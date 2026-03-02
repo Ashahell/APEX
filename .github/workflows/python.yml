@@ -1,0 +1,80 @@
+name: Python
+
+on:
+  push:
+    paths:
+      - 'execution/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+  pull_request:
+    paths:
+      - 'execution/**'
+      - 'pyproject.toml'
+      - 'poetry.lock'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        working-directory: execution
+        run: poetry install --no-interaction
+
+      - name: Ruff lint
+        working-directory: execution
+        run: poetry run ruff check .
+
+  typecheck:
+    name: Type Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        working-directory: execution
+        run: poetry install --no-interaction
+
+      - name: Mypy type check
+        working-directory: execution
+        run: poetry run mypy .
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        uses: snok/install-poetry@v1
+
+      - name: Install dependencies
+        working-directory: execution
+        run: poetry install --no-interaction
+
+      - name: Pytest
+        working-directory: execution
+        run: poetry run pytest

@@ -1,0 +1,15 @@
+{
+  "schema": "chorus-1.1",
+  "retention": {
+    "draftArtifacts": "7d",
+    "stagingArtifacts": "30d",
+    "finalArtifacts": "forever",
+    "eventLog": "90d",
+    "snapshots": 10
+  },
+  "sessionTimeoutMs": 3600000,
+  "autoPromote": false,
+  "unattended": false,
+  "tokenBudget": 8000,
+  "defaultComplexity": "simple"
+}

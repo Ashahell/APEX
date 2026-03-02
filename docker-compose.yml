@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # Note: NATS removed - using tokio broadcast channels for single-node message bus
+  # NATS can be enabled for multi-node deployments if needed
+  # nats:
+  #   image: nats:latest
+  #   ports:
+  #     - "4222:4222"
+  #   command: ["--js", "--store-dir=/data"]
+  #   volumes:
+  #     - nats_data:/data
+
+  # LocalStack for S3-compatible storage (optional, for file artifacts)
+  localstack:
+    image: localstack/localstack:latest
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=s3
+      - DEFAULT_REGION=us-east-1
+      - DATA_DIR=/tmp/localstack/data
+    volumes:
+      - localstack_data:/tmp/localstack
+      - "/var/run/docker.sock:/var/run/docker.sock"
+    profiles:
+      - optional
+
+  # Prometheus for metrics (optional, for observability)
+  prometheus:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./infra/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    profiles:
+      - monitoring
+
+  # Grafana for dashboards (optional)
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    profiles:
+      - monitoring
+      - optional
+
+volumes:
+  localstack_data:
+  prometheus_data:
