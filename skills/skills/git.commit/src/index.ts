@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { Skill, SkillContext, SkillResult } from '../../types.js';
+import { checkGit } from '../../../src/utils.js';
 
 const execAsync = promisify(exec);
 
@@ -73,12 +74,7 @@ export const skill: Skill = {
   },
 
   async healthCheck(): Promise<boolean> {
-    try {
-      await execAsync('git --version');
-      return true;
-    } catch {
-      return false;
-    }
+    return checkGit();
   },
 };
 

@@ -1,5 +1,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { useAppStore } from '../../stores/appStore';
+import { apiPost, apiGet } from '../../lib/api';
+import { TaskSidebar } from './TaskSidebar';
+import { ConfirmationGate } from './ConfirmationGate';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -10,7 +13,7 @@ export function Chat() {
   const [lastStats, setLastStats] = useState<{steps: number, cost: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, addMessage } = useAppStore();
+  const { messages, addMessage, pendingConfirmation, setPendingConfirmation } = useAppStore();
 
   useEffect(() => {
     const saved = localStorage.getItem('apex-last-stats');
@@ -38,7 +41,7 @@ export function Chat() {
     for (let i = 0; i < timeoutSeconds; i++) {
       await new Promise(r => setTimeout(r, 1000));
       try {
-        const res = await fetch(`http://localhost:3000/api/v1/tasks/${taskId}`);
+        const res = await apiGet(`/api/v1/tasks/${taskId}`);
         if (res.ok) {
           const data = await res.json();
           if (data.status === 'completed' || data.status === 'failed') {
@@ -112,11 +115,7 @@ export function Chat() {
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:3000/api/v1/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: userMessage, ...taskConfig }),
-      });
+      const response = await apiPost('/api/v1/tasks', { content: userMessage, ...taskConfig });
 
       if (response.ok) {
         const data = await response.json();
@@ -168,22 +167,23 @@ export function Chat() {
   };
 
   return (
-    <div className="flex flex-col h-full">
-      <div className="border-b p-3 flex items-center gap-4 flex-wrap">
-        {error && (
-          <span className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded flex items-center gap-2">
-            ⚠️ {error}
-            <button onClick={() => setError(null)} className="hover:text-red-600">✕</button>
-          </span>
-        )}
-        {lastStats && (
-          <span className="text-sm bg-muted px-2 py-1 rounded">
-            Stats: {lastStats.steps} steps, ${lastStats.cost.toFixed(4)}
-          </span>
-        )}
-      </div>
+    <div className="flex h-full">
+      <div className="flex-1 flex flex-col">
+        <div className="border-b p-3 flex items-center gap-4 flex-wrap">
+          {error && (
+            <span className="text-sm bg-red-100 text-red-800 px-2 py-1 rounded flex items-center gap-2">
+              ⚠️ {error}
+              <button onClick={() => setError(null)} className="hover:text-red-600">✕</button>
+            </span>
+          )}
+          {lastStats && (
+            <span className="text-sm bg-muted px-2 py-1 rounded">
+              Stats: {lastStats.steps} steps, ${lastStats.cost.toFixed(4)}
+            </span>
+          )}
+        </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 && (
           <div className="text-center text-muted-foreground mt-8">
             <p className="text-lg">Welcome to APEX</p>
@@ -228,12 +228,30 @@ export function Chat() {
                     },
                   }}
                 >
-                  {message.content}
+          {message.content}
                 </ReactMarkdown>
               </div>
             </div>
           </div>
         ))}
+        
+        {pendingConfirmation && (
+          <ConfirmationGate
+            tier={pendingConfirmation.tier}
+            action={pendingConfirmation.action}
+            skillName={pendingConfirmation.skillName}
+            details={pendingConfirmation.consequences ? {
+              impact: pendingConfirmation.consequences.summary,
+            } : undefined}
+            onConfirm={(confirmationText, totpCode) => {
+              console.log('Confirmed:', confirmationText, totpCode);
+              setPendingConfirmation(null);
+            }}
+            onCancel={() => {
+              setPendingConfirmation(null);
+            }}
+          />
+        )}
         
         <div ref={messagesEndRef} />
       </div>
@@ -257,6 +275,9 @@ export function Chat() {
           </button>
         </div>
       </form>
+      </div>
+      
+      <TaskSidebar onTaskClick={(taskId) => console.log('Task clicked:', taskId)} />
     </div>
   );
 }

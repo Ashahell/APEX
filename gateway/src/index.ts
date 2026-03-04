@@ -1,17 +1,19 @@
 import { connect, NatsConnection, JetStreamClient } from 'nats';
 import Pino from 'pino';
-import { randomUUID } from 'crypto';
+import { randomUUID, createHmac } from 'crypto';
 
 export interface GatewayConfig {
   natsUrl?: string;
   routerUrl?: string;
   port?: number;
+  sharedSecret?: string;
 }
 
 const DEFAULT_CONFIG: GatewayConfig = {
   natsUrl: 'localhost:4222',
   routerUrl: 'http://localhost:3000',
   port: 3001,
+  sharedSecret: process.env.APEX_SHARED_SECRET || 'dev-secret-change-in-production',
 };
 
 export interface TaskRequest {
@@ -79,7 +81,7 @@ export class Gateway {
   }
 
   async createTask(request: TaskRequest): Promise<TaskResponse> {
-    const response = await fetch(`${this.config.routerUrl}/api/v1/tasks`, {
+    const response = await this.signedFetch(`${this.config.routerUrl}/api/v1/tasks`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -98,7 +100,7 @@ export class Gateway {
   }
 
   async getTask(taskId: string): Promise<TaskResponse> {
-    const response = await fetch(`${this.config.routerUrl}/api/v1/tasks/${taskId}`);
+    const response = await this.signedFetch(`${this.config.routerUrl}/api/v1/tasks/${taskId}`);
     if (!response.ok) {
       throw new Error(`Failed to get task: ${response.statusText}`);
     }
@@ -106,7 +108,7 @@ export class Gateway {
   }
 
   async getMetrics(): Promise<unknown> {
-    const response = await fetch(`${this.config.routerUrl}/api/v1/metrics`);
+    const response = await this.signedFetch(`${this.config.routerUrl}/api/v1/metrics`);
     if (!response.ok) {
       throw new Error(`Failed to get metrics: ${response.statusText}`);
     }
@@ -183,6 +185,28 @@ export class Gateway {
 
   registerAdapter(name: string, adapter: unknown): void {
     this.adapters.set(name, adapter);
+  }
+
+  private signRequest(method: string, path: string, body: string): { signature: string; timestamp: number } {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const message = `${timestamp}${method}${path}${body}`;
+    const signature = createHmac('sha256', this.config.sharedSecret!)
+      .update(message)
+      .digest('hex');
+    return { signature, timestamp };
+  }
+
+  private async signedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+    const method = options.method || 'GET';
+    const body = typeof options.body === 'string' ? options.body : JSON.stringify(options.body || {});
+    const urlPath = new URL(url).pathname;
+    const { signature, timestamp } = this.signRequest(method, urlPath, body);
+
+    const headers = new Headers(options.headers);
+    headers.set('X-APEX-Signature', signature);
+    headers.set('X-APEX-Timestamp', timestamp.toString());
+
+    return fetch(url, { ...options, headers });
   }
 }
 

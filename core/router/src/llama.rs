@@ -1,3 +1,4 @@
+use crate::unified_config::AppConfig;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -47,12 +48,8 @@ impl LlamaClient {
     }
 
     pub fn from_env() -> Self {
-        let base_url = std::env::var("LLAMA_SERVER_URL")
-            .unwrap_or_else(|_| "http://localhost:8080".to_string());
-
-        let model = std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "model".to_string());
-
-        Self::new(base_url, model)
+        let config = AppConfig::global();
+        Self::new(config.agent.llama_url, config.agent.llama_model)
     }
 
     pub async fn chat(&self, system_prompt: &str, user_prompt: &str) -> Result<String, String> {
@@ -169,12 +166,8 @@ mod tests {
     #[tokio::test]
     #[ignore]
     async fn test_llama_server_connectivity() {
-        let client = LlamaClient::new(
-            std::env::var("LLAMA_SERVER_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
-            std::env::var("LLAMA_MODEL")
-                .unwrap_or_else(|_| "model".to_string()),
-        );
+        let config = AppConfig::global();
+        let client = LlamaClient::new(config.agent.llama_url, config.agent.llama_model);
 
         let result = client.chat("You are a helpful assistant.", "Say 'hello' in one word.").await;
         

@@ -2,6 +2,17 @@ use crate::tasks::{CreateTask, Task, TaskStatus, TaskTier};
 use chrono::Utc;
 use sqlx::{Row, SqlitePool};
 
+fn sanitize_identifier(value: &str) -> Result<String, String> {
+    // Validate that the value contains only safe characters (alphanumeric, dash, underscore)
+    if value.is_empty() || value.len() > 100 {
+        return Err("Invalid identifier length".to_string());
+    }
+    if !value.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err("Invalid characters in identifier".to_string());
+    }
+    Ok(value.to_string())
+}
+
 pub struct TaskRepository<'a> {
     pool: &'a SqlitePool,
 }
@@ -88,20 +99,20 @@ impl<'a> TaskRepository<'a> {
         id: &str,
         status: TaskStatus,
         output_content: Option<String>,
-        cost: Option<f64>,
+        cost_cents: Option<i64>,
     ) -> Result<(), sqlx::Error> {
         let now = Utc::now();
 
         sqlx::query(
             r#"
             UPDATE tasks 
-            SET status = ?, output_content = ?, actual_cost_usd = ?, completed_at = ?, updated_at = ?
+            SET status = ?, output_content = ?, actual_cost_cents = ?, completed_at = ?, updated_at = ?
             WHERE id = ?
             "#
         )
         .bind(status.as_str())
         .bind(&output_content)
-        .bind(cost)
+        .bind(cost_cents)
         .bind(now)
         .bind(now)
         .bind(id)
@@ -158,12 +169,17 @@ impl<'a> TaskRepository<'a> {
         Ok(result.rows_affected())
     }
 
-    pub async fn get_total_cost(&self) -> Result<f64, sqlx::Error> {
-        let row = sqlx::query("SELECT COALESCE(SUM(actual_cost_usd), 0.0) FROM tasks WHERE status = 'completed' AND actual_cost_usd IS NOT NULL")
+    pub async fn get_total_cost_cents(&self) -> Result<i64, sqlx::Error> {
+        let row = sqlx::query("SELECT COALESCE(SUM(actual_cost_cents), 0) FROM tasks WHERE status = 'completed' AND actual_cost_cents IS NOT NULL")
             .fetch_one(self.pool)
             .await?;
 
-        Ok(row.get::<f64, _>(0))
+        Ok(row.get::<i64, _>(0))
+    }
+
+    pub async fn get_total_cost(&self) -> Result<f64, sqlx::Error> {
+        let cents = self.get_total_cost_cents().await?;
+        Ok(cents as f64 / 100.0)
     }
 
     pub async fn find_by_project(&self, project: &str, limit: i64) -> Result<Vec<Task>, sqlx::Error> {
@@ -205,29 +221,59 @@ impl<'a> TaskRepository<'a> {
         limit: i64,
         offset: i64,
     ) -> Result<Vec<Task>, sqlx::Error> {
+        // Build query dynamically with validation to prevent SQL injection
+        // Column names are hardcoded, values are validated and parameterized
         let mut conditions = Vec::new();
-        let mut query = "SELECT * FROM tasks WHERE 1=1".to_string();
+        let mut values: Vec<String> = Vec::new();
 
         if let Some(p) = project {
-            conditions.push(format!(" AND project = '{}'", p));
+            let validated = sanitize_identifier(p).unwrap_or_else(|_| "".to_string());
+            if !validated.is_empty() {
+                conditions.push("project = ?");
+                values.push(validated);
+            }
         }
         if let Some(s) = status {
-            conditions.push(format!(" AND status = '{}'", s));
+            let validated = sanitize_identifier(s).unwrap_or_else(|_| "".to_string());
+            if !validated.is_empty() {
+                conditions.push("status = ?");
+                values.push(validated);
+            }
         }
         if let Some(p) = priority {
-            conditions.push(format!(" AND priority = '{}'", p));
+            let validated = sanitize_identifier(p).unwrap_or_else(|_| "".to_string());
+            if !validated.is_empty() {
+                conditions.push("priority = ?");
+                values.push(validated);
+            }
         }
         if let Some(c) = category {
-            conditions.push(format!(" AND category = '{}'", c));
+            let validated = sanitize_identifier(c).unwrap_or_else(|_| "".to_string());
+            if !validated.is_empty() {
+                conditions.push("category = ?");
+                values.push(validated);
+            }
         }
 
-        for cond in conditions {
-            query.push_str(&cond);
+        let where_clause = if conditions.is_empty() {
+            String::new()
+        } else {
+            format!(" WHERE {}", conditions.join(" AND "))
+        };
+
+        let query = format!(
+            "SELECT id, status, tier, input_content, output_content, error_message, channel, thread_id, author, skill_name, project, priority, category, created_at, updated_at FROM tasks{} ORDER BY created_at DESC",
+            where_clause
+        );
+
+        // Use query! macro with validated values to prevent SQL injection
+        let mut query_builder = sqlx::query_as::<_, Task>(&query);
+        
+        for value in &values {
+            query_builder = query_builder.bind(value.as_str());
         }
-
-        query.push_str(" ORDER BY created_at DESC LIMIT ? OFFSET ?");
-
-        sqlx::query_as::<_, Task>(&query)
+        
+        query_builder
             .bind(limit)
             .bind(offset)
             .fetch_all(self.pool)
@@ -306,5 +352,16 @@ impl<'a> TaskRepository<'a> {
             }
         }
         Ok(categories)
+    }
+
+    pub async fn update_input_content(&self, id: &str, input_content: &str) -> Result<(), sqlx::Error> {
+        let now = Utc::now();
+        sqlx::query("UPDATE tasks SET input_content = ?, updated_at = ? WHERE id = ?")
+            .bind(input_content)
+            .bind(now)
+            .bind(id)
+            .execute(self.pool)
+            .await?;
+        Ok(())
     }
 }

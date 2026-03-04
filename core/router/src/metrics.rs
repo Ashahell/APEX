@@ -62,3 +62,73 @@ pub struct MetricsSnapshot {
     pub tasks_by_status: HashMap<String, u64>,
     pub total_cost: f64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_metrics_new() {
+        let metrics = RouterMetrics::new();
+        let snapshot = metrics.get_metrics().await;
+        
+        assert_eq!(snapshot.tasks_total.get("total"), None);
+        assert!(snapshot.total_cost == 0.0);
+    }
+
+    #[tokio::test]
+    async fn test_record_task() {
+        let metrics = RouterMetrics::new();
+        metrics.record_task("deep", "completed").await;
+        
+        let snapshot = metrics.get_metrics().await;
+        
+        assert_eq!(snapshot.tasks_total.get("total"), Some(&1u64));
+        assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&1u64));
+        assert_eq!(snapshot.tasks_by_status.get("completed"), Some(&1u64));
+    }
+
+    #[tokio::test]
+    async fn test_record_multiple_tasks() {
+        let metrics = RouterMetrics::new();
+        
+        metrics.record_task("deep", "completed").await;
+        metrics.record_task("instant", "completed").await;
+        metrics.record_task("deep", "failed").await;
+        
+        let snapshot = metrics.get_metrics().await;
+        
+        assert_eq!(snapshot.tasks_total.get("total"), Some(&3u64));
+        assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&2u64));
+        assert_eq!(snapshot.tasks_by_tier.get("instant"), Some(&1u64));
+        assert_eq!(snapshot.tasks_by_status.get("completed"), Some(&2u64));
+        assert_eq!(snapshot.tasks_by_status.get("failed"), Some(&1u64));
+    }
+
+    #[tokio::test]
+    async fn test_record_cost() {
+        let metrics = RouterMetrics::new();
+        
+        metrics.record_cost(0.50).await;
+        metrics.record_cost(1.25).await;
+        
+        let snapshot = metrics.get_metrics().await;
+        
+        assert_eq!(snapshot.total_cost, 1.75);
+    }
+
+    #[tokio::test]
+    async fn test_metrics_combined() {
+        let metrics = RouterMetrics::new();
+        
+        metrics.record_task("deep", "completed").await;
+        metrics.record_cost(0.75).await;
+        
+        let snapshot = metrics.get_metrics().await;
+        
+        assert_eq!(snapshot.tasks_total.get("total"), Some(&1u64));
+        assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&1u64));
+        assert_eq!(snapshot.tasks_by_status.get("completed"), Some(&1u64));
+        assert_eq!(snapshot.total_cost, 0.75);
+    }
+}

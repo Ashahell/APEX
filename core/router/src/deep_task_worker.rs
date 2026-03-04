@@ -1,17 +1,22 @@
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::TaskStatus;
+use apex_memory::decision_journal::{DecisionJournalRepository, CreateDecisionEntry};
 use tokio::sync::broadcast;
 
 use crate::agent_loop::{AgentConfig, AgentLoop};
 use crate::circuit_breaker::CircuitBreakerRegistry;
+use crate::execution_stream::{ExecutionEvent, ExecutionStreamManager};
 use crate::message_bus::{DeepTaskMessage, MessageBus};
 use crate::vm_pool::VmPool;
+use crate::websocket::WebSocketManager;
 
 pub struct DeepTaskWorker {
     pool: sqlx::Pool<sqlx::Sqlite>,
     message_bus: MessageBus,
     vm_pool: VmPool,
     circuit_breakers: CircuitBreakerRegistry,
+    execution_streams: ExecutionStreamManager,
+    ws_manager: WebSocketManager,
 }
 
 impl DeepTaskWorker {
@@ -20,12 +25,16 @@ impl DeepTaskWorker {
         message_bus: MessageBus,
         vm_pool: VmPool,
         circuit_breakers: CircuitBreakerRegistry,
+        execution_streams: ExecutionStreamManager,
+        ws_manager: WebSocketManager,
     ) -> Self {
         Self {
             pool,
             message_bus,
             vm_pool,
             circuit_breakers,
+            execution_streams,
+            ws_manager,
         }
     }
 
@@ -89,12 +98,16 @@ impl DeepTaskWorker {
                     .update_completed(
                         &message.task_id,
                         TaskStatus::Completed,
-                        Some(output),
-                        Some(0.10),
+                        Some(output.clone()),
+                        Some(10),  // 10 cents
                     )
                     .await
                 {
                     tracing::error!(task_id = %message.task_id, error = %e, "Failed to update completed task");
+                }
+
+                if let Err(e) = self.write_decision_journal(&message.task_id, &output).await {
+                    tracing::warn!(task_id = %message.task_id, error = %e, "Failed to write decision journal");
                 }
             }
             Err(error) => {
@@ -116,6 +129,50 @@ impl DeepTaskWorker {
         }
     }
 
+    async fn write_decision_journal(&self, task_id: &str, output_json: &str) -> Result<(), String> {
+        let output: serde_json::Value = serde_json::from_str(output_json)
+            .map_err(|e| format!("Failed to parse output: {}", e))?;
+
+        let history = output.get("history")
+            .and_then(|h| h.as_array())
+            .ok_or("No history in output")?;
+
+        let journal_repo = DecisionJournalRepository::new(&self.pool);
+
+        for step in history {
+            let step_number = step.get("step_number")
+                .and_then(|s| s.as_u64())
+                .unwrap_or(0) as i64;
+            
+            let action = step.get("action")
+                .and_then(|a| a.as_str())
+                .unwrap_or("unknown");
+            
+            let observation = step.get("observation")
+                .and_then(|o| o.as_str())
+                .unwrap_or("");
+            
+            let decision = format!("Step {}: {}", step_number, action);
+            let context = format!("Observation: {}", observation);
+
+            let entry = CreateDecisionEntry {
+                task_id: Some(task_id.to_string()),
+                title: format!("Step {}", step_number),
+                decision,
+                context: Some(context),
+                rationale: None,
+                outcome: None,
+                tags: Some(vec![format!("step{}", step_number), "agent".to_string()]),
+            };
+
+            let entry_id = format!("{}-step-{}", task_id, step_number);
+            journal_repo.create(&entry_id, entry).await
+                .map_err(|e| format!("Failed to create journal entry: {}", e))?;
+        }
+
+        Ok(())
+    }
+
     async fn execute_in_vm(
         &self,
         message: &DeepTaskMessage,
@@ -123,6 +180,21 @@ impl DeepTaskWorker {
     ) -> Result<String, String> {
         tracing::debug!(vm_id = %vm_id, "Executing deep task in VM");
 
+        let stream = self.execution_streams.create_stream(&message.task_id);
+        let task_id = message.task_id.clone();
+        let execution_streams = self.execution_streams.clone();
+        let ws_manager = self.ws_manager.clone();
+        
+        tokio::spawn(async move {
+            if let Some(mut rx) = execution_streams.subscribe(&task_id) {
+                while let Ok(event) = rx.recv().await {
+                    if let Ok(json) = serde_json::to_string(&event) {
+                        ws_manager.broadcast_task_update(&task_id, &json).await;
+                    }
+                }
+            }
+        });
+        
         let config = AgentConfig {
             max_steps: message.max_steps,
             max_budget_usd: message.budget_usd,
@@ -133,10 +205,13 @@ impl DeepTaskWorker {
 
         tracing::info!(use_llm = config.use_llm, llama_url = ?config.llama_url, "Agent config");
 
-        let agent = AgentLoop::new(config);
+        let agent = AgentLoop::new(config)
+            .with_execution_stream(stream);
         let result = agent
             .run(message.task_id.clone(), message.content.clone())
             .await;
+
+        self.execution_streams.remove_stream(&message.task_id);
 
         let output = serde_json::json!({
             "vm_id": vm_id,

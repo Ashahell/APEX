@@ -68,7 +68,7 @@ impl SkillWorker {
                         &message.task_id,
                         TaskStatus::Completed,
                         Some(result),
-                        Some(0.01),
+                        Some(1),  // 1 cent
                     )
                     .await
                 {
@@ -109,31 +109,16 @@ impl SkillWorker {
     ) -> Result<String, String> {
         let input_json = serde_json::to_string(input).map_err(|e| e.to_string())?;
 
-        // Try to find tsx and the CLI source
-        let cli_path = std::env::current_exe()
+        // Use environment variable or fall back to discovery
+        let cli_path = std::env::var("APEX_SKILLS_CLI")
             .ok()
-            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-            .map(|p| {
-                // Try different paths relative to the executable
-                let candidates = vec![
-                    p.join("..").join("skills").join("src").join("cli.ts"),
-                    p.join("..")
-                        .join("..")
-                        .join("skills")
-                        .join("src")
-                        .join("cli.ts"),
-                    std::path::PathBuf::from("E:\\projects\\APEX\\skills\\src\\cli.ts"),
-                ];
-                for c in &candidates {
-                    if c.exists() {
-                        return c.clone();
-                    }
-                }
-                candidates.last().unwrap().clone()
-            })
-            .unwrap_or(std::path::PathBuf::from(
-                "E:\\projects\\APEX\\skills\\src\\cli.ts",
-            ));
+            .map(std::path::PathBuf::from)
+            .or_else(Self::find_cli_path);
+
+        let cli_path = cli_path.ok_or_else(|| "Could not find skills CLI".to_string())?;
+
+        let skills_dir = std::env::var("APEX_SKILLS_DIR")
+            .unwrap_or_else(|_| "E:\\projects\\APEX\\skills".to_string());
 
         let output = tokio::process::Command::new("pnpm")
             .arg("tsx")
@@ -144,7 +129,7 @@ impl SkillWorker {
             .arg(&input_json)
             .arg("--task-id")
             .arg(task_id)
-            .current_dir("E:\\projects\\APEX\\skills")
+            .current_dir(&skills_dir)
             .output()
             .await
             .map_err(|e| format!("Failed to execute skill: {}", e))?;
@@ -175,5 +160,28 @@ impl SkillWorker {
             let stderr = String::from_utf8_lossy(&output.stderr).to_string();
             Err(format!("Skill execution failed: {}", stderr))
         }
+    }
+
+    fn find_cli_path() -> Option<std::path::PathBuf> {
+        std::env::current_exe()
+            .ok()
+            .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+            .map(|p| {
+                let candidates = vec![
+                    p.join("..").join("skills").join("src").join("cli.ts"),
+                    p.join("..")
+                        .join("..")
+                        .join("skills")
+                        .join("src")
+                        .join("cli.ts"),
+                ];
+                for c in &candidates {
+                    if c.exists() {
+                        return c.clone();
+                    }
+                }
+                candidates.first().cloned().unwrap_or_default()
+            })
+            .filter(|p| !p.as_os_str().is_empty())
     }
 }

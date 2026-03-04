@@ -1,11 +1,19 @@
+use apex_router::governance::GovernanceEngine;
+use apex_router::moltbook::MoltbookClient;
+use apex_router::rate_limiter::RateLimiter;
+use apex_router::response_cache::ResponseCache;
+use apex_router::system_health::SystemMonitor;
+use apex_router::unified_config::AppConfig;
 use apex_memory::db::Database;
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskTier};
 use apex_router::api::{create_router, AppState};
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
+use apex_router::execution_stream::ExecutionStreamManager;
 use apex_router::message_bus::MessageBus;
 use apex_router::metrics::RouterMetrics;
 use apex_router::vm_pool::VmPool;
+use apex_router::websocket::WebSocketManager;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
@@ -23,6 +31,14 @@ async fn create_test_state() -> AppState {
         message_bus: MessageBus::new(10),
         circuit_breakers: CircuitBreakerRegistry::new(),
         vm_pool: Some(VmPool::new(Default::default(), 2, 0)),
+        execution_streams: ExecutionStreamManager::new(),
+        ws_manager: WebSocketManager::new(),
+        moltbook: None,
+        governance: std::sync::Arc::new(std::sync::Mutex::new(GovernanceEngine::default())),
+        system_monitor: SystemMonitor::new(),
+        cache: ResponseCache::new(60),
+        rate_limiter: RateLimiter::new(60),
+        workflow_repo: apex_memory::WorkflowRepository::new(&db.pool()),
     }
 }
 

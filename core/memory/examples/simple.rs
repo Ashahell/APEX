@@ -25,8 +25,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             author TEXT,
             skill_name TEXT,
             error_message TEXT,
-            cost_estimate_usd REAL,
-            actual_cost_usd REAL,
+            cost_estimate_cents INTEGER NOT NULL DEFAULT 0,
+            actual_cost_cents INTEGER NOT NULL DEFAULT 0,
             started_at TEXT,
             completed_at TEXT,
             created_at TEXT NOT NULL,
@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "test-001",
         TaskStatus::Completed,
         Some("Done!".to_string()),
-        Some(0.05),
+        Some(5),  // 5 cents
     )
     .await?;
 

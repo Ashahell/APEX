@@ -1,5 +1,5 @@
 use axum::{
-    extract::State,
+    extract::{Path, Query, State},
     routing::{delete, get, post, put},
     Json, Router,
 };
@@ -11,10 +11,18 @@ use ulid::Ulid;
 use crate::apex_security::capability::{CapabilityToken, PermissionTier};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::classifier::TaskClassifier;
+use crate::governance::GovernanceEngine;
 use crate::message_bus::DeepTaskMessage;
 use crate::message_bus::MessageBus;
 use crate::metrics::RouterMetrics;
+use crate::moltbook::MoltbookClient;
 use crate::vm_pool::VmPool;
+use crate::execution_stream::ExecutionStreamManager;
+use crate::websocket::WebSocketManager;
+use crate::system_health::SystemMonitor;
+use crate::response_cache::ResponseCache;
+use crate::rate_limiter::RateLimiter;
+use apex_memory::{Workflow, WorkflowExecution, CreateWorkflow, UpdateWorkflow};
 use apex_memory::msg_repo::MessageRepository;
 use apex_memory::skill_registry::{SkillRegistry, SkillRegistryEntry};
 use apex_memory::task_repo::TaskRepository;
@@ -141,6 +149,199 @@ pub struct AppState {
     pub message_bus: MessageBus,
     pub circuit_breakers: CircuitBreakerRegistry,
     pub vm_pool: Option<VmPool>,
+    pub execution_streams: ExecutionStreamManager,
+    pub ws_manager: WebSocketManager,
+    pub moltbook: Option<MoltbookClient>,
+    pub governance: std::sync::Arc<std::sync::Mutex<GovernanceEngine>>,
+    pub system_monitor: SystemMonitor,
+    pub cache: ResponseCache,
+    pub rate_limiter: RateLimiter,
+    pub workflow_repo: apex_memory::WorkflowRepository,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkflowResponse {
+    pub id: String,
+    pub name: String,
+    pub description: Option<String>,
+    pub definition: String,
+    pub category: Option<String>,
+    pub version: i32,
+    pub is_active: bool,
+    pub created_at_ms: i64,
+    pub updated_at_ms: i64,
+    pub last_executed_at_ms: Option<i64>,
+    pub execution_count: i32,
+    pub avg_duration_secs: Option<f64>,
+    pub success_rate: Option<f64>,
+}
+
+impl From<Workflow> for WorkflowResponse {
+    fn from(w: Workflow) -> Self {
+        Self {
+            id: w.id,
+            name: w.name,
+            description: w.description,
+            definition: w.definition,
+            category: w.category,
+            version: w.version,
+            is_active: w.is_active == 1,
+            created_at_ms: w.created_at_ms,
+            updated_at_ms: w.updated_at_ms,
+            last_executed_at_ms: w.last_executed_at_ms,
+            execution_count: w.execution_count,
+            avg_duration_secs: w.avg_duration_secs,
+            success_rate: w.success_rate,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CreateWorkflowRequest {
+    pub name: String,
+    pub description: Option<String>,
+    pub definition: String,
+    pub category: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateWorkflowRequest {
+    pub name: Option<String>,
+    pub description: Option<String>,
+    pub definition: Option<String>,
+    pub category: Option<String>,
+    pub is_active: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WorkflowExecutionResponse {
+    pub id: String,
+    pub workflow_id: String,
+    pub status: String,
+    pub started_at_ms: i64,
+    pub completed_at_ms: Option<i64>,
+    pub duration_secs: Option<f64>,
+    pub input_data: Option<String>,
+    pub output_data: Option<String>,
+    pub error_message: Option<String>,
+    pub triggered_by: Option<String>,
+}
+
+impl From<WorkflowExecution> for WorkflowExecutionResponse {
+    fn from(e: WorkflowExecution) -> Self {
+        Self {
+            id: e.id,
+            workflow_id: e.workflow_id,
+            status: e.status,
+            started_at_ms: e.started_at_ms,
+            completed_at_ms: e.completed_at_ms,
+            duration_secs: e.duration_secs,
+            input_data: e.input_data,
+            output_data: e.output_data,
+            error_message: e.error_message,
+            triggered_by: e.triggered_by,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListWorkflowsQuery {
+    pub category: Option<String>,
+    pub active_only: Option<bool>,
+}
+
+async fn list_workflows(
+    State(state): State<AppState>,
+    Query(query): Query<ListWorkflowsQuery>,
+) -> Result<Json<Vec<WorkflowResponse>>, String> {
+    let repo = &state.workflow_repo;
+    let workflows = if query.active_only.unwrap_or(false) {
+        repo.find_active().await.map_err(|e| e.to_string())?
+    } else if let Some(ref cat) = query.category {
+        repo.find_by_category(cat).await.map_err(|e| e.to_string())?
+    } else {
+        repo.find_all().await.map_err(|e| e.to_string())?
+    };
+    Ok(Json(workflows.into_iter().map(WorkflowResponse::from).collect()))
+}
+
+async fn get_workflow_filter_options(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let repo = &state.workflow_repo;
+    let categories = repo.get_categories().await.map_err(|e| e.to_string())?;
+    Ok(Json(serde_json::json!({ "categories": categories })))
+}
+
+async fn get_workflow(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<WorkflowResponse>, String> {
+    let repo = &state.workflow_repo;
+    let workflow = repo.find_by_id(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Workflow not found".to_string())?;
+    Ok(Json(WorkflowResponse::from(workflow)))
+}
+
+async fn create_workflow(
+    State(state): State<AppState>,
+    Json(req): Json<CreateWorkflowRequest>,
+) -> Result<Json<WorkflowResponse>, String> {
+    let repo = &state.workflow_repo;
+    let id = Ulid::new().to_string();
+    let create = CreateWorkflow {
+        name: req.name,
+        description: req.description,
+        definition: req.definition,
+        category: req.category,
+    };
+    repo.create(&id, &create).await.map_err(|e| e.to_string())?;
+    let workflow = repo.find_by_id(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Workflow not found after creation".to_string())?;
+    Ok(Json(WorkflowResponse::from(workflow)))
+}
+
+async fn update_workflow(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateWorkflowRequest>,
+) -> Result<Json<WorkflowResponse>, String> {
+    let repo = &state.workflow_repo;
+    let update = UpdateWorkflow {
+        name: req.name,
+        description: req.description,
+        definition: req.definition,
+        category: req.category,
+        is_active: req.is_active,
+    };
+    repo.update(&id, &update).await.map_err(|e| e.to_string())?;
+    let workflow = repo.find_by_id(&id)
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "Workflow not found after update".to_string())?;
+    Ok(Json(WorkflowResponse::from(workflow)))
+}
+
+async fn delete_workflow(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let repo = &state.workflow_repo;
+    repo.delete(&id).await.map_err(|e| e.to_string())?;
+    Ok(Json(serde_json::json!({ "success": true, "deleted": id })))
+}
+
+async fn get_workflow_executions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Vec<WorkflowExecutionResponse>>, String> {
+    let repo = &state.workflow_repo;
+    let executions = repo.get_executions(&id, 50).await.map_err(|e| e.to_string())?;
+    Ok(Json(executions.into_iter().map(WorkflowExecutionResponse::from).collect()))
 }
 
 pub fn create_router(state: AppState) -> Router {
@@ -167,6 +368,13 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/skills/execute", post(execute_skill))
         .route("/api/v1/deep", post(execute_deep_task))
         .route("/api/v1/vm/stats", get(get_vm_stats))
+        .route("/api/v1/workflows", get(list_workflows))
+        .route("/api/v1/workflows", post(create_workflow))
+        .route("/api/v1/workflows/filter-options", get(get_workflow_filter_options))
+        .route("/api/v1/workflows/:id", get(get_workflow))
+        .route("/api/v1/workflows/:id", put(update_workflow))
+        .route("/api/v1/workflows/:id", delete(delete_workflow))
+        .route("/api/v1/workflows/:id/executions", get(get_workflow_executions))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
@@ -229,6 +437,7 @@ async fn create_task(
                     max_steps,
                     budget_usd,
                     time_limit_secs: payload.time_limit_secs,
+                    permission_tier: tier_str.clone(),
                 });
 
             state.metrics.record_task(&tier_str, "running").await;
@@ -470,6 +679,7 @@ async fn execute_deep_task(
         max_steps,
         budget_usd,
         time_limit_secs,
+        permission_tier: "T2".to_string(),
     });
 
     Ok(Json(ExecuteDeepTaskResponse {
@@ -648,6 +858,7 @@ async fn execute_skill(
             task_id: payload.task_id.clone(),
             skill_name: payload.skill_name.clone(),
             input: payload.input,
+            permission_tier: payload.tier.clone(),
         });
 
     Ok(Json(ExecuteSkillResponse {
@@ -722,11 +933,19 @@ mod tests {
     async fn test_create_task_invalid_json() {
         let pool = sqlx::SqlitePool::connect("sqlite::memory:").await.unwrap();
         let state = AppState {
-            pool,
+            pool: pool.clone(),
             metrics: RouterMetrics::new(),
             message_bus: MessageBus::new(10),
             circuit_breakers: CircuitBreakerRegistry::new(),
             vm_pool: None,
+            execution_streams: ExecutionStreamManager::new(),
+            ws_manager: WebSocketManager::new(),
+            moltbook: None,
+            governance: std::sync::Arc::new(std::sync::Mutex::new(GovernanceEngine::default())),
+            system_monitor: SystemMonitor::new(),
+            cache: ResponseCache::new(60),
+            rate_limiter: RateLimiter::new(60),
+            workflow_repo: apex_memory::WorkflowRepository::new(&pool),
         };
         let app = create_router(state);
 

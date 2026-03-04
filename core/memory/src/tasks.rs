@@ -178,8 +178,8 @@ pub struct Task {
     pub author: Option<String>,
     pub skill_name: Option<String>,
     pub error_message: Option<String>,
-    pub cost_estimate_usd: Option<f64>,
-    pub actual_cost_usd: Option<f64>,
+    pub cost_estimate_cents: i64,
+    pub actual_cost_cents: i64,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -187,6 +187,16 @@ pub struct Task {
     pub project: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
+}
+
+impl Task {
+    pub fn cost_estimate_usd(&self) -> f64 {
+        self.cost_estimate_cents as f64 / 100.0
+    }
+
+    pub fn actual_cost_usd(&self) -> f64 {
+        self.actual_cost_cents as f64 / 100.0
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -206,8 +216,8 @@ pub struct UpdateTask {
     pub status: Option<TaskStatus>,
     pub output_content: Option<String>,
     pub error_message: Option<String>,
-    pub cost_estimate_usd: Option<f64>,
-    pub actual_cost_usd: Option<f64>,
+    pub cost_estimate_cents: Option<i64>,
+    pub actual_cost_cents: Option<i64>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
     pub project: Option<String>,

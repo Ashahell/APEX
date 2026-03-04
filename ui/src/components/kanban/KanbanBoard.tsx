@@ -40,6 +40,9 @@ export function KanbanBoard() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [editModal, setEditModal] = useState<{task: Task; field: string} | null>(null);
+  const [newTaskModal, setNewTaskModal] = useState(false);
+  const [newTask, setNewTask] = useState({ content: '', project: '', priority: 'medium', category: '' });
+  const [runningTask, setRunningTask] = useState<string | null>(null);
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -94,6 +97,47 @@ export function KanbanBoard() {
     }
   };
 
+  const createTask = async () => {
+    try {
+      const res = await fetch('http://localhost:3000/api/v1/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          content: newTask.content,
+          project: newTask.project || undefined,
+          priority: newTask.priority || undefined,
+          category: newTask.category || undefined,
+        }),
+      });
+      if (res.ok) {
+        await fetchTasks();
+        await fetchFilterOptions();
+        setNewTaskModal(false);
+        setNewTask({ content: '', project: '', priority: 'medium', category: '' });
+      }
+    } catch (err) {
+      console.error('Failed to create task:', err);
+    }
+  };
+
+  const runTask = async (taskId: string) => {
+    setRunningTask(taskId);
+    try {
+      const res = await fetch('http://localhost:3000/api/v1/tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: `Execute task ${taskId}` }),
+      });
+      if (res.ok) {
+        await fetchTasks();
+      }
+    } catch (err) {
+      console.error('Failed to run task:', err);
+    } finally {
+      setRunningTask(null);
+    }
+  };
+
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
   };
@@ -145,6 +189,12 @@ export function KanbanBoard() {
       <div className="border-b p-4 flex items-center justify-between bg-background">
         <h2 className="text-xl font-semibold">Task Board</h2>
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => setNewTaskModal(true)}
+            className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm hover:bg-primary/90"
+          >
+            + New Task
+          </button>
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
@@ -203,6 +253,18 @@ export function KanbanBoard() {
                         )}
                       </div>
                       <div className="mt-2 flex gap-1">
+                        {task.status === 'pending' && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              runTask(task.task_id);
+                            }}
+                            disabled={runningTask === task.task_id}
+                            className="text-xs px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700 disabled:opacity-50"
+                          >
+                            {runningTask === task.task_id ? '⏳' : '▶'} Run
+                          </button>
+                        )}
                         {STATUS_COLUMNS
                           .filter(c => c.id !== task.status)
                           .slice(0, 3)
@@ -349,6 +411,88 @@ export function KanbanBoard() {
                 className="px-4 py-2 rounded bg-primary text-primary-foreground"
               >
                 Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {newTaskModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setNewTaskModal(false)}>
+          <div className="bg-background rounded-lg p-6 max-w-lg w-full mx-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold mb-4">Create New Task</h3>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Task Description</label>
+                <textarea
+                  value={newTask.content}
+                  onChange={(e) => setNewTask({ ...newTask, content: e.target.value })}
+                  placeholder="What do you want to do?"
+                  className="w-full px-3 py-2 rounded border bg-background h-24 resize-none"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Project</label>
+                  <input
+                    type="text"
+                    value={newTask.project}
+                    onChange={(e) => setNewTask({ ...newTask, project: e.target.value })}
+                    placeholder="project-name"
+                    list="project-list"
+                    className="w-full px-3 py-2 rounded border bg-background"
+                  />
+                  <datalist id="project-list">
+                    {filterOptions?.projects.map(p => (
+                      <option key={p} value={p} />
+                    ))}
+                  </datalist>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Priority</label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                    className="w-full px-3 py-2 rounded border bg-background"
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Category</label>
+                <input
+                  type="text"
+                  value={newTask.category}
+                  onChange={(e) => setNewTask({ ...newTask, category: e.target.value })}
+                  placeholder="bug, feature, research..."
+                  list="category-list"
+                  className="w-full px-3 py-2 rounded border bg-background"
+                />
+                <datalist id="category-list">
+                  {filterOptions?.categories.map(c => (
+                    <option key={c} value={c} />
+                  ))}
+                </datalist>
+              </div>
+            </div>
+            <div className="flex gap-2 justify-end mt-6">
+              <button
+                onClick={() => setNewTaskModal(false)}
+                className="px-4 py-2 rounded border"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={createTask}
+                disabled={!newTask.content.trim()}
+                className="px-4 py-2 rounded bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              >
+                Create Task
               </button>
             </div>
           </div>
