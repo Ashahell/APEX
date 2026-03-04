@@ -1,6 +1,6 @@
 # APEX - Autonomous Agent Platform
 
-APEX is a production-ready autonomous agent platform combining messaging interfaces with secure code execution. Multi-tenancy is explicitly out of scope.
+APEX is an autonomous agent platform combining messaging interfaces with secure code execution. 
 
 ## Status
 
