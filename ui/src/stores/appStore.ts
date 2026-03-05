@@ -37,9 +37,21 @@ export interface PendingConfirmation {
   };
 }
 
+export interface Notification {
+  id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  severity: string;
+  read: boolean;
+  created_at_ms: number;
+  data?: Record<string, unknown>;
+}
+
 interface AppState {
   messages: Message[];
   tasks: Task[];
+  notifications: Notification[];
   isConnected: boolean;
   connectionState: ConnectionState;
   sessionCost: number;
@@ -49,6 +61,7 @@ interface AppState {
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
   addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
+  addNotification: (notification: Notification) => void;
   setConnected: (connected: boolean) => void;
   setConnectionState: (state: ConnectionState) => void;
   setSessionCost: (cost: number) => void;
@@ -60,6 +73,7 @@ interface AppState {
 export const useAppStore = create<AppState>((set) => ({
   messages: [],
   tasks: [],
+  notifications: [],
   isConnected: false,
   connectionState: 'disconnected',
   sessionCost: 0,
@@ -84,6 +98,7 @@ export const useAppStore = create<AppState>((set) => ({
         ...state.tasks,
         {
           ...task,
+          ...task,
           id: crypto.randomUUID(),
           createdAt: new Date(),
         },
@@ -95,6 +110,11 @@ export const useAppStore = create<AppState>((set) => ({
       tasks: state.tasks.map((t) =>
         t.id === id ? { ...t, ...updates } : t
       ),
+    })),
+
+  addNotification: (notification) =>
+    set((state) => ({
+      notifications: [notification, ...state.notifications].slice(0, 50),
     })),
 
   setConnected: (connected) => set({ isConnected: connected }),

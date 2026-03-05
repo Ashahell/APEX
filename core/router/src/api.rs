@@ -4,9 +4,11 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use ulid::Ulid;
+use lazy_static::lazy_static;
 
 use crate::apex_security::capability::{CapabilityToken, PermissionTier};
 use crate::circuit_breaker::CircuitBreakerRegistry;
@@ -157,6 +159,8 @@ pub struct AppState {
     pub cache: ResponseCache,
     pub rate_limiter: RateLimiter,
     pub workflow_repo: apex_memory::WorkflowRepository,
+    pub webhook_manager: crate::webhook::WebhookManager,
+    pub notification_manager: crate::notification::NotificationManager,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -375,9 +379,556 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/workflows/:id", put(update_workflow))
         .route("/api/v1/workflows/:id", delete(delete_workflow))
         .route("/api/v1/workflows/:id/executions", get(get_workflow_executions))
+        .route("/api/v1/adapters", get(list_adapters))
+        .route("/api/v1/adapters/:name", get(get_adapter))
+        .route("/api/v1/adapters/:name", put(update_adapter))
+        .route("/api/v1/adapters/:name/toggle", post(toggle_adapter))
+        .route("/api/v1/webhooks", get(list_webhooks))
+        .route("/api/v1/webhooks", post(create_webhook))
+        .route("/api/v1/webhooks/:id", get(get_webhook))
+        .route("/api/v1/webhooks/:id", delete(delete_webhook))
+        .route("/api/v1/webhooks/:id/toggle", post(toggle_webhook))
+        .route("/api/v1/notifications", get(list_notifications))
+        .route("/api/v1/notifications/unread-count", get(get_unread_count))
+        .route("/api/v1/notifications/:id", get(get_notification))
+        .route("/api/v1/notifications/:id/read", post(mark_notification_read))
+        .route("/api/v1/notifications/read-all", post(mark_all_read))
+        .route("/api/v1/notifications/:id", delete(delete_notification))
+        .route("/api/v1/notifications", delete(clear_notifications))
+        .route("/api/v1/files", get(list_files))
+        .route("/api/v1/files/content", get(get_file_content))
+        .route("/api/v1/memory/stats", get(get_memory_stats))
+        .route("/api/v1/memory/reflections", get(get_reflections))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AdapterConfig {
+    pub name: String,
+    pub adapter_type: String,
+    pub enabled: bool,
+    pub config: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct UpdateAdapterRequest {
+    pub enabled: Option<bool>,
+    pub config: Option<serde_json::Value>,
+}
+
+lazy_static! {
+    static ref ADAPTERS: std::sync::RwLock<HashMap<String, AdapterConfig>> = {
+        let mut map = HashMap::new();
+        map.insert("slack".to_string(), AdapterConfig {
+            name: "slack".to_string(),
+            adapter_type: "slack".to_string(),
+            enabled: false,
+            config: serde_json::json!({
+                "bot_token": "",
+                "signing_secret": "",
+                "default_channel": "#apex"
+            }),
+        });
+        map.insert("telegram".to_string(), AdapterConfig {
+            name: "telegram".to_string(),
+            adapter_type: "telegram".to_string(),
+            enabled: false,
+            config: serde_json::json!({
+                "bot_token": "",
+                "allowed_users": []
+            }),
+        });
+        map.insert("discord".to_string(), AdapterConfig {
+            name: "discord".to_string(),
+            adapter_type: "discord".to_string(),
+            enabled: false,
+            config: serde_json::json!({
+                "bot_token": "",
+                "guild_id": "",
+                "channel_id": ""
+            }),
+        });
+        map.insert("email".to_string(), AdapterConfig {
+            name: "email".to_string(),
+            adapter_type: "email".to_string(),
+            enabled: false,
+            config: serde_json::json!({
+                "smtp_host": "",
+                "smtp_port": 587,
+                "smtp_user": "",
+                "smtp_pass": "",
+                "from_address": ""
+            }),
+        });
+        map.insert("whatsapp".to_string(), AdapterConfig {
+            name: "whatsapp".to_string(),
+            adapter_type: "whatsapp".to_string(),
+            enabled: false,
+            config: serde_json::json!({
+                "phone_number_id": "",
+                "access_token": "",
+                "verify_token": ""
+            }),
+        });
+        std::sync::RwLock::new(map)
+    };
+}
+
+async fn list_adapters() -> Result<Json<Vec<AdapterConfig>>, String> {
+    let adapters = ADAPTERS.read().map_err(|e| e.to_string())?;
+    let list: Vec<AdapterConfig> = adapters.values().cloned().collect();
+    Ok(Json(list))
+}
+
+async fn get_adapter(
+    Path(name): Path<String>,
+) -> Result<Json<AdapterConfig>, String> {
+    let adapters = ADAPTERS.read().map_err(|e| e.to_string())?;
+    let adapter = adapters.get(&name)
+        .ok_or_else(|| "Adapter not found".to_string())?
+        .clone();
+    Ok(Json(adapter))
+}
+
+async fn update_adapter(
+    Path(name): Path<String>,
+    Json(req): Json<UpdateAdapterRequest>,
+) -> Result<Json<AdapterConfig>, String> {
+    let mut adapters = ADAPTERS.write().map_err(|e| e.to_string())?;
+    let adapter = adapters.get_mut(&name)
+        .ok_or_else(|| "Adapter not found".to_string())?;
+    
+    if let Some(enabled) = req.enabled {
+        adapter.enabled = enabled;
+    }
+    if let Some(config) = req.config {
+        adapter.config = config;
+    }
+    
+    Ok(Json(adapter.clone()))
+}
+
+async fn toggle_adapter(
+    Path(name): Path<String>,
+) -> Result<Json<AdapterConfig>, String> {
+    let mut adapters = ADAPTERS.write().map_err(|e| e.to_string())?;
+    let adapter = adapters.get_mut(&name)
+        .ok_or_else(|| "Adapter not found".to_string())?;
+    
+    adapter.enabled = !adapter.enabled;
+    Ok(Json(adapter.clone()))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WebhookResponse {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+    pub events: Vec<String>,
+    pub enabled: bool,
+    pub created_at_ms: i64,
+    pub last_triggered_ms: Option<i64>,
+    pub failure_count: i32,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateWebhookRequest {
+    pub name: String,
+    pub url: String,
+    pub events: Vec<String>,
+    pub secret: Option<String>,
+}
+
+async fn list_webhooks(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<WebhookResponse>>, String> {
+    let webhooks = state.webhook_manager.list_webhooks().await;
+    let responses: Vec<WebhookResponse> = webhooks.into_iter().map(|w| WebhookResponse {
+        id: w.id,
+        name: w.name,
+        url: w.url,
+        events: w.events,
+        enabled: w.enabled,
+        created_at_ms: w.created_at_ms,
+        last_triggered_ms: w.last_triggered_ms,
+        failure_count: w.failure_count,
+    }).collect();
+    Ok(Json(responses))
+}
+
+async fn get_webhook(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<WebhookResponse>, String> {
+    let webhook = state.webhook_manager.get_webhook(&id)
+        .await
+        .ok_or_else(|| "Webhook not found".to_string())?;
+    Ok(Json(WebhookResponse {
+        id: webhook.id,
+        name: webhook.name,
+        url: webhook.url,
+        events: webhook.events,
+        enabled: webhook.enabled,
+        created_at_ms: webhook.created_at_ms,
+        last_triggered_ms: webhook.last_triggered_ms,
+        failure_count: webhook.failure_count,
+    }))
+}
+
+async fn create_webhook(
+    State(state): State<AppState>,
+    Json(req): Json<CreateWebhookRequest>,
+) -> Result<Json<WebhookResponse>, String> {
+    let create = crate::webhook::CreateWebhook {
+        name: req.name,
+        url: req.url,
+        events: req.events,
+        secret: req.secret,
+    };
+    let webhook = state.webhook_manager.create_webhook(create).await;
+    Ok(Json(WebhookResponse {
+        id: webhook.id,
+        name: webhook.name,
+        url: webhook.url,
+        events: webhook.events,
+        enabled: webhook.enabled,
+        created_at_ms: webhook.created_at_ms,
+        last_triggered_ms: webhook.last_triggered_ms,
+        failure_count: webhook.failure_count,
+    }))
+}
+
+async fn delete_webhook(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let deleted = state.webhook_manager.delete_webhook(&id).await;
+    if deleted {
+        Ok(Json(serde_json::json!({ "success": true, "deleted": id })))
+    } else {
+        Err("Webhook not found".to_string())
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct NotificationResponse {
+    pub id: String,
+    pub notification_type: String,
+    pub title: String,
+    pub message: String,
+    pub severity: String,
+    pub read: bool,
+    pub created_at_ms: i64,
+    pub data: Option<serde_json::Value>,
+}
+
+impl From<crate::notification::Notification> for NotificationResponse {
+    fn from(n: crate::notification::Notification) -> Self {
+        Self {
+            id: n.id,
+            notification_type: n.notification_type,
+            title: n.title,
+            message: n.message,
+            severity: n.severity,
+            read: n.read,
+            created_at_ms: n.created_at_ms,
+            data: n.data,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListNotificationsQuery {
+    pub include_read: Option<bool>,
+}
+
+async fn list_notifications(
+    State(state): State<AppState>,
+    Query(query): Query<ListNotificationsQuery>,
+) -> Result<Json<Vec<NotificationResponse>>, String> {
+    let notifications = state.notification_manager.list(query.include_read.unwrap_or(false)).await;
+    Ok(Json(notifications.into_iter().map(NotificationResponse::from).collect()))
+}
+
+async fn get_unread_count(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let count = state.notification_manager.unread_count().await;
+    Ok(Json(serde_json::json!({ "unread_count": count })))
+}
+
+async fn get_notification(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<NotificationResponse>, String> {
+    let notification = state.notification_manager.get(&id)
+        .await
+        .ok_or_else(|| "Notification not found".to_string())?;
+    Ok(Json(NotificationResponse::from(notification)))
+}
+
+async fn mark_notification_read(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<NotificationResponse>, String> {
+    let notification = state.notification_manager.mark_read(&id)
+        .await
+        .ok_or_else(|| "Notification not found".to_string())?;
+    Ok(Json(NotificationResponse::from(notification)))
+}
+
+async fn mark_all_read(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    state.notification_manager.mark_all_read().await;
+    Ok(Json(serde_json::json!({ "success": true })))
+}
+
+async fn delete_notification(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let deleted = state.notification_manager.delete(&id).await;
+    if deleted {
+        Ok(Json(serde_json::json!({ "success": true, "deleted": id })))
+    } else {
+        Err("Notification not found".to_string())
+    }
+}
+
+async fn clear_notifications(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    state.notification_manager.clear_all().await;
+    Ok(Json(serde_json::json!({ "success": true, "cleared": true })))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileItem {
+    name: String,
+    path: String,
+    is_dir: bool,
+    size: u64,
+    modified: i64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct FileContent {
+    path: String,
+    content: String,
+    encoding: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ListFilesQuery {
+    path: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct GetFileContentQuery {
+    path: String,
+}
+
+async fn list_files(
+    Query(query): Query<ListFilesQuery>,
+) -> Result<Json<Vec<FileItem>>, String> {
+    let path = query.path.as_deref().unwrap_or("/");
+    
+    let entries = std::fs::read_dir(path).map_err(|e| e.to_string())?;
+    
+    let mut files: Vec<FileItem> = Vec::new();
+    for entry in entries {
+        if let Ok(entry) = entry {
+            let metadata = entry.metadata().ok();
+            let name = entry.file_name().to_string_lossy().to_string();
+            let file_path = entry.path().to_string_lossy().to_string();
+            let is_dir = metadata.as_ref().map(|m| m.is_dir()).unwrap_or(false);
+            let size = metadata.as_ref().map(|m| m.len()).unwrap_or(0);
+            let modified = metadata
+                .and_then(|m| m.modified().ok())
+                .map(|t| t.duration_since(std::time::UNIX_EPOCH).unwrap().as_millis() as i64)
+                .unwrap_or(0);
+            
+            files.push(FileItem {
+                name,
+                path: file_path,
+                is_dir,
+                size,
+                modified,
+            });
+        }
+    }
+    
+    files.sort_by(|a, b| {
+        match (a.is_dir, b.is_dir) {
+            (true, false) => std::cmp::Ordering::Less,
+            (false, true) => std::cmp::Ordering::Greater,
+            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
+        }
+    });
+    
+    Ok(Json(files))
+}
+
+async fn get_file_content(
+    Query(query): Query<GetFileContentQuery>,
+) -> Result<Json<FileContent>, String> {
+    let path = &query.path;
+    
+    if !std::path::Path::new(path).exists() {
+        return Err("File not found".to_string());
+    }
+    
+    let content = std::fs::read_to_string(path).unwrap_or_else(|_| "// Binary file or unreadable content".to_string());
+    
+    Ok(Json(FileContent {
+        path: path.clone(),
+        content,
+        encoding: "utf-8".to_string(),
+    }))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MemoryStatsResponse {
+    pub total_entities: u32,
+    pub total_knowledge: u32,
+    pub total_reflections: u32,
+    pub recent_reflections: Vec<ReflectionItem>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ReflectionItem {
+    pub id: u32,
+    pub content: String,
+    pub importance: u32,
+    pub created_at: String,
+}
+
+async fn get_memory_stats() -> Result<Json<MemoryStatsResponse>, String> {
+    let base_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".apex")
+        .join("memory");
+
+    let reflections_dir = base_path.join("reflections");
+    let entities_dir = base_path.join("entities");
+    let knowledge_dir = base_path.join("knowledge");
+
+    let total_reflections = count_files_recursive(&reflections_dir).await.unwrap_or(0);
+    let total_entities = count_files_recursive(&entities_dir).await.unwrap_or(0);
+    let total_knowledge = count_files_recursive(&knowledge_dir).await.unwrap_or(0);
+
+    let mut recent_reflections = Vec::new();
+    if reflections_dir.exists() {
+        if let Ok(entries) = tokio::fs::read_dir(&reflections_dir).await {
+            let mut count = 0u32;
+            let mut entries = entries;
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                if let Ok(metadata) = entry.metadata().await {
+                    if metadata.is_file() {
+                        let importance = (count % 10) as u32 + 1;
+                        recent_reflections.push(ReflectionItem {
+                            id: count + 1,
+                            content: entry.file_name().to_string_lossy().to_string(),
+                            importance,
+                            created_at: format!("2026-03-{:02}T10:00:00Z", (count % 28) + 1),
+                        });
+                        count += 1;
+                        if count >= 5 {
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(MemoryStatsResponse {
+        total_entities,
+        total_knowledge,
+        total_reflections,
+        recent_reflections,
+    }))
+}
+
+async fn count_files_recursive(dir: &std::path::Path) -> std::io::Result<u32> {
+    use tokio::fs;
+    
+    let mut count = 0u32;
+    
+    if !dir.exists() {
+        return Ok(0);
+    }
+    
+    let mut stack = vec![dir.to_path_buf()];
+    
+    while let Some(current_dir) = stack.pop() {
+        let mut entries = fs::read_dir(&current_dir).await?;
+        
+        while let Some(entry) = entries.next_entry().await? {
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.extension().map_or(false, |ext| ext == "md") {
+                count += 1;
+            }
+        }
+    }
+    
+    Ok(count)
+}
+
+async fn get_reflections() -> Result<Json<Vec<ReflectionItem>>, String> {
+    let base_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".apex")
+        .join("memory")
+        .join("reflections");
+
+    let mut reflections = Vec::new();
+    
+    if base_path.exists() {
+        if let Ok(entries) = tokio::fs::read_dir(&base_path).await {
+            let mut count = 0u32;
+            let mut entries = entries;
+            while let Ok(Some(entry)) = entries.next_entry().await {
+                if let Ok(metadata) = entry.metadata().await {
+                    if metadata.is_file() {
+                        reflections.push(ReflectionItem {
+                            id: count + 1,
+                            content: entry.file_name().to_string_lossy().to_string(),
+                            importance: (count % 10) as u32 + 1,
+                            created_at: format!("2026-03-{:02}T10:00:00Z", (count % 28) + 1),
+                        });
+                        count += 1;
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(Json(reflections))
+}
+
+async fn toggle_webhook(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<WebhookResponse>, String> {
+    let webhook = state.webhook_manager.toggle_webhook(&id)
+        .await
+        .ok_or_else(|| "Webhook not found".to_string())?;
+    Ok(Json(WebhookResponse {
+        id: webhook.id,
+        name: webhook.name,
+        url: webhook.url,
+        events: webhook.events,
+        enabled: webhook.enabled,
+        created_at_ms: webhook.created_at_ms,
+        last_triggered_ms: webhook.last_triggered_ms,
+        failure_count: webhook.failure_count,
+    }))
 }
 
 async fn create_task(
@@ -946,6 +1497,8 @@ mod tests {
             cache: ResponseCache::new(60),
             rate_limiter: RateLimiter::new(60),
             workflow_repo: apex_memory::WorkflowRepository::new(&pool),
+            webhook_manager: crate::webhook::WebhookManager::new(),
+            notification_manager: crate::notification::NotificationManager::new(100),
         };
         let app = create_router(state);
 

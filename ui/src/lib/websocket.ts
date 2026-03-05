@@ -42,8 +42,19 @@ export interface ExecutionEvent {
 }
 
 export interface ServerMessage {
-  type: 'task_update' | 'task_created' | 'metrics' | 'execution_event' | 'error';
+  type: 'task_update' | 'task_created' | 'metrics' | 'execution_event' | 'notification' | 'error';
   payload: unknown;
+}
+
+export interface NotificationMessage {
+  id: string;
+  notification_type: string;
+  title: string;
+  message: string;
+  severity: string;
+  read: boolean;
+  created_at_ms: number;
+  data?: Record<string, unknown>;
 }
 
 class WebSocketClient {
@@ -114,6 +125,10 @@ class WebSocketClient {
         this.handleExecutionEvent(event);
       });
 
+      this.socket.on('notification', (notification: NotificationMessage) => {
+        this.handleNotification(notification);
+      });
+
       this.socket.on('error', (error: Error) => {
         console.error('WebSocket error:', error);
         store.setConnectionState('degraded');
@@ -162,6 +177,12 @@ class WebSocketClient {
     if (event.type === 'Thought' || event.type === 'ToolCall' || event.type === 'ToolResult') {
       console.log('Execution event:', event.type, event.data);
     }
+  }
+
+  private handleNotification(notification: NotificationMessage): void {
+    console.log('Received notification via WebSocket:', notification);
+    const store = useAppStore.getState();
+    store.addNotification(notification);
   }
 
   private startPolling(): void {

@@ -1,6 +1,6 @@
 import clsx from 'clsx';
 
-type AppTab = 'chat' | 'skills' | 'marketplace' | 'consequences' | 'files' | 'kanban' | 'memory' | 'narrative' | 'workflows' | 'audit' | 'channels' | 'journal' | 'soul' | 'social' | 'autonomy' | 'governance' | 'vm' | 'metrics' | 'monitoring' | 'health' | 'totp' | 'clients' | 'deep' | 'settings';
+type AppTab = 'chat' | 'skills' | 'marketplace' | 'consequences' | 'files' | 'kanban' | 'memory' | 'memoryStats' | 'narrative' | 'workflows' | 'audit' | 'channels' | 'journal' | 'soul' | 'social' | 'autonomy' | 'governance' | 'vm' | 'metrics' | 'monitoring' | 'health' | 'totp' | 'clients' | 'deep' | 'settings' | 'adapters' | 'webhooks';
 
 interface SidebarProps {
   activeTab: AppTab;
@@ -14,6 +14,7 @@ const tabs: { id: AppTab; label: string; icon: string }[] = [
   { id: 'marketplace', label: 'Market', icon: '🛒' },
   { id: 'consequences', label: 'Preview', icon: '👁️' },
   { id: 'memory', label: 'Memory', icon: '🧠' },
+  { id: 'memoryStats', label: 'Stats', icon: '📊' },
   { id: 'narrative', label: 'Narrative', icon: '📖' },
   { id: 'files', label: 'Files', icon: '📁' },
   { id: 'kanban', label: 'Board', icon: '📋' },
@@ -22,6 +23,8 @@ const tabs: { id: AppTab; label: string; icon: string }[] = [
   { id: 'audit', label: 'Audit', icon: '📊' },
   { id: 'channels', label: 'Channels', icon: '📢' },
   { id: 'journal', label: 'Journal', icon: '📝' },
+  { id: 'adapters', label: 'Adapters', icon: '🔌' },
+  { id: 'webhooks', label: 'Webhooks', icon: '🪝' },
   { id: 'vm', label: 'VMs', icon: '🖥️' },
   { id: 'metrics', label: 'Metrics', icon: '📈' },
   { id: 'monitoring', label: 'Monitor', icon: '📊' },

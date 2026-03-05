@@ -10,27 +10,33 @@ import { Settings } from './components/settings/Settings';
 import { KanbanBoard } from './components/kanban/KanbanBoard';
 import { MemoryViewer } from './components/memory/MemoryViewer';
 import { NarrativeMemoryViewer } from './components/memory/NarrativeMemoryViewer';
+import { MemoryStatsDashboard } from './components/memory/MemoryStatsDashboard';
 import { Workflows } from './components/workflows/Workflows';
 import { AuditLog } from './components/audit/AuditLog';
 import { ChannelManager } from './components/channels/ChannelManager';
+import { AdapterManager } from './components/channels/AdapterManager';
+import { WebhookManager } from './components/integrations/WebhookManager';
 import { DecisionJournal } from './components/journal/DecisionJournal';
 import { SoulEditor } from './components/soul/SoulEditor';
 import { SocialDashboard } from './components/social/SocialDashboard';
 import { AutonomyControls } from './components/autonomy/AutonomyControls';
 import { GovernanceControls } from './components/autonomy/GovernanceControls';
+import { DeepTaskPanel } from './components/deep/DeepTaskPanel';
 import { VmPoolDashboard } from './components/vm/VmPoolDashboard';
 import { MetricsPanel } from './components/metrics/MetricsPanel';
-import { SystemHealthPanel } from './components/metrics/SystemHealthPanel';
 import { MonitoringDashboard } from './components/metrics/MonitoringDashboard';
+import { SystemHealthPanel } from './components/metrics/SystemHealthPanel';
 import { TotpSetup } from './components/auth/TotpSetup';
 import { ClientAuthManager } from './components/auth/ClientAuthManager';
-import { DeepTaskPanel } from './components/deep/DeepTaskPanel';
 import { Sidebar } from './components/ui/Sidebar';
+import { NotificationBell } from './components/ui/NotificationBell';
+import { SkillQuickLaunch } from './components/skills/SkillQuickLaunch';
+import { QuickCommandBar } from './components/ui/QuickCommandBar';
 import { wsClient } from './lib/websocket';
 
-type AppTab = 'chat' | 'skills' | 'marketplace' | 'consequences' | 'files' | 'kanban' | 'memory' | 'narrative' | 'workflows' | 'audit' | 'channels' | 'journal' | 'soul' | 'social' | 'autonomy' | 'governance' | 'vm' | 'metrics' | 'monitoring' | 'health' | 'totp' | 'clients' | 'deep' | 'settings';
+type AppTab = 'chat' | 'skills' | 'marketplace' | 'consequences' | 'files' | 'kanban' | 'memory' | 'memoryStats' | 'narrative' | 'workflows' | 'audit' | 'channels' | 'journal' | 'soul' | 'social' | 'autonomy' | 'governance' | 'vm' | 'metrics' | 'monitoring' | 'health' | 'totp' | 'clients' | 'deep' | 'settings' | 'adapters' | 'webhooks';
 
-const TAB_ORDER: AppTab[] = ['chat', 'skills', 'marketplace', 'consequences', 'memory', 'narrative', 'files', 'kanban', 'workflows', 'audit', 'channels', 'journal', 'deep', 'vm', 'metrics', 'monitoring', 'health', 'soul', 'social', 'autonomy', 'governance', 'totp', 'clients', 'settings'];
+const TAB_ORDER: AppTab[] = ['chat', 'skills', 'marketplace', 'consequences', 'memory', 'memoryStats', 'narrative', 'files', 'kanban', 'workflows', 'audit', 'channels', 'adapters', 'webhooks', 'journal', 'deep', 'vm', 'metrics', 'monitoring', 'health', 'soul', 'social', 'autonomy', 'governance', 'totp', 'clients', 'settings'];
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('chat');
@@ -118,6 +124,8 @@ function App() {
           </div>
           
           <div className="flex items-center gap-2 sm:gap-6">
+            <SkillQuickLaunch />
+            <QuickCommandBar onNavigate={(tab) => setActiveTab(tab as AppTab)} onOpenSettings={() => setActiveTab('settings')} />
             <button 
               className="flex items-center gap-2 hover:bg-muted px-2 sm:px-3 py-1.5 rounded-lg transition-colors"
               onClick={() => setActiveTab('kanban')}
@@ -133,6 +141,8 @@ function App() {
             >
               {theme === 'dark' ? '☀️' : '🌙'}
             </button>
+            
+            <NotificationBell />
             
             <div className="flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full ${conn.color} animate-pulse`} />
@@ -151,10 +161,13 @@ function App() {
           {activeTab === 'files' && <Files />}
           {activeTab === 'kanban' && <KanbanBoard />}
           {activeTab === 'memory' && <MemoryViewer />}
+          {activeTab === 'memoryStats' && <MemoryStatsDashboard />}
           {activeTab === 'narrative' && <NarrativeMemoryViewer />}
           {activeTab === 'workflows' && <Workflows />}
           {activeTab === 'audit' && <AuditLog />}
           {activeTab === 'channels' && <ChannelManager />}
+          {activeTab === 'adapters' && <AdapterManager />}
+          {activeTab === 'webhooks' && <WebhookManager />}
           {activeTab === 'journal' && <DecisionJournal />}
           {activeTab === 'deep' && <DeepTaskPanel />}
           {activeTab === 'vm' && <VmPoolDashboard />}

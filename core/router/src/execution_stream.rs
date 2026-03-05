@@ -309,9 +309,10 @@ mod tests {
     async fn test_execution_stream() {
         let stream = ExecutionStream::new("test-task".to_string());
         
+        let mut rx = stream.subscribe();
+        
         stream.emit_thought(0, "Starting task".to_string()).await;
         
-        let mut rx = stream.subscribe();
         let event = rx.recv().await.unwrap();
         
         match event {
@@ -331,7 +332,22 @@ mod tests {
         let stream2 = manager.get_stream("task-1");
         
         assert!(stream2.is_some());
-        assert!(std::ptr::eq(&stream1, &stream2.unwrap()));
+        
+        let mut rx1 = stream1.subscribe();
+        let mut rx2 = stream2.unwrap().subscribe();
+        
+        stream1.emit(ExecutionEvent::Thought { step: 1, content: "test".to_string() }).await;
+        
+        let event1 = rx1.recv().await.unwrap();
+        let event2 = rx2.recv().await.unwrap();
+        
+        match (&event1, &event2) {
+            (ExecutionEvent::Thought { step: s1, content: c1 }, ExecutionEvent::Thought { step: s2, content: c2 }) => {
+                assert_eq!(s1, s2);
+                assert_eq!(c1, c2);
+            }
+            _ => panic!("Expected Thought events"),
+        }
         
         manager.remove_stream("task-1");
         assert!(manager.get_stream("task-1").is_none());

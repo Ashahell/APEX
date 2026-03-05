@@ -18,12 +18,15 @@ use crate::api::AppState;
 #[derive(Clone)]
 pub struct WebSocketManager {
     clients: StdArc<RwLock<HashMap<String, broadcast::Sender<String>>>>,
+    notification_channel: StdArc<broadcast::Sender<String>>,
 }
 
 impl WebSocketManager {
     pub fn new() -> Self {
+        let (notification_channel, _) = broadcast::channel(100);
         Self {
             clients: StdArc::new(RwLock::new(HashMap::new())),
+            notification_channel: StdArc::new(notification_channel),
         }
     }
 
@@ -50,6 +53,14 @@ impl WebSocketManager {
             let _ = sender.send(message.to_string());
         }
     }
+
+    pub fn broadcast_notification(&self, message: &str) {
+        let _ = self.notification_channel.send(message.to_string());
+    }
+
+    pub fn notification_receiver(&self) -> broadcast::Receiver<String> {
+        self.notification_channel.subscribe()
+    }
 }
 
 impl Default for WebSocketManager {
@@ -70,9 +81,17 @@ async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
     let (mut sender, mut receiver) = socket.split();
     let task_id = StdArc::new(RwLock::new(String::new()));
     let (tx, mut rx) = broadcast::channel::<String>(100);
+    
+    // Subscribe to notification broadcasts
+    let mut notification_rx = ws_manager.notification_receiver();
 
     let task_id_clone = task_id.clone();
     let tx_orig = tx.clone();
+
+    // Use Arc to share sender across tasks
+    let sender = StdArc::new(tokio::sync::Mutex::new(sender));
+    let sender_for_tasks = sender.clone();
+    let sender_for_notifs = sender.clone();
 
     tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -92,8 +111,20 @@ async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
         }
     });
 
+    // Handle task-specific messages
     tokio::spawn(async move {
         while let Ok(msg) = rx.recv().await {
+            let mut sender = sender_for_tasks.lock().await;
+            if sender.send(Message::Text(msg)).await.is_err() {
+                break;
+            }
+        }
+    });
+
+    // Handle notification broadcasts
+    tokio::spawn(async move {
+        while let Ok(msg) = notification_rx.recv().await {
+            let mut sender = sender_for_notifs.lock().await;
             if sender.send(Message::Text(msg)).await.is_err() {
                 break;
             }

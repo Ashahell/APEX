@@ -18,6 +18,8 @@ use apex_router::unified_config::AppConfig;
 use apex_router::vm_pool::{VmConfig, VmPool};
 use apex_router::rate_limiter::RateLimiter;
 use apex_router::response_cache::ResponseCache;
+use apex_router::webhook::WebhookManager;
+use apex_router::notification::NotificationManager;
 use apex_router::system_health::SystemMonitor;
 use apex_router::websocket::WebSocketManager;
 
@@ -129,6 +131,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cache: ResponseCache::new(60),
         rate_limiter: RateLimiter::new(60),
         workflow_repo: apex_memory::WorkflowRepository::new(&pool_for_workers),
+        webhook_manager: WebhookManager::new(),
+        notification_manager: NotificationManager::new(100),
     };
 
     let worker = SkillWorker::new(pool_for_workers.clone(), message_bus.clone(), circuit_breakers.clone());

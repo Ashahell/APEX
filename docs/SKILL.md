@@ -4,8 +4,13 @@
 
 Skills are reusable, typed execution units that extend APEX's capabilities. Each skill is a self-contained module with input/output validation, health checks, and permission tiering.
 
+APEX v0.2.0 supports two skill formats:
+1. **TypeScript Skills** - Traditional skill format with package.json
+2. **SKILL.md Plugins** - Markdown-based skill definition (new in v0.2.0)
+
 ## Skill Structure
 
+### TypeScript Format
 ```
 skill-name/
 ├── package.json          # Skill metadata
@@ -13,6 +18,69 @@ skill-name/
 │   └── index.ts          # Skill implementation
 ├── input.schema.json     # Input validation schema
 └── output.schema.json    # Output validation schema
+```
+
+### SKILL.md Plugin Format (v0.2.0)
+```
+skill-name/
+├── SKILL.md              # Skill definition
+├── src/
+│   └── index.ts          # Implementation (optional)
+└── config.yaml           # Runtime configuration (optional)
+```
+
+## SKILL.md Plugin Format
+
+```markdown
+# skill.code.generate
+
+**Version**: 1.2.0
+**Author**: APEX Team
+**Tier**: T1 (Tap to confirm)
+**Runtime**: TypeScript
+
+## Description
+Generates code from natural language descriptions using AI.
+
+## Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "language": { "type": "string", "enum": ["python", "javascript", "rust", "go"] },
+    "description": { "type": "string" }
+  },
+  "required": ["language", "description"]
+}
+```
+
+## Output Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "code": { "type": "string" },
+    "files": { "type": "array" }
+  }
+}
+```
+
+## Capabilities
+- code.generate
+- file.write
+- docs.read
+
+## Security
+- sandbox: true
+- network: false
+- timeout: 30s
+
+## Example
+```yaml
+input:
+  language: python
+  description: "A function to calculate fibonacci numbers"
+```
 ```
 
 ## package.json Schema
@@ -142,6 +210,67 @@ Skills are loaded from the `skills/skills/` directory at startup. The loader:
 |-------|------|-------------|
 | code.generate | T1 | Generate code from description |
 | code.review | T1 | Review code for issues |
-| shell.execute | T2 | Execute shell commands |
+| shell.execute | T3 | Execute shell commands (requires TOTP) |
 | docs.read | T0 | Read documentation |
-| git.commit | T1 | Create git commits |
+| git.commit | T2 | Create git commits |
+
+---
+
+## SKILL.md Plugin System (v0.2.0)
+
+APEX v0.2.0 introduces a new plugin system based on SKILL.md files.
+
+### Plugin Manager
+
+```rust
+pub struct SkillPluginManager {
+    plugins: HashMap<String, SkillPlugin>,
+    skills_dir: PathBuf,
+}
+
+impl SkillPluginManager {
+    pub async fn load_plugin(&mut self, name: &str) -> Result<&SkillPlugin, PluginError>;
+    pub async fn unload_plugin(&mut self, name: &str) -> Result<(), PluginError>;
+    pub fn get_plugin(&self, name: &str) -> Option<&SkillPlugin>;
+    pub fn list_plugins(&self) -> Vec<&SkillPlugin>;
+}
+```
+
+### Plugin Manifest
+
+```rust
+pub struct SkillManifest {
+    pub name: String,
+    pub version: String,
+    pub description: String,
+    pub author: String,
+    pub tier: PermissionTier,      // T0, T1, T2, T3
+    pub runtime: PluginRuntime,    // TypeScript, Python, Bash
+    pub input_schema: serde_json::Value,
+    pub output_schema: serde_json::Value,
+    pub capabilities: Vec<String>,
+    pub security: SkillSecurity,
+}
+```
+
+### Plugin Runtime Types
+
+| Runtime | Description |
+|---------|-------------|
+| TypeScript | Compiled JavaScript with node |
+| Python | Python 3.11+ interpreter |
+| Bash | Shell scripts (/bin/sh) |
+
+### Security Configuration
+
+```yaml
+security:
+  sandbox: true      # Run in isolated environment
+  network: false    # Disable network access
+  timeout: 30       # Max execution time in seconds
+  max_memory_mb: 512
+```
+
+### Loading Plugins
+
+Plugins are automatically loaded from the `skills/skills/` directory. Each subdirectory with a `SKILL.md` file is treated as a plugin.

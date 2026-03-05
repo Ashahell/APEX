@@ -403,6 +403,47 @@ GET /
 APEX Router v0.1.0 - See /api/v1/tasks for task endpoints
 ```
 
+### Configuration
+
+#### Get All Config
+```
+GET /api/v1/config
+```
+
+**Response:**
+```json
+{
+  "config": {
+    "APEX_PORT": "3000",
+    "APEX_HOST": "0.0.0.0",
+    "APEX_USE_LLM": "0",
+    "LLAMA_SERVER_URL": "http://localhost:8080",
+    ...
+  },
+  "source": "environment"
+}
+```
+
+#### Get Config Summary
+```
+GET /api/v1/config/summary
+```
+
+**Response:**
+```json
+{
+  "server": { "host": "0.0.0.0", "port": 3000 },
+  "auth_enabled": true,
+  "database_type": "sqlite",
+  "nats_enabled": false,
+  "use_llm": false,
+  "execution_backend": "none",
+  "heartbeat_enabled": false,
+  "config_source": "environment",
+  "validation_errors": []
+}
+```
+
 ## Task Tiers
 
 | Tier | Description | Use Case |
@@ -476,3 +517,486 @@ Requires Discord Bot Token and Gateway Intents.
 Location: `gateway/src/adapters/telegram/`
 
 Requires Telegram Bot Token from BotFather.
+
+---
+
+## v0.2.0 New Endpoints
+
+### VM Pool Stats
+
+```
+GET /api/v1/vm/stats
+```
+
+Get VM pool statistics.
+
+**Response:**
+```json
+{
+  "total": 5,
+  "ready": 3,
+  "busy": 1,
+  "starting": 1,
+  "stopped": 0,
+  "available": 3,
+  "backend": "Firecracker",
+  "enabled": true
+}
+```
+
+### Configuration
+
+APEX v0.2.0 supports YAML configuration files. Configuration can also be provided via environment variables.
+
+**Environment Variables:**
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `APEX_PORT` | 3000 | Router port |
+| `APEX_SHARED_SECRET` | dev-secret | HMAC signing secret |
+| `APEX_AUTH_DISABLED` | false | Disable authentication |
+| `APEX_NATS_ENABLED` | false | Enable NATS distributed mode |
+| `APEX_NATS_URL` | 127.0.0.1:4222 | NATS server URL |
+| `APEX_DATABASE_URL` | sqlite:apex.db | Database connection |
+| `APEX_USE_FIRECRACKER` | false | Enable |
+| `AP Firecracker VMsEX_USE_GVISOR` | false | Enable gVisor |
+| `APEX_USE_DOCKER` | false | Enable Docker execution |
+| `APEX_VM_VCPU` | 2 | CPUs per VM |
+| `APEX_VM_MEMORY_MIB` | 2048 | Memory per VM in MiB |
+| `LLAMA_SERVER_URL` | localhost:8080 | LLM endpoint |
+
+**YAML Configuration:**
+```yaml
+# apex.yaml
+server:
+  host: "0.0.0.0"
+  port: 3000
+
+auth:
+  shared_secret: "${APEX_SHARED_SECRET}"
+  disabled: false
+
+database:
+  type: "sqlite"  # or "postgresql"
+  connection_string: "${APEX_DATABASE_URL}"
+
+agent:
+  max_iterations: 50
+  max_budget_cents: 500
+  context_window_tokens: 4096
+  model: "qwen3-4b"
+
+execution:
+  isolation: "firecracker"  # firecracker | gvisor | docker
+  firecracker:
+    vcpus: 2
+    memory_mib: 2048
+    timeout_secs: 60
+```
+
+---
+
+## Authentication
+
+All API requests (except `/health` and `/`) require HMAC-SHA256 authentication.
+
+### Headers Required:
+- `X-APEX-Signature`: HMAC-SHA256 signature
+- `X-APEX-Timestamp`: Unix timestamp (within 5 minutes)
+
+### Signature Calculation:
+```
+signature = HMAC-SHA256(timestamp + method + path + body, shared_secret)
+```
+
+Example:
+```javascript
+const timestamp = Math.floor(Date.now() / 1000);
+const message = timestamp + 'POST' + '/api/v1/tasks' + JSON.stringify(body);
+const signature = crypto.createHmac('sha256', secret).update(message).digest('hex');
+```
+
+---
+
+## SOUL Identity
+
+### Get SOUL Identity
+```
+GET /api/v1/soul
+```
+
+Returns the agent's SOUL.md identity.
+
+**Response:**
+```json
+{
+  "success": true,
+  "identity": {
+    "name": "APEX",
+    "version": "1.0",
+    "created": "2026-03-01T00:00:00Z",
+    "wake_count": 42,
+    "purpose": "Your AI assistant",
+    "values": [...],
+    "capabilities": [...],
+    "autonomy_config": {...},
+    "memory_strategy": {...},
+    "relationships": [...],
+    "affiliations": [...],
+    "current_goals": [...],
+    "reflections": [...],
+    "constitution": {...}
+  }
+}
+```
+
+### Update SOUL Identity
+```
+PUT /api/v1/soul
+```
+
+**Request Body:**
+```json
+{
+  "content": "# SOUL.md content..."
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "SOUL.md updated successfully"
+}
+```
+
+### Get SOUL Fragments
+```
+GET /api/v1/soul/fragments
+```
+
+Returns modular identity fragments (values.md, skills.md, relationships.md, goals.md).
+
+---
+
+## Heartbeat / Autonomy
+
+### Get Heartbeat Config
+```
+GET /api/v1/heartbeat/config
+```
+
+**Response:**
+```json
+{
+  "enabled": true,
+  "interval_minutes": 60,
+  "jitter_percent": 10,
+  "cooldown_seconds": 300,
+  "max_actions_per_wake": 3,
+  "require_approval_t1_plus": true
+}
+```
+
+### Update Heartbeat Config
+```
+POST /api/v1/heartbeat/config
+```
+
+**Request Body:**
+```json
+{
+  "enabled": true,
+  "interval_minutes": 60,
+  "jitter_percent": 10,
+  "cooldown_seconds": 300,
+  "max_actions_per_wake": 3,
+  "require_approval_t1_plus": true
+}
+```
+
+### Get Heartbeat Stats
+```
+GET /api/v1/heartbeat/stats
+```
+
+**Response:**
+```json
+{
+  "wake_count": 42,
+  "last_wake": "2026-03-04T10:30:00Z",
+  "actions_performed": 126,
+  "autonomous_actions": 15
+}
+```
+
+### Trigger Manual Wake
+```
+POST /api/v1/heartbeat/trigger
+```
+
+### Toggle Heartbeat
+```
+POST /api/v1/heartbeat/toggle
+```
+
+**Request Body:**
+```json
+{
+  "enabled": false
+}
+```
+
+---
+
+## Narrative Memory
+
+### Get Memory Stats
+```
+GET /api/v1/memory/stats
+```
+
+**Response:**
+```json
+{
+  "journal_entries": 150,
+  "entities": 25,
+  "knowledge_items": 80,
+  "reflections": 12,
+  "total_files": 267
+}
+```
+
+### Get Journal Entries
+```
+GET /api/v1/memory/journal
+```
+
+### Get Entities
+```
+GET /api/v1/memory/entities
+```
+
+### Get Knowledge
+```
+GET /api/v1/memory/knowledge
+```
+
+### Get Reflections
+```
+GET /api/v1/memory/reflections
+```
+
+### Add Reflection
+```
+POST /api/v1/memory/reflections
+```
+
+**Request Body:**
+```json
+{
+  "title": "Lesson learned",
+  "content": "What I learned from this task..."
+}
+```
+
+---
+
+## System
+
+### Health & Monitoring
+
+#### Get System Health
+```
+GET /api/v1/system/health
+```
+
+**Response:**
+```json
+{
+  "uptime_secs": 3600,
+  "requests_total": 150,
+  "errors_total": 2,
+  "error_rate": 1.33,
+  "avg_response_time_ms": 25.5,
+  "requests_by_endpoint": {
+    "/api/v1/tasks": 50,
+    "/api/v1/skills": 30
+  },
+  "last_error": null
+}
+```
+
+#### Get Cache Statistics
+```
+GET /api/v1/system/cache
+```
+
+**Response:**
+```json
+{
+  "total_entries": 10,
+  "expired_entries": 2,
+  "active_entries": 8
+}
+```
+
+#### Clear Cache
+```
+DELETE /api/v1/system/cache
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "message": "Cache cleared"
+}
+```
+
+#### Configure Cache
+```
+POST /api/v1/system/cache/config
+```
+
+**Request Body:**
+```json
+{
+  "default_ttl_secs": 120,
+  "endpoint_ttl": {
+    "/api/v1/skills": 300,
+    "/api/v1/tasks": 60
+  }
+}
+```
+
+#### Get Rate Limit Stats
+```
+GET /api/v1/system/ratelimit
+```
+
+**Response:**
+```json
+{
+  "active_keys": 5,
+  "total_requests": 150,
+  "requests_per_minute": 60,
+  "burst_size": 10
+}
+```
+
+---
+
+## Moltbook Social
+
+### Get Moltbook Status
+```
+GET /api/v1/moltbook/status
+```
+
+### Get Agent Directory
+```
+GET /api/v1/moltbook/agents
+```
+
+### Connect to Moltbook
+```
+POST /api/v1/moltbook/connect
+```
+
+### Disconnect from Moltbook
+```
+POST /api/v1/moltbook/disconnect
+```
+
+### Get Social Profile
+```
+GET /api/v1/social/profile
+```
+
+### Create Social Post
+```
+POST /api/v1/social/post
+```
+
+**Request Body:**
+```json
+{
+  "content": "Hello from APEX!"
+}
+```
+
+### Get Notifications
+```
+GET /api/v1/social/notifications
+```
+
+### Search Agents
+```
+GET /api/v1/social/agents/search?q=query
+```
+
+### Get Agent Directory
+```
+GET /api/v1/social/agents/directory
+```
+
+### Assess Trust
+```
+GET /api/v1/social/trust?agent_id=id
+```
+
+---
+
+## Governance
+
+### Get Governance Policy
+```
+GET /api/v1/governance/policy
+```
+
+**Response:**
+```json
+{
+  "policy": {
+    "constitution_hash": "...",
+    "immutable_values": [...],
+    "emergency_protocols": [...]
+  },
+  "oracle_mode": false
+}
+```
+
+### Check Action Allowed
+```
+POST /api/v1/governance/check
+```
+
+**Request Body:**
+```json
+{
+  "action_type": "values",
+  "approval_tier": "T1"
+}
+```
+
+### Get Immutable Values
+```
+GET /api/v1/governance/immutable
+```
+
+### Get Emergency Protocols
+```
+GET /api/v1/governance/emergency
+```
+
+### Toggle Oracle Mode
+```
+POST /api/v1/governance/oracle
+```
+
+**Request Body:**
+```json
+{
+  "enable": true
+}
+```

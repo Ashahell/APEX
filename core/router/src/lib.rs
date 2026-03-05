@@ -12,6 +12,7 @@ pub mod message_bus;
 pub mod metrics;
 pub mod moltbook;
 pub mod narrative;
+pub mod notification;
 pub mod rate_limiter;
 pub mod response_cache;
 pub mod skill_worker;
@@ -20,6 +21,7 @@ pub mod subagent;
 pub mod system_health;
 pub mod unified_config;
 pub mod vm_pool;
+pub mod webhook;
 pub mod websocket;
 
 pub use apex_memory;

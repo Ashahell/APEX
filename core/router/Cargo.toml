@@ -40,6 +40,7 @@ rand = "0.8"
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
 serde_yaml = "0.9"
+lazy_static = "1.4"
 nats = { version = "0.25", optional = true }
 
 [dev-dependencies]

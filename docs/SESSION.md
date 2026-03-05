@@ -1,7 +1,33 @@
 # Session Context - APEX Development
 
-**Date**: 2026-03-02
-**Session**: Kanban Board Implementation - COMPLETE
+> ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
+
+**Date**: 2026-03-05
+**Session**: v1.3.0 - Quick Command Bar - COMPLETE
+
+---
+
+## Recent Updates
+
+### Phase 23: Skill Quick-Launch (v1.1.2)
+- Added SkillQuickLaunch UI component (Ctrl+K)
+- Added 5 new skills: file.search, git.branch, code.format, api.test, docker.run
+
+### Phase 24: Memory Dashboard (v1.2.0)
+- Added MemoryStatsDashboard UI component
+- Added /api/v1/memory/stats endpoint
+- Added /api/v1/memory/reflections endpoint
+
+### Phase 25: Workflow Visualizer (v1.2.1)
+- Added WorkflowVisualizer component
+- Flowchart and timeline views
+- Execution status indicators
+
+### Phase 26: Quick Command Bar (v1.3.0)
+- Added QuickCommandBar component (Ctrl+P)
+- Navigation commands
+- Task execution with `>` prefix
+- Grouped by category
 
 ---
 
@@ -232,16 +258,22 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/v1/skills" -Method Post -Conte
 
 ## Environment Variables
 
+APEX uses a unified configuration system. See `AGENTS.md` for the complete reference.
+
 | Variable | Description | Default |
 |----------|-------------|---------|
 | APEX_USE_LLM | Enable LLM integration | false |
 | LLAMA_SERVER_URL | llama-server address | http://localhost:8080 |
-| LLAMA_MODEL | Model file path | Qwen3-4B-Instruct-2507-Q4_K_M.gguf |
+| LLAMA_MODEL | Model file path | qwen3-4b |
 | APEX_USE_FIRECRACKER | Enable Firecracker VMs | false |
 | APEX_USE_GVISOR | Enable gVisor VMs | false |
 | APEX_VM_VCPU | VCPUs per VM | 2 |
 | APEX_VM_MEMORY_MIB | Memory per VM (MiB) | 2048 |
 | APEX_PORT | Router port | 3000 |
+
+**Configuration API:**
+- `GET /api/v1/config` - Get all configuration
+- `GET /api/v1/config/summary` - Get configuration summary
 
 ---
 
@@ -430,3 +462,210 @@ The `execution/Dockerfile` creates a Python 3.11-slim container with Poetry inst
 
 ### Usage:
 Click the 📋 icon in the sidebar to access the Kanban board.
+
+---
+
+## Phase 1: Security & Permissions (2026-03-03)
+
+### Completed:
+
+1. **Confirmation Modal UI** (`ui/src/components/ui/ConfirmationModal.tsx`)
+   - T0: Silent (no confirmation needed)
+   - T1: Tap to confirm (simple button)
+   - T2: Type to confirm (must type action name)
+   - T3: TOTP + 5-second delay (mock implementation)
+
+2. **Message Bus Updates** (`core/router/src/message_bus.rs`)
+   - Added `permission_tier` to `SkillExecutionMessage`
+   - Added `permission_tier` to `DeepTaskMessage`
+   - Added `ConfirmationMessage` type for confirmation events
+   - Added `subscribe_confirmations()` method
+
+3. **API Endpoints** (`core/router/src/api.rs`)
+   - Added `POST /api/v1/tasks/:id/confirm` - Confirm pending task
+   - Added `ConfirmTaskRequest` struct
+   - Added `permission_tier` to `SkillResponse`
+
+4. **Prompt Injection Defense** (`core/router/src/agent_loop.rs`)
+   - Expanded `sanitize_for_llm()` with 10+ new patterns:
+     - DAN, jailbreak, developer mode
+     - new instructions, override rules
+     - bypass restriction, ignore policy
+     - do anything now, spanish to english, translate instructions
+
+5. **Kanban Board Enhancements** (`ui/src/components/kanban/KanbanBoard.tsx`)
+   - Added "+ New Task" button with modal form
+   - Added "▶ Run" button to execute pending tasks
+   - Project autocomplete from existing projects
+   - Category autocomplete from existing categories
+
+### Files Created/Modified:
+- `ui/src/components/ui/ConfirmationModal.tsx` - NEW
+- `ui/src/components/chat/Chat.tsx` - Updated
+- `core/router/src/message_bus.rs` - Updated
+- `core/router/src/api.rs` - Updated
+- `core/router/src/agent_loop.rs` - Updated
+- `ui/src/components/kanban/KanbanBoard.tsx` - Updated
+
+### New API Endpoints:
+- `POST /api/v1/tasks/:id/confirm` - Confirm task with tier verification
+
+---
+
+## Bug Fix: sqlx Migration Error (2026-03-03)
+
+### Problem
+Router crashed on startup with `Error: Configuration(VersionMismatch(1))` due to sqlx::migrate!() macro incompatibility.
+
+### Solution
+Replaced `sqlx::migrate!()` with manual SQL queries in `core/memory/src/db.rs`.
+
+### Files Modified:
+- `core/memory/src/db.rs` - Manual migrations instead of sqlx macro
+
+---
+
+## Session Updates (2026-03-03) - Phases 1-6 Complete
+
+### Docker Container Cleanup Fix
+**Problem**: Container name conflicts - "apex-vm-0 already in use"
+
+**Solution**: Added container cleanup in `release()` function in `vm_pool.rs`
+- Runs `docker rm -f apex-vm-{id}` when releasing Docker VMs
+- Fixed naming consistency (apex-vm-{id} across all backends)
+
+### Security Hardening (Phase 4)
+Added to Docker container spawn:
+- `--memory=2048m` - Memory limit
+- `--cpus=2` - CPU limit
+- `--pids-limit=256` - Process limit
+- `--network=none` - Network isolation
+- `--read-only` - Read-only filesystem
+- `--tmpfs=/tmp` - Writable temp directory
+
+### New Components
+
+#### Memory Viewer (Phase 5)
+- Created `ui/src/components/memory/MemoryViewer.tsx`
+- Added Memory tab to sidebar (🧠 icon)
+- Features: search, project filtering, task history
+
+#### Cost Estimator (Phase 6)
+- Created `core/router/src/cost_estimator.rs`
+- Estimates based on: token count, step count, complexity
+- Breakdown: LLM, compute, storage, network costs
+
+#### TTL Cleanup (Phase 6)
+- Created `core/memory/migrations/003_ttl_config.sql`
+- Created `core/memory/src/ttl_cleanup.rs`
+- Default retention: 90 days (tasks/messages), 365 days (audit), 30 days (vectors)
+
+#### Skill SDK (Phase 6)
+- Created `docs/SKILL-SDK.md`
+- Complete guide for creating new skills
+
+### New Skills (Phase 6)
+Registered 9 new skills:
+- music.generate, music.extend, music.remix (T2)
+- video.generate, video.edit (T2)
+- script.outline, script.draft (T1)
+- copy.generate, seo.optimize (T1)
+
+### Files Created/Modified
+```
+core/router/src/vm_pool.rs           -- Security hardening + cleanup
+core/router/src/cost_estimator.rs   -- NEW
+core/router/src/lib.rs               -- Added cost_estimator module
+core/memory/src/ttl_cleanup.rs      -- NEW
+core/memory/migrations/003_ttl_config.sql -- NEW
+docs/VM-BACKENDS.md                 -- NEW
+docs/SKILL-SDK.md                   -- NEW
+ui/src/components/memory/MemoryViewer.tsx -- NEW
+ui/src/App.tsx                      -- Added memory tab
+ui/src/components/ui/Sidebar.tsx    -- Added memory icon
+skills/skills/music.generate/       -- NEW
+skills/skills/music.extend/         -- NEW
+skills/skills/music.remix/          -- NEW
+skills/skills/video.generate/       -- NEW
+skills/skills/video.edit/           -- NEW
+skills/skills/script.outline/       -- NEW
+skills/skills/script.draft/         -- NEW
+skills/skills/copy.generate/        -- NEW
+skills/skills/seo.optimize/         -- NEW
+```
+
+---
+
+## Current State (2026-03-03)
+
+### Running Services
+- Llama-Server: http://localhost:8080
+- Router: http://localhost:3000
+- UI: http://localhost:8083
+
+### APEX Update Project
+- 66 completed tasks
+- All Phases (1-6) complete
+
+### Skills Registry
+- Total: 23 skills
+  - T0 (Read-only): 3
+  - T1 (Tap confirm): 11
+  - T2 (Type confirm): 9
+  - T3 (Delay): 0
+
+### Documentation
+- ✅ UPDATE-PLAN.md - Complete
+- ✅ VM-BACKENDS.md - Complete  
+- ✅ SKILL-SDK.md - Complete
+- ✅ SESSION.md - Updated
+
+---
+
+## Current Session (2026-03-04) - Testing Infrastructure
+
+### What We Did
+
+#### Phase: Test Suite Enhancement
+
+1. **Added UI Testing Infrastructure**
+   - Installed `@testing-library/react`, `@testing-library/jest-dom`, `jsdom`
+   - Created `ui/src/test/setup.ts` with global mocks
+   - Created `ui/src/test/mocks.ts` with API mock utilities
+   - Updated `vite.config.ts` with test configuration
+
+2. **Created UI Component Tests**
+   - NotificationBell.test.tsx - 7 tests
+   - Sidebar.test.tsx - 7 tests
+   - ConfirmationModal.test.tsx - 9 tests
+
+3. **Fixed Pre-existing Test Issues**
+   - test_stream_manager - Fixed pointer comparison
+   - test_decision_engine - Fixed empty context issue
+   - test_execution_stream - Fixed subscription timing
+
+### Test Suite Results
+
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Rust Integration | 40 | ✅ Pass |
+| Rust Memory Unit | 16 | ✅ Pass |
+| Rust Router Unit | 68 | ✅ Pass |
+| Gateway TypeScript | 8 | ✅ Pass |
+| Skills TypeScript | 8 | ✅ Pass |
+| UI React | 23 | ✅ Pass |
+
+**Total: 163 tests passing**
+
+### Files Created/Modified
+```
+ui/vite.config.ts                         -- Added test config
+ui/src/test/setup.ts                      -- NEW
+ui/src/test/mocks.ts                      -- NEW
+ui/src/components/ui/NotificationBell.test.tsx -- NEW
+ui/src/components/ui/Sidebar.test.tsx     -- NEW
+ui/src/components/ui/ConfirmationModal.test.tsx -- NEW
+core/router/src/execution_stream.rs       -- Fixed test
+core/router/src/heartbeat/scheduler.rs    -- Fixed test
+core/router/tests/integration.rs          -- Added 26 new tests
+```

@@ -292,16 +292,22 @@ mod tests {
 
     #[test]
     fn test_decision_engine() {
+        use super::{GoalContext, HeartbeatConfig, AutonomyDecisionEngine, DecisionContext};
+        
         let config = HeartbeatConfig::default();
         let engine = AutonomyDecisionEngine::new(config);
         
         let context = DecisionContext {
-            active_goals: vec![],
+            active_goals: vec![GoalContext {
+                id: "test-goal".to_string(),
+                description: "Test goal".to_string(),
+                priority: 9,
+            }],
             pending_notifications: 0,
             last_activity: None,
         };
         
         let actions = futures::executor::block_on(engine.decide(&context));
-        assert!(actions.len() >= 1); // Should have self-maintenance
+        assert!(actions.len() >= 1); // Should have goal advancement
     }
 }

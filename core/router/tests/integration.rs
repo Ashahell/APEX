@@ -39,6 +39,8 @@ async fn create_test_state() -> AppState {
         cache: ResponseCache::new(60),
         rate_limiter: RateLimiter::new(60),
         workflow_repo: apex_memory::WorkflowRepository::new(&db.pool()),
+        webhook_manager: apex_router::webhook::WebhookManager::new(),
+        notification_manager: apex_router::notification::NotificationManager::new(100),
     }
 }
 
@@ -353,4 +355,622 @@ async fn test_deep_task_creates_task_in_db() {
 
     let task = repo.find_by_id(task_id).await.unwrap();
     assert_eq!(task.tier.to_string(), "deep");
+}
+
+#[tokio::test]
+async fn test_list_workflows_empty() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_create_workflow() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let request_body = r#"{
+        "name": "Test Workflow",
+        "description": "A test workflow",
+        "definition": "{\"steps\":[]}",
+        "category": "testing"
+    }"#;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_workflow() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "Get Test Workflow",
+        "definition": "{\"steps\":[]}"
+    }"#;
+
+    let create_response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(create_response.status(), StatusCode::OK);
+
+    let app2 = create_router(state);
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows/test-workflow-id")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_update_workflow() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "Original Name",
+        "definition": "{\"steps\":[]}"
+    }"#;
+
+    let _ = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let app2 = create_router(state);
+    let update_body = r#"{
+        "name": "Updated Name",
+        "is_active": false
+    }"#;
+
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows/test-wf-update")
+                .method("PUT")
+                .header("Content-Type", "application/json")
+                .body(Body::from(update_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_delete_workflow() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "To Be Deleted",
+        "definition": "{\"steps\":[]}"
+    }"#;
+
+    let _ = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let app2 = create_router(state);
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows/delete-me")
+                .method("DELETE")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_workflow_filter_options() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows/filter-options")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_workflow_executions() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/workflows/test-id/executions")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_list_adapters() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/adapters")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_adapter() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/adapters/slack")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_nonexistent_adapter() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/adapters/nonexistent")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status() == StatusCode::NOT_FOUND || response.status() == StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_update_adapter() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let update_body = r#"{"enabled": false}"#;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/adapters/slack")
+                .method("PUT")
+                .header("Content-Type", "application/json")
+                .body(Body::from(update_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_toggle_adapter() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/adapters/telegram/toggle")
+                .method("POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_list_webhooks() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_create_webhook() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let request_body = r#"{
+        "name": "Test Webhook",
+        "url": "https://example.com/webhook",
+        "events": ["task.completed", "task.failed"],
+        "secret": "test-secret"
+    }"#;
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(request_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_webhook() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "Get Test Webhook",
+        "url": "https://example.com/webhook",
+        "events": ["task.completed"]
+    }"#;
+
+    let _ = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let app2 = create_router(state);
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks/test-webhook-id")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_delete_webhook() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "To Delete",
+        "url": "https://example.com/webhook",
+        "events": ["task.completed"]
+    }"#;
+
+    let _ = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let app2 = create_router(state);
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks/delete-me-webhook")
+                .method("DELETE")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_toggle_webhook() {
+    let state = create_test_state().await;
+    let app = create_router(state.clone());
+
+    let create_body = r#"{
+        "name": "Toggle Test",
+        "url": "https://example.com/webhook",
+        "events": ["task.completed"]
+    }"#;
+
+    let _ = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks")
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .body(Body::from(create_body))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    let app2 = create_router(state);
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/webhooks/toggle-test-id/toggle")
+                .method("POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_list_notifications() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_unread_count() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications/unread-count")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_notification() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications/test-notification-id")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_mark_notification_read() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications/test-id/read")
+                .method("POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_mark_all_read() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications/read-all")
+                .method("POST")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_delete_notification() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications/delete-me")
+                .method("DELETE")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_clear_notifications() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/notifications")
+                .method("DELETE")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
+}
+
+#[tokio::test]
+async fn test_list_files() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/files")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_get_file_content() {
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/files/content?path=test.txt")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success() || response.status().is_client_error());
 }

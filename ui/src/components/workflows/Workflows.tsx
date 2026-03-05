@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete, apiPut } from '../../lib/api';
+import { WorkflowVisualizer } from './WorkflowVisualizer';
 
 interface Workflow {
   id: string;
@@ -360,8 +361,9 @@ export function Workflows() {
             >
               ← Back to List
             </button>
-            <h3 className="text-lg font-medium mb-4">
-              Executions: {selectedWorkflow.name}
+            <WorkflowVisualizer workflow={selectedWorkflow} executions={executions} />
+            <h3 className="text-lg font-medium mt-6 mb-4">
+              Execution History: {selectedWorkflow.name}
             </h3>
             {executions.length === 0 ? (
               <div className="text-center text-muted-foreground py-12">
