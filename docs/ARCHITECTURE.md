@@ -1,14 +1,19 @@
 # APEX Architecture Documentation
 
-**Date**: 2026-03-04
-**Version**: v1.0.0
+> ⚠️ **WARNING: PRE-ALPHA** - This document describes an experimental research system. Not production ready.
+
+**Date**: 2026-03-05
+**Version**: v1.3.0
+**Status**: Pre-Alpha (Experimental)
 **Scope**: All directories (core/, gateway/, skills/, ui/, execution/)
 
 ---
 
 ## Executive Summary
 
-APEX is a single-user autonomous agent platform combining messaging interfaces with secure code execution. The system uses a 6-layer architecture with support for Firecracker microVM isolation, Agent Zero's autonomous reasoning loop, and OpenClaw-inspired multi-channel ingress.
+APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. The system uses a 6-layer architecture with support for Firecracker microVM isolation, Agent Zero's autonomous reasoning loop, and OpenClaw-inspired multi-channel ingress.
+
+> **Note**: Many features are proof-of-concept. Firecracker VM isolation is not implemented (uses mock backend).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -228,6 +233,8 @@ interface GatewayConfig {
 | Governance | `src/governance.rs` | Constitution enforcement (✅ ACTIVE) |
 | ExecutionStream | `src/execution_stream.rs` | Real-time execution streaming |
 | Moltbook | `src/moltbook/mod.rs` | Social context (✅ ACTIVE) |
+| Webhook | `src/webhook.rs` | External integrations |
+| Notification | `src/notification.rs` | In-app notifications |
 
 #### API Endpoints
 
@@ -288,6 +295,44 @@ interface GatewayConfig {
 | PUT | `/api/v1/journal/:id` | Update entry |
 | DELETE | `/api/v1/journal/:id` | Delete entry |
 | GET | `/api/v1/journal/search?q=` | Search entries |
+
+**Workflows**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/workflows` | List workflows |
+| POST | `/api/v1/workflows` | Create workflow |
+| GET | `/api/v1/workflows/filter-options` | Get filter options |
+| GET | `/api/v1/workflows/:id` | Get workflow |
+| PUT | `/api/v1/workflows/:id` | Update workflow |
+| DELETE | `/api/v1/workflows/:id` | Delete workflow |
+| GET | `/api/v1/workflows/:id/executions` | Get execution history |
+
+**Adapters**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/adapters` | List adapters |
+| GET | `/api/v1/adapters/:name` | Get adapter config |
+| PUT | `/api/v1/adapters/:name` | Update adapter |
+| POST | `/api/v1/adapters/:name/toggle` | Toggle adapter |
+
+**Webhooks**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/webhooks` | List webhooks |
+| POST | `/api/v1/webhooks` | Create webhook |
+| GET | `/api/v1/webhooks/:id` | Get webhook |
+| DELETE | `/api/v1/webhooks/:id` | Delete webhook |
+| POST | `/api/v1/webhooks/:id/toggle` | Toggle webhook |
+
+**Notifications**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/notifications` | List notifications |
+| GET | `/api/v1/notifications/unread-count` | Get unread count |
+| GET | `/api/v1/notifications/:id` | Get notification |
+| POST | `/api/v1/notifications/:id/read` | Mark as read |
+| POST | `/api/v1/notifications/read-all` | Mark all as read |
+| DELETE | `/api/v1/notifications/:id` | Delete notification |
 
 **Real-time**
 | Method | Endpoint | Description |
