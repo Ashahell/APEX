@@ -1112,3 +1112,136 @@ async fn test_get_file_content() {
 
     assert!(response.status().is_success() || response.status().is_client_error());
 }
+
+#[tokio::test]
+async fn test_memory_search_endpoint() {
+    let _timer = TestTimer::new("test_memory_search_endpoint");
+    let state = create_test_state().await;
+    let pool = state.pool.clone();
+    let app = create_router(state);
+
+    // Insert test memory chunk (with chunk_index)
+    sqlx::query("INSERT INTO memory_chunks (id, file_path, chunk_index, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind("test-chunk-1")
+        .bind("/test/file.md")
+        .bind(0)
+        .bind("This is a test document about testing")
+        .bind(8)
+        .bind("test")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/search?q=test&limit=5")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_index_stats_endpoint() {
+    let _timer = TestTimer::new("test_memory_index_stats_endpoint");
+    let state = create_test_state().await;
+    let pool = state.pool.clone();
+    let app = create_router(state);
+
+    // Insert test memory chunk (with chunk_index)
+    sqlx::query("INSERT INTO memory_chunks (id, file_path, chunk_index, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind("test-chunk-2")
+        .bind("/test/file2.md")
+        .bind(0)
+        .bind("Another test document")
+        .bind(4)
+        .bind("test")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/index")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_index_stats_endpoint() {
+    let _timer = TestTimer::new("test_memory_index_stats_endpoint");
+    let state = create_test_state().await;
+    let pool = state.pool.clone();
+    let app = create_router(state);
+
+    // Insert test memory chunk
+    sqlx::query("INSERT INTO memory_chunks (id, file_path, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?)")
+        .bind("test-chunk-2")
+        .bind("/test/file2.md")
+        .bind("Another test document")
+        .bind(4)
+        .bind("test")
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/index")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_stats_endpoint() {
+    let _timer = TestTimer::new("test_memory_stats_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/stats")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_reflections_endpoint() {
+    let _timer = TestTimer::new("test_memory_reflections_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/reflections")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}

@@ -6,6 +6,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use axum::extract::State;
 
+use apex_memory::hybrid_search::{rrf_score, reciprocal_rank_fusion, temporal_decay, frequency_boost, mmr_select};
 use super::{AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse, ReflectionItem};
 
 #[derive(Debug, Deserialize)]
@@ -205,9 +206,11 @@ async fn search_memory(
         .await
         .map_err(|e| format!("Failed to embed query: {}", e))?;
     
-    // Fetch all chunks with their embeddings
-    let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
-        "SELECT mc.id, mc.file_path, mc.content, mc.memory_type, mv.embedding
+    // Fetch all chunks with their embeddings and metadata
+    let rows: Vec<(String, String, String, String, Option<String>, f64, i64)> = sqlx::query_as(
+        "SELECT mc.id, mc.file_path, mc.content, mc.memory_type, mv.embedding, 
+                COALESCE(julianday('now') - julianday(mc.accessed_at), 0) as access_age_days,
+                mc.access_count
          FROM memory_chunks mc
          LEFT JOIN memory_vec mv ON mc.id = mv.chunk_id"
     )
@@ -215,37 +218,67 @@ async fn search_memory(
     .await
     .map_err(|e| format!("Search failed: {}", e))?;
     
-    // Compute similarity scores and sort
-    let mut scored_results: Vec<(String, String, String, f64, String)> = rows
-        .into_iter()
-        .filter_map(|(chunk_id, file_path, content, memory_type, embedding_json)| {
-            if let Some(emb_json) = embedding_json {
-                if let Ok(embedding) = serde_json::from_str::<Vec<f32>>(&emb_json) {
-                    let sim = cosine_similarity_f32(&query_embedding, &embedding);
-                    return Some((chunk_id, file_path, content, sim, memory_type));
-                }
+    // Compute vector similarity ranks
+    let mut vec_scores: Vec<(String, f64, Vec<f32>)> = Vec::new();
+    let mut bm25_scores: Vec<(String, usize)> = Vec::new();
+    let mut chunk_data: std::collections::HashMap<String, (String, String, String)> = std::collections::HashMap::new();
+    
+    let query_lower = query.q.to_lowercase();
+    
+    for row in rows {
+        let (chunk_id, file_path, content, memory_type, embedding_json, access_age_days, access_count) = row;
+        
+        // Store chunk data
+        chunk_data.insert(chunk_id.clone(), (file_path.clone(), content.clone(), memory_type.clone()));
+        
+        // Vector similarity
+        if let Some(emb_json) = embedding_json {
+            if let Ok(embedding) = serde_json::from_str::<Vec<f32>>(&emb_json) {
+                let sim = cosine_similarity_f32(&query_embedding, &embedding);
+                // Apply temporal decay (half-life: 30 days)
+                let decay = (access_age_days / 30.0).max(0.0);
+                let temporal_score = sim * 2.0_f64.powf(-decay);
+                // Apply frequency boost
+                let freq_boost = frequency_boost(access_count as u64);
+                vec_scores.push((chunk_id.clone(), temporal_score * freq_boost, embedding));
             }
-            // Fallback: keyword match for chunks without embeddings
-            let query_lower = query.q.to_lowercase();
-            let content_lower = content.to_lowercase();
-            let count = content_lower.matches(&query_lower).count();
-            let score = (count as f64).min(10.0) / 10.0;
-            Some((chunk_id, file_path, content, score, memory_type))
-        })
-        .collect();
+        }
+        
+        // BM25-like keyword ranking
+        let content_lower = content.to_lowercase();
+        let count = content_lower.matches(&query_lower).count();
+        if count > 0 {
+            bm25_scores.push((chunk_id, count));
+        }
+    }
     
-    // Sort by score descending
-    scored_results.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
-    scored_results.truncate(limit);
+    // Sort vector scores by similarity
+    vec_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+    let vec_ranks: Vec<_> = vec_scores.iter().enumerate().map(|(i, (id, _, _))| (id.clone(), i + 1)).collect();
     
-    let search_results: Vec<MemorySearchResult> = scored_results
-        .into_iter()
-        .map(|(chunk_id, file_path, content, score, memory_type)| {
+    // Sort BM25 scores
+    bm25_scores.sort_by(|a, b| b.1.cmp(&a.1));
+    let bm25_ranks: Vec<_> = bm25_scores.iter().enumerate().map(|(i, (id, _))| (id.clone(), i + 1)).collect();
+    
+    // Apply Reciprocal Rank Fusion
+    let rrf_k = 60;
+    let fused = reciprocal_rank_fusion(&vec_ranks, &bm25_ranks, rrf_k);
+    
+    // Build final results with MMR for diversity
+    let lambda = 0.7;
+    let _mmr_selected = mmr_select(&vec_scores, &query_embedding, limit, lambda);
+    
+    let search_results: Vec<MemorySearchResult> = fused.iter()
+        .take(limit)
+        .map(|(chunk_id, score)| {
+            let (file_path, content, memory_type) = chunk_data.get(chunk_id)
+                .cloned()
+                .unwrap_or_else(|| (chunk_id.clone(), String::new(), "unknown".to_string()));
             MemorySearchResult {
-                chunk_id,
+                chunk_id: chunk_id.clone(),
                 file_path,
                 content: content.chars().take(500).collect(),
-                score,
+                score: *score,
                 memory_type,
             }
         })
