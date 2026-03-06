@@ -1,6 +1,8 @@
 # APEX Architecture Documentation
 
 > ⚠️ **WARNING: PRE-ALPHA** - This document describes an experimental research system. Not production ready.
+> 
+> **Production Gaps**: No security audit performed, limited test coverage (180 tests), no formal load testing, no disaster recovery procedures, single-node deployment only.
 
 **Date**: 2026-03-06
 **Version**: v1.3.0
@@ -9,17 +11,7 @@
 
 ---
 
-## Executive Summary
-
-APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. The system uses a 6-layer architecture with support for Firecracker microVM isolation, Agent Zero's autonomous reasoning loop, and OpenClaw-inspired multi-channel ingress.
-
-The system now includes an **enhanced memory system** with:
-- Semantic search via sqlite-vec (768-dim embeddings)
-- Hybrid search combining vector + BM25 (RRF)
-- Working memory (per-task scratchpad)
-- Background indexer for automatic file indexing
-
-> **Note**: Firecracker VM isolation is implemented but requires configuration. gVisor and Mock backends also available.
+> **Note on Versioning**: v1.3.0 represents the current development state. Earlier versions (v0.x) were internal development milestones. Version history at bottom explains the progression.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -55,24 +47,35 @@ The system now includes an **enhanced memory system** with:
 │  ┌─────────────┐    ┌─────────────┐    ┌─────────────────┐            │
 │  │    Skill    │    │    Deep     │    │       T3        │            │
 │  │   Worker    │    │   Task      │    │  Confirmation   │            │
-│  │             │    │  Worker     │    │   Worker        │            │
+│  │  (L4 Skill  │    │  Worker     │    │   Worker        │            │
+│  │   Executor) │    │             │    │                 │            │
 │  └──────┬──────┘    └──────┬──────┘    └─────────────────┘            │
 │         │                  │                                          │
 └─────────┼──────────────────┼──────────────────────────────────────────────┘
           │                  │
           ▼                  ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    L3: Memory (Rust - SQLite/PostgreSQL)                │
+│                    L3: Memory (Rust - SQLite)                          │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐            │
 │  │  Tasks   │  │ Messages  │  │ Skills   │  │Audit Log  │            │
 │  │          │  │           │  │          │  │          │            │
 │  │Channels  │  │  Journal  │  │VectorSt. │  │ Prefs    │            │
 │  └──────────┘  └──────────┘  └──────────┘  └──────────┘            │
+│         │                                                                  │
+└─────────┼────────────────────────────────────────────────────────────────┘
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                    L4: Skills Framework (TypeScript)                    │
+│  ┌────────────────────────────────────────────────────────────────┐    │
+│  │  SkillPool (pre-warmed Bun)  │  SkillLoader (TypeScript)      │    │
+│  │  SKILL.md plugins           │  Zod schema validation          │    │
+│  └────────────────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────────────────┘
           │
           ▼
 ┌─────────────────────────────────────────────────────────────────────────┐
-│                    L5: Execution (Python)                               │
+│                    L5: Execution (Python/Docker)                       │
 │  ┌────────────────────────────────────────────────────────────────┐    │
 │  │                    Agent Zero Fork                               │    │
 │  │         Plan → Act → Observe → Reflect Loop                    │    │
@@ -83,11 +86,21 @@ The system now includes an **enhanced memory system** with:
 
 ---
 
+### Architecture Notes
+
+1. **L2 (Router)** orchestrates all communication - it does NOT flow directly to L5
+2. **L2 ↔ L3**: Router queries Memory via sqlx (not L3→L5)
+3. **L2 ↔ L4**: Router executes Skills via SkillPool or spawns Bun processes
+4. **L2 → L5**: DeepTaskWorker invokes Python agent via subprocess
+5. **L4 Skills** are independent of L5 Execution - Skills run in Router's worker pool, not in Execution VMs
+
+---
+
 ## Deployment Model
 
-### Single-Process Architecture (v0.2.0)
+### Single-Process Architecture
 
-**Current Implementation**: APEX v0.2.0 is implemented as a **single-process Rust binary** where:
+**Current Implementation**: APEX is implemented as a **single-process Rust binary** where:
 
 - L2 (Router), L3 (Memory), and workers all run in the same process
 - Inter-component communication uses **Tokio broadcast channels** (in-memory)
@@ -106,7 +119,7 @@ The system now includes an **enhanced memory system** with:
 
 ### Configuration
 
-APEX v0.2.0 uses a **unified configuration system** (`AppConfig`) that loads from:
+APEX uses a **unified configuration system** (`AppConfig`) that loads from:
 1. Environment variables (highest priority)
 2. YAML configuration file (apex.yaml)
 3. Default values (lowest priority)
@@ -244,6 +257,44 @@ interface GatewayConfig {
 | Webhook | `src/webhook.rs` | External integrations |
 | Notification | `src/notification.rs` | In-app notifications |
 
+#### Active Components Detail
+
+##### Heartbeat (`src/heartbeat/mod.rs`)
+- **Purpose**: Periodic autonomous wake cycle for self-directed tasks
+- **Behaviour**: Runs every N minutes (configurable via `APEX_HEARTBEAT_INTERVAL`). On wake:
+  1. Checks system health metrics
+  2. Scans for pending tasks or suggestions
+  3. May execute up to `APEX_HEARTBEAT_MAX_ACTIONS` actions autonomously
+  4. Flushes any orphaned working memory to long-term storage
+- **Config**: `APEX_HEARTBEAT_ENABLED`, `APEX_HEARTBEAT_INTERVAL`, `APEX_HEARTBEAT_JITTER`, `APEX_HEARTBEAT_COOLDOWN`, `APEX_HEARTBEAT_MAX_ACTIONS`
+
+##### Soul (`src/soul/mod.rs`)
+- **Purpose**: Agent identity and persona system
+- **Behaviour**: Loads SOUL.md file from `APEX_SOUL_DIR` (~/.apex/soul) at startup. Provides:
+  - Agent name, values, and personality
+  - Skills and capabilities declaration
+  - Relationship mapping to other agents
+  - Goals and objectives
+- **Config**: `APEX_SOUL_DIR`, `APEX_SOUL_BACKUP`
+
+##### Governance (`src/governance.rs`)
+- **Purpose**: Constitution enforcement for agent actions
+- **Behaviour**: 
+  - Loads constitution rules at startup
+  - Intercepts all T2/T3 actions before execution
+  - Checks if action violates immutable values
+  - Can block action or enable oracle mode (unrestricted)
+- **API**: `POST /api/v1/governance/check`, `POST /api/v1/governance/oracle`
+
+##### Moltbook (`src/moltbook/mod.rs`)
+- **Purpose**: Social context and agent directory
+- **Behaviour**:
+  - Connects to Moltbook service (optional)
+  - Maintains agent directory with trust scores
+  - Enables social posts and notifications
+  - Assesses trust between agents before collaboration
+- **Config**: `APEX_MOLTBOOK_AGENT_ID`
+
 #### API Endpoints
 
 **Tasks**
@@ -378,8 +429,19 @@ pub struct AppState {
     pub auth_config: AuthConfig,
     pub totp_manager: TotpManager,
     pub ws_manager: Arc<WebSocketManager>,
+    pub skill_pool: Option<Arc<SkillPool>>,
+    pub narrative_memory: Arc<NarrativeMemory>,
 }
 ```
+
+> **Note on Component Wiring**: Some components are accessed via global static or lazy initialization rather than through `AppState`:
+> - `Heartbeat`: Initialized in `main.rs`, runs as background daemon
+> - `Soul`: Loaded via `Soul::load()` at startup, accessible via `SOUL.get()`
+> - `Governance`: Initialized in router, accessed via `Governance::check()`
+> - `Moltbook`: Lazy-loaded on first use via `MoltbookClient::new()`
+> - `BackgroundIndexer`: Created in main.rs, spawned as async task
+> - `Embedder`: Created on demand via `Embedder::new()`
+> - `WorkingMemory`: Created per-task via `WorkingMemory::new()`
 
 ---
 
@@ -388,65 +450,23 @@ pub struct AppState {
 **Technology**: Rust, SQLite, SQLx, sqlite-vec
 
 #### Responsibilities
-- SQLite database persistence
-- Task storage and retrieval
-- Message storage
-- Skill registry management
+- SQLite database persistence (single `apex.db` file)
+- Task, message, skill, and preference storage
 - Audit logging with hash chain
-- Channel management
-- Decision journal
-- User preferences
-- Vector store for embeddings (sqlite-vec)
-- Narrative memory (markdown files)
-- TTL-based cleanup
+- Channel and decision journal management
 - **Enhanced Semantic Search** (v1.3.0):
-  - sqlite-vec for vector storage (768-dim)
-  - FTS5 for BM25 keyword search
+  - sqlite-vec for vector storage (768-dim embeddings)
+  - FTS5 for BM25 keyword search  
   - Hybrid search with RRF (Reciprocal Rank Fusion)
   - Temporal decay and MMR (Max Marginal Relevance)
   - Working memory (per-task scratchpad)
   - Background indexer for automatic file indexing
 
-#### Enhanced Memory Schema (v1.3.0)
-
-**memory_chunks**
-```sql
-CREATE TABLE memory_chunks (
-    id          TEXT PRIMARY KEY,
-    file_path   TEXT NOT NULL,
-    chunk_index INTEGER NOT NULL,
-    content     TEXT NOT NULL,
-    word_count  INTEGER NOT NULL,
-    memory_type TEXT NOT NULL,
-    task_id     TEXT,
-    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
-    accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
-    access_count INTEGER NOT NULL DEFAULT 0,
-    UNIQUE(file_path, chunk_index)
-);
-```
-
-**memory_vec** (sqlite-vec)
-```sql
-CREATE VIRTUAL TABLE IF NOT EXISTS memory_vec USING vec0(
-    chunk_id    TEXT PARTITION KEY,
-    embedding   float[768]
-);
-```
-
-**working_memory** (per-task scratchpad)
-```sql
-CREATE TABLE working_memory (
-    task_id           TEXT PRIMARY KEY,
-    scratchpad        TEXT NOT NULL DEFAULT '',
-    entities_json     TEXT NOT NULL DEFAULT '{}',
-    causal_links_json TEXT NOT NULL DEFAULT '[]',
-    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
-);
-```
+> **Note on VectorStore vs HybridSearch**: `VectorStore` (legacy) stores embeddings as JSON in SQLite. `HybridSearch` uses sqlite-vec for efficient KNN. The legacy `VectorStore` is deprecated; use `HybridSearch` for new development.
 
 #### Database Schema
+
+All tables are in `apex.db`. See `core/memory/migrations/` for complete definitions.
 
 **tasks**
 ```sql
@@ -461,8 +481,6 @@ CREATE TABLE tasks (
   author TEXT,
   skill_name TEXT,
   error_message TEXT,
-  cost_estimate_usd REAL,
-  actual_cost_usd REAL,
   cost_estimate_cents INTEGER,
   actual_cost_cents INTEGER,
   project TEXT,
@@ -472,8 +490,6 @@ CREATE TABLE tasks (
   updated_at TEXT
 );
 ```
-
-> **Note**: v0.2.0 adds `cost_estimate_cents` and `actual_cost_cents` columns for precise currency handling (INTEGER cents instead of REAL dollars).
 
 **messages**
 ```sql
@@ -531,6 +547,43 @@ CREATE TABLE skill_registry (
 );
 ```
 
+**memory_chunks** (enhanced search - v1.3.0)
+```sql
+CREATE TABLE memory_chunks (
+    id          TEXT PRIMARY KEY,
+    file_path   TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content     TEXT NOT NULL,
+    word_count  INTEGER NOT NULL,
+    memory_type TEXT NOT NULL,
+    task_id     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    access_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(file_path, chunk_index)
+);
+```
+
+**memory_vec** (sqlite-vec virtual table)
+```sql
+CREATE VIRTUAL TABLE memory_vec USING vec0(
+    chunk_id    TEXT PARTITION KEY,
+    embedding   float[768]
+);
+```
+
+**working_memory** (per-task scratchpad)
+```sql
+CREATE TABLE working_memory (
+    task_id           TEXT PRIMARY KEY,
+    scratchpad        TEXT NOT NULL DEFAULT '',
+    entities_json     TEXT NOT NULL DEFAULT '{}',
+    causal_links_json TEXT NOT NULL DEFAULT '[]',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
+
 #### Components
 | Component | File | Purpose |
 |-----------|------|---------|
@@ -541,15 +594,14 @@ CREATE TABLE skill_registry (
 | DecisionJournalRepository | `src/decision_journal.rs` | Journal CRUD operations |
 | SkillRegistry | `src/skill_registry.rs` | Skill management |
 | Tasks | `src/tasks.rs` | Task/TaskStatus/TaskTier types |
-| VectorStore | `src/vector_store.rs` | Semantic search |
+| HybridSearch | `src/hybrid_search.rs` | Semantic search (RRF + BM25) |
 | Audit | `src/audit.rs` | Audit logging with hash chain |
 | Preferences | `src/preferences.rs` | User preferences |
 | TtlCleanup | `src/ttl_cleanup.rs` | Data retention |
-| **Embedder** | `src/embedder.rs` | Local (nomic-embed-text) + OpenAI embeddings |
-| **Chunker** | `src/chunker.rs` | Text chunking with markdown awareness |
-| **HybridSearch** | `src/hybrid_search.rs` | RRF + temporal decay + MMR |
-| **WorkingMemory** | `src/working_memory.rs` | Per-task scratchpad |
-| **BackgroundIndexer** | `src/background_indexer.rs` | Async file indexing |
+| Embedder | `src/embedder.rs` | Local (nomic-embed-text) + OpenAI embeddings |
+| Chunker | `src/chunker.rs` | Text chunking with markdown awareness |
+| WorkingMemory | `src/working_memory.rs` | Per-task scratchpad |
+| BackgroundIndexer | `src/background_indexer.rs` | Async file indexing |
 
 #### Public API
 ```rust
@@ -711,7 +763,26 @@ What this skill does
 - Tool execution framework
 - Budget enforcement in cents
 
-#### Agent Loop (v0.2.0)
+#### L2 → L5 Boundary: Rust orchestrates Python
+
+The Router (L2) invokes Python (L5) via **subprocess**:
+1. **DeepTaskWorker** (Rust) receives a deep task message from the MessageBus
+2. **VmPool** acquires a VM (Docker/Firecracker/gVisor) from the pool
+3. **DeepTaskWorker** spawns Python subprocess inside the VM:
+   ```
+   python -m apex_agent.agent --task-id <id> --input "<content>"
+   ```
+4. Python agent executes the agent loop, writing outputs to stdout
+5. **DeepTaskWorker** captures stdout, parses results, stores in database
+6. VM is released back to the pool
+
+**There are TWO agent loop implementations:**
+- **`core/router/src/agent_loop.rs` (Rust)**: Used for simpler orchestration within Router process
+- **`execution/src/apex_agent/agent.py` (Python)**: Used for complex tasks requiring full tool suite and VM isolation
+
+The Rust agent loop is invoked directly (no subprocess). The Python agent loop runs in an isolated VM.
+
+#### Agent Loop
 ```python
 class ApexAgent:
     SYSTEM_PROMPT = """You are an autonomous AI agent that executes tasks by planning, acting, observing, and reflecting.
@@ -843,16 +914,28 @@ interface AppState {
 5. TaskClassifier determines tier (Instant/Shallow/Deep)
    ↓
 6. Task saved to SQLite via TaskRepository
-   ↓
-7. MessageBus publishes to appropriate worker:
-   - Instant: Response returned immediately
-   - Shallow: SkillWorker executes skill
-   - Deep: DeepTaskWorker handles with LLM
-   ↓
-8. Task status updated in database
-   ↓
-9. WebSocket notifies UI
-```
+
+#### Task Classification Logic
+
+The Classifier (`src/classifier.rs`) determines task tier based on:
+
+| Input Factor | Classification |
+|--------------|----------------|
+| Empty or greeting | **Instant** (respond immediately, no skill) |
+| Skill name detected (e.g., "generate code for...") | **Shallow** (execute skill) |
+| Complex/long input, ambiguous intent | **Deep** (LLM-powered) |
+
+**Classification algorithm:**
+1. **Intent detection**: If input contains skill keywords (code., git., shell., etc.) → Shallow
+2. **Complexity check**: If input > 500 chars or multiple sentences → Deep
+3. **Explicit routing**: If `?tier=deep` in request → Deep
+4. **Default**: Instant for simple queries, Shallow otherwise
+
+**User tier capping**: The request's permission tier (from auth) caps the maximum task tier. A T1 user cannot trigger T3 operations.
+
+**Memory integration**: The enhanced memory system can influence classification by:
+- Searching relevant past tasks in `memory_chunks`
+- If similar tasks exist, using their tier as a hint
 
 ### Skill Execution Pipeline
 ```
@@ -880,6 +963,14 @@ interface AppState {
 ```
 
 **Fallback**: If SkillPool unavailable, SkillWorker spawns fresh Bun process (legacy mode)
+
+**Fallback Observability**:
+- **Trigger conditions**: Pool not started (`APEX_SKILL_POOL_ENABLED=0`), all slots busy (timeout after `APEX_SKILL_POOL_ACQUIRE`), or health check failed
+- **Latency impact**: Legacy mode adds ~50-100ms per execution (process spawn overhead)
+- **Detection**: 
+  - Log level `warn` with message "SkillPool unavailable, falling back to spawn mode"
+  - Metric `skill_pool_fallback_total` increments on each fallback
+- **Recovery**: If pool was disabled, stays in legacy mode. If slots were busy, pool automatically recovers on next acquire attempt.
 
 ### SkillPool Architecture
 
@@ -968,6 +1059,30 @@ Generated for each task with:
 - `--read-only` filesystem
 - `--pids-limit=256` (process limit)
 - Memory limits enforced
+
+### Additional Security Considerations
+
+#### Skill Pool Trust Boundary
+- Pool worker processes run Bun code from `skills/` directory
+- **No sandboxing** applied to pool workers beyond OS-level process isolation
+- **T3 tier enforcement**: `shell.execute` and other T3 skills check permission tier at Router level before IPC call; pool workers trust the Router's authorization header
+- **Module access**: Pool workers can import any module available in the Bun runtime
+
+#### Embedding Server (Port 8081)
+- System makes outbound HTTP calls to local llama-server for embeddings
+- **Network surface**: Only localhost (127.0.0.1) by default
+- **Integrity risk**: If embedding server is compromised, memory index could be poisoned with malicious embeddings
+- **Mitigation**: Use localhost-only binding, verify server fingerprints
+
+#### Working Memory Persistence
+- `working_memory` table stores scratchpad content and entity data in plaintext SQLite
+- **Database file access**: If `apex.db` is accessed directly, all working memory is readable
+- **Acceptable for single-user**: Assumes host filesystem permissions restrict access
+
+#### Single-User Assumption
+- No user isolation between tasks
+- All tasks run with same permissions as the APEX process
+- Database and memory files are not encrypted at rest
 
 ---
 
@@ -1084,8 +1199,12 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 ## Version History
 
+> **Note on versioning**: v1.x marks production-readiness milestones. v0.x were internal development versions. v1.3.0 represents the current pre-alpha state with full feature set.
+
 - **v1.3.0** (2026-03-06): Enhanced Memory System - sqlite-vec, hybrid search (RRF), working memory, background indexer
-- **v0.2.0** (2026-03-03): Major upgrade - Firecracker VM, Agent Zero loop, SKILL.md plugins, PostgreSQL support, YAML config, per-client auth
+- **v1.2.0** (2026-03-05): UI overhaul, settings tabs, memory viewer, workflow visualizer
+- **v1.1.0** (2026-03-04): Skill quick-launch, command bar, task board
+- **v1.0.0** (2026-03-03): Core feature freeze - Firecracker VM, Agent Zero loop, SKILL.md plugins, PostgreSQL support
 - **v0.1.2** (2026-03-03): Added Channels, Decision Journal, WebSocket server, NATS integration
 - **v0.1.1** (2026-01-XX): Added HMAC auth, TOTP verification, shell.execute → T3
 - **v0.1.0** (2026-01-XX): Initial release
