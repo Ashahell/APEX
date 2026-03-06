@@ -66,14 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let message_bus = MessageBus::new(100);
     let circuit_breakers = CircuitBreakerRegistry::new();
 
-    let vm_config = VmConfig::from_env();
-    tracing::info!(vm_config = ?vm_config, "VM Configuration");
-    
-    let vm_pool = VmPool::new(vm_config, 3, 1);
-    if let Err(e) = vm_pool.initialize().await {
-        tracing::warn!("Failed to initialize VM pool: {}", e);
-    }
-
+    // C4: Load config first, before creating components
     let config = AppConfig::global();
     
     let validation_errors = config.validate();
@@ -84,6 +77,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     } else {
         tracing::info!("Configuration validation passed");
+    }
+
+    // Now create components WITH config instead of using AppConfig::global()
+    let vm_config = VmConfig::from_config(&config);
+    tracing::info!(vm_config = ?vm_config, "VM Configuration");
+    
+    let vm_pool = VmPool::new(vm_config, 3, 1);
+    if let Err(e) = vm_pool.initialize().await {
+        tracing::warn!("Failed to initialize VM pool: {}", e);
     }
 
     let skill_pool = if config.skill_pool.enabled {
