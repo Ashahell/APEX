@@ -86,6 +86,7 @@ async fn create_test_state() -> AppState {
     db.run_migrations().await.unwrap();
 
     AppState {
+        config: apex_router::unified_config::AppConfig::default(),  // C4 Step 2
         pool: db.pool().clone(),
         metrics: RouterMetrics::new(),
         message_bus: MessageBus::new(10),

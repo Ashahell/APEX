@@ -1,10 +1,16 @@
 use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
 static GLOBAL_CONFIG: Lazy<RwLock<Option<AppConfig>>> = Lazy::new(|| RwLock::new(None));
+
+// C4 Step 1: Thread-local config override for test isolation
+thread_local! {
+    static THREAD_CONFIG: RefCell<Option<AppConfig>> = RefCell::new(None);
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppConfig {
@@ -488,7 +494,35 @@ impl AppConfig {
     }
 
     pub fn global() -> AppConfig {
-        Self::get_global().unwrap_or_else(Self::default)
+        // C4 Step 1: Check thread-local override first (for test isolation)
+        THREAD_CONFIG.with(|c| {
+            c.borrow().clone()
+        }).unwrap_or_else(|| Self::get_global().unwrap_or_else(Self::default))
+    }
+
+    /// C4 Step 1: Test helper — sets a config visible only to the calling thread.
+    /// Automatically scoped: drops when the test finishes.
+    #[cfg(test)]
+    pub fn with_test_config<F, R>(config: AppConfig, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        THREAD_CONFIG.with(|c| *c.borrow_mut() = Some(config));
+        let result = f();
+        THREAD_CONFIG.with(|c| *c.borrow_mut() = None);
+        result
+    }
+
+    /// C4 Step 1: Async test helper
+    #[cfg(test)]
+    pub async fn with_test_config_async<F, R>(config: AppConfig, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        THREAD_CONFIG.with(|c| *c.borrow_mut() = Some(config));
+        let result = f();
+        THREAD_CONFIG.with(|c| *c.borrow_mut() = None);
+        result
     }
 
     pub fn to_env_vars(&self) -> HashMap<String, String> {

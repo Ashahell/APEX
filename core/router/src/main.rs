@@ -148,6 +148,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let governance = std::sync::Arc::new(std::sync::Mutex::new(GovernanceEngine::default()));
 
     let state = AppState {
+        config: config.clone(),  // C4 Step 2: Add config to AppState
         pool: pool_for_workers.clone(),
         metrics: RouterMetrics::new(),
         message_bus: message_bus.clone(),

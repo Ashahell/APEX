@@ -38,6 +38,7 @@ use crate::rate_limiter::RateLimiter;
 use apex_memory::{Workflow, WorkflowExecution};
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskTier};
+use crate::unified_config::AppConfig;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TaskRequest {
@@ -157,6 +158,7 @@ pub struct ExecuteDeepTaskResponse {
 
 #[derive(Clone)]
 pub struct AppState {
+    pub config: AppConfig,  // C4 Step 2: Config as first-class field
     pub pool: sqlx::SqlitePool,
     pub metrics: RouterMetrics,
     pub message_bus: MessageBus,
