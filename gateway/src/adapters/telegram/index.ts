@@ -36,7 +36,6 @@ export class TelegramAdapter implements ChannelAdapter {
     });
 
     await this.bot.launch();
-    console.log('Telegram adapter started');
   }
 
   async stop(): Promise<void> {
@@ -44,6 +43,5 @@ export class TelegramAdapter implements ChannelAdapter {
   }
 
   async send(response: TaskResponse): Promise<void> {
-    console.log('Telegram send:', response);
   }
 }

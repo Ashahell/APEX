@@ -14,17 +14,14 @@ export function useWebSocket() {
       const ws = new WebSocket(WS_URL);
       
       ws.onopen = () => {
-        console.log('WebSocket connected');
         setConnected(true);
       };
 
       ws.onclose = () => {
-        console.log('WebSocket disconnected, using local mode');
         setConnected(false);
       };
 
       ws.onerror = () => {
-        console.log('WebSocket unavailable, using local mode');
         setConnected(false);
       };
 
@@ -54,7 +51,6 @@ export function useWebSocket() {
 
       wsRef.current = ws;
     } catch {
-      console.log('WebSocket unavailable, using local mode');
       setConnected(false);
     }
   }, [setConnected, addMessage, addTask]);

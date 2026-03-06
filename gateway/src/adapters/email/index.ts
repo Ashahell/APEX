@@ -36,11 +36,9 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async start(): Promise<void> {
-    console.log('Email adapter started (IMAP listener mode)');
   }
 
   async stop(): Promise<void> {
-    console.log('Email adapter stopped');
   }
 
   async handleIncomingEmail(message: EmailMessage): Promise<void> {
@@ -56,6 +54,5 @@ export class EmailAdapter implements ChannelAdapter {
   }
 
   async send(response: TaskResponse): Promise<void> {
-    console.log('Email send:', response);
   }
 }

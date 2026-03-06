@@ -219,14 +219,12 @@ async function main() {
   });
 
   await gateway.start();
-  console.log('APEX Gateway started on port', 3001);
 
   const testTask = await gateway.createTask({
     content: 'Hello from gateway!',
     channel: 'api',
     author: 'test',
   });
-  console.log('Test task created:', testTask);
 }
 
 main().catch(console.error);

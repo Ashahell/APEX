@@ -144,7 +144,7 @@ function generateJsDoc(fileName: string, ext: string, content: string): string {
     if (trimmed.startsWith('function ') || trimmed.match(/^(?:const|let|var)\s+\w+\s*=/)) {
       const match = trimmed.match(/(?:function|const|let|var)\s+(\w+)/);
       if (match) {
-        doc += `/**\n * @function ${match[1]}\n * @description TODO: Add description\n */\n`;
+        doc += `/**\n * @function ${match[1]}\n * @description Auto-generated function documentation\n */\n`;
       }
     }
   }

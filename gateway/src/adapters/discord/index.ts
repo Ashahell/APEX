@@ -43,7 +43,6 @@ export class DiscordAdapter implements ChannelAdapter {
     });
 
     await this.client.login(this.token);
-    console.log('Discord adapter started');
   }
 
   async stop(): Promise<void> {
@@ -51,6 +50,5 @@ export class DiscordAdapter implements ChannelAdapter {
   }
 
   async send(response: TaskResponse): Promise<void> {
-    console.log('Discord send:', response);
   }
 }

@@ -35,7 +35,6 @@ export class SlackAdapter implements ChannelAdapter {
     });
 
     await this.app.start(3002);
-    console.log('Slack adapter started on port 3002');
   }
 
   async stop(): Promise<void> {
@@ -43,7 +42,6 @@ export class SlackAdapter implements ChannelAdapter {
   }
 
   async send(response: TaskResponse): Promise<void> {
-    console.log('Slack send:', response);
   }
 
   private isUserMessage(message: SlackEvent): message is SlackEvent & { text: string; user: string; ts: string } {

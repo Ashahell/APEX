@@ -23,10 +23,6 @@ use apex_router::notification::NotificationManager;
 use apex_router::system_health::SystemMonitor;
 use apex_router::websocket::WebSocketManager;
 
-async fn root() -> &'static str {
-    "APEX Router v0.1.0 - See /api/v1/tasks for task endpoints"
-}
-
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_logs = std::env::var("APEX_JSON_LOGS").is_ok();

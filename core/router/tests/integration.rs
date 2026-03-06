@@ -1,9 +1,7 @@
 use apex_router::governance::GovernanceEngine;
-use apex_router::moltbook::MoltbookClient;
 use apex_router::rate_limiter::RateLimiter;
 use apex_router::response_cache::ResponseCache;
 use apex_router::system_health::SystemMonitor;
-use apex_router::unified_config::AppConfig;
 use apex_memory::db::Database;
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskTier};

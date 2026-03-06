@@ -148,19 +148,15 @@ mod tests {
 
     #[test]
     fn test_llama_client_from_env() {
-        unsafe {
-            std::env::set_var("LLAMA_SERVER_URL", "http://localhost:1234");
-            std::env::set_var("LLAMA_MODEL", "test-model");
-        }
+        std::env::set_var("LLAMA_SERVER_URL", "http://localhost:1234");
+        std::env::set_var("LLAMA_MODEL", "test-model");
 
         let client = LlamaClient::from_env();
         assert_eq!(client.base_url, "http://localhost:1234");
         assert_eq!(client.model, "test-model");
 
-        unsafe {
-            std::env::remove_var("LLAMA_SERVER_URL");
-            std::env::remove_var("LLAMA_MODEL");
-        }
+        std::env::remove_var("LLAMA_SERVER_URL");
+        std::env::remove_var("LLAMA_MODEL");
     }
 
     #[tokio::test]

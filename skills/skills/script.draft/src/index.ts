@@ -51,7 +51,7 @@ export const skill: Skill = {
   },
 };
 
-function generateScript(outline: any[], wordCount: number, format: string): string {
+function generateScript(outline: { section: string; keyPoints: string[] }[], wordCount: number, format: string): string {
   let script = format === 'markdown' ? '# Script\n\n' : '';
   
   for (const section of outline) {

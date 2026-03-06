@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import type { Skill, SkillContext, SkillResult } from '../../types.js';
 
+interface TableDefinition {
+  name: string;
+  columns: {
+    name: string;
+    type: string;
+    nullable: boolean;
+    primaryKey?: boolean;
+    references?: { table: string; column: string };
+  }[];
+}
+
 const InputSchema = z.object({
   tables: z.array(z.object({
     name: z.string(),
@@ -58,7 +69,7 @@ export const skill: Skill = {
   },
 };
 
-async function designSchema(tables: any[], database: string): Promise<{ schema: string; entities: { name: string; sql: string }[]; summary: string }> {
+async function designSchema(tables: TableDefinition[], database: string): Promise<{ schema: string; entities: { name: string; sql: string }[]; summary: string }> {
   const entities: { name: string; sql: string }[] = [];
   
   for (const table of tables) {

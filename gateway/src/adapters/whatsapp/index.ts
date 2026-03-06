@@ -27,11 +27,9 @@ export class WhatsAppAdapter implements ChannelAdapter {
   }
 
   async start(): Promise<void> {
-    console.log('WhatsApp adapter started (webhook mode)');
   }
 
   async stop(): Promise<void> {
-    console.log('WhatsApp adapter stopped');
   }
 
   async handleIncomingMessage(message: WhatsAppMessage): Promise<void> {

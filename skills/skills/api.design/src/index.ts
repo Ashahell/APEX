@@ -57,17 +57,23 @@ export const skill: Skill = {
   },
 };
 
-async function designApi(name: string, resources: any[], style: string): Promise<{ spec: any; files: { path: string; content: string }[]; summary: string }> {
-  const spec = {
+interface ApiResource {
+  name: string;
+  operations: ('GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE')[];
+  fields: { name: string; type: string; required: boolean }[];
+}
+
+async function designApi(name: string, resources: ApiResource[], style: string): Promise<{ spec: Record<string, unknown>; files: { path: string; content: string }[]; summary: string }> {
+  const spec: Record<string, unknown> = {
     openapi: '3.0.0',
     info: { title: name, version: '1.0.0' },
-    paths: {} as Record<string, any>,
+    paths: {} as Record<string, unknown>,
   };
   
   for (const resource of resources) {
     for (const op of resource.operations) {
       const path = '/' + resource.name.toLowerCase();
-      spec.paths[path] = {
+      (spec.paths as Record<string, unknown>)[path] = {
         [op.toLowerCase()]: {
           summary: op + ' ' + resource.name,
           responses: { '200': { description: 'OK' } },

@@ -155,7 +155,6 @@ export class RestAdapter {
 
     try {
       await this.app.listen({ port: this.port, host: '127.0.0.1' });
-      console.log(`REST API adapter started on port ${this.port}`);
     } catch (err) {
       this.app.log.error(err);
       throw err;

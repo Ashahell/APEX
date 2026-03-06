@@ -30,7 +30,6 @@ class WebSocketClient {
       this.ws = new WebSocket(`${this.baseUrl}/api/v1/ws`);
       
       this.ws.onopen = () => {
-        console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         store.setConnectionState('connected');
         this.stopPolling();
@@ -55,7 +54,6 @@ class WebSocketClient {
       };
       
       this.ws.onclose = () => {
-        console.log('WebSocket closed');
         this.reconnectAttempts++;
         if (this.reconnectAttempts < this.maxReconnectAttempts) {
           setTimeout(() => this.connect(), this.reconnectDelay * this.reconnectAttempts);
@@ -106,7 +104,6 @@ class WebSocketClient {
     if (this.pollingInterval) return;
     
     const store = useAppStore.getState();
-    console.log('Starting polling fallback...');
     
     this.pollingInterval = window.setInterval(async () => {
       try {
