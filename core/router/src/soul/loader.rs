@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
@@ -94,7 +93,7 @@ impl SoulLoader {
         let mut in_values = false;
         let mut in_capabilities = false;
         let mut in_goals = false;
-        let mut in_constitution = false;
+        let mut _in_constitution = false;
 
         for line in content.lines() {
             let line = line.trim();
@@ -142,7 +141,7 @@ impl SoulLoader {
             }
             if line.starts_with("# CONSTITUTION") || line.starts_with("## CONSTITUTION") {
                 in_goals = false;
-                in_constitution = true;
+                _in_constitution = true;
                 continue;
             }
             if in_values && line.starts_with("- **") {

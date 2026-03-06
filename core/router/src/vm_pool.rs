@@ -11,6 +11,7 @@ use crate::unified_config::AppConfig;
 const VM_STARTUP_TIMEOUT_SECS: u64 = 30;
 const VM_IDLE_TIMEOUT_SECS: u64 = 300;
 const VM_EXECUTION_TIMEOUT_SECS: u64 = 60;
+#[allow(dead_code)]
 const VSOCK_PORT: u32 = 5000;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -44,6 +45,23 @@ impl VmConfig {
     }
 
     pub fn from_config(config: &AppConfig) -> Self {
+        let isolation = config.execution.isolation.to_lowercase();
+        
+        let (use_firecracker, use_gvisor, use_docker) = match isolation.as_str() {
+            "firecracker" => (true, false, false),
+            "gvisor" => (false, true, false),
+            "docker" => (false, false, true),
+            "mock" => (false, false, false),
+            _ => {
+                // Fallback to config file settings
+                (
+                    config.execution.firecracker.enabled,
+                    config.execution.gvisor.enabled,
+                    config.execution.docker.enabled,
+                )
+            }
+        };
+        
         VmConfig {
             vcpu_count: config.execution.firecracker.vcpus,
             memory_mib: config.execution.firecracker.memory_mib,
@@ -52,9 +70,9 @@ impl VmConfig {
             firecracker_path: config.execution.firecracker.firecracker_path.clone(),
             runsc_path: config.execution.gvisor.runsc_path.clone(),
             docker_image: Some(config.execution.docker.image.clone()),
-            use_firecracker: config.execution.firecracker.enabled,
-            use_gvisor: config.execution.gvisor.enabled,
-            use_docker: config.execution.docker.enabled,
+            use_firecracker,
+            use_gvisor,
+            use_docker,
             network_isolation: config.execution.firecracker.network_isolation,
             fast_boot: config.execution.firecracker.fast_boot,
             use_jailer: config.execution.firecracker.use_jailer,
@@ -344,11 +362,11 @@ impl VmPool {
             .unwrap_or("apex-execution:latest");
 
         tracing::info!(vm_id = id, image = image, "Starting Docker container with security constraints");
+        tracing::debug!("docker_image config: {:?}", self.config.docker_image);
 
         let container_name = format!("apex-vm-{}", id);
         let memory_limit = format!("{}m", self.config.memory_mib);
-        let _cpu_quota = self.config.vcpu_count * 100000;
-
+        
         let mut cmd = Command::new("docker");
         cmd.arg("run")
             .arg("-d")
@@ -373,9 +391,8 @@ impl VmPool {
             // Security: Drop all capabilities
             .arg("--cap-drop")
             .arg("ALL")
-            // Security: Disable privileged mode
-            .arg("--privileged")
-            .arg("false")
+            // Security: Disable privileged mode (use =false for Windows compatibility)
+            .arg("--privileged=false")
             // Security: No automatic restart
             .arg("--restart")
             .arg("no")
@@ -388,10 +405,32 @@ impl VmPool {
             .arg("--rm")
             // Timeout for execution
             .arg("--stop-timeout")
-            .arg("10")
-            .arg(image);
+            .arg("10");
 
-        let output = cmd
+        let cpus = (self.config.vcpu_count as f64).to_string();
+        let vm_id_label = format!("apex.vm-id={}", id);
+
+        let docker_args = vec![
+            "run", "-d", "--name", &container_name,
+            "--memory", &memory_limit,
+            "--cpus", &cpus,
+            "--pids-limit", "256",
+            "--network", "none",
+            "--read-only",
+            "--tmpfs", "/tmp:rw,exec,size=64m",
+            "--tmpfs", "/run:rw,exec,size=16m",
+            "--cap-drop", "ALL",
+            "--privileged=false",
+            "--restart", "no",
+            "--label", "apex.managed=true",
+            "--label", &vm_id_label,
+            "--rm",
+            "--stop-timeout", "10",
+            image,
+        ];
+
+        let output = Command::new("docker")
+            .args(&docker_args)
             .output()
             .await
             .map_err(|e| format!("Failed to run docker: {}", e))?;
@@ -446,29 +485,6 @@ impl VmPool {
     }
 
     pub async fn release(&self, id: &str) -> Result<(), String> {
-        let backend = {
-            let instances = self.instances.read().await;
-            instances.get(id).map(|vm| vm.backend.clone())
-        };
-
-        if let Some(backend) = backend {
-            if backend == VmmBackend::Docker {
-                let container_name = format!("apex-vm-{}", id);
-                tracing::info!(vm_id = id, container = container_name, "Removing Docker container");
-                
-                let output = Command::new("docker")
-                    .args(["rm", "-f", &container_name])
-                    .output()
-                    .await
-                    .map_err(|e| format!("Failed to remove docker container: {}", e))?;
-
-                if !output.status.success() {
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    tracing::warn!(container = container_name, error = %stderr, "Failed to remove container (may not exist)");
-                }
-            }
-        }
-
         let mut instances = self.instances.write().await;
 
         if let Some(vm) = instances.get_mut(id) {

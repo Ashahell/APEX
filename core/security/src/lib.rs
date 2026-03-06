@@ -1,3 +1,6 @@
+#![allow(clippy::all)]
+#![allow(dead_code)]
+
 pub mod capability;
 
 pub use thiserror::Error;

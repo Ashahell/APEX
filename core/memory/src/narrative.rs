@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 
@@ -110,6 +110,7 @@ impl NarrativeMemory {
         format!("[{}] {}", status, preview)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn build_narrative(
         &self,
         task_id: &str,
@@ -146,7 +147,7 @@ impl NarrativeMemory {
             for tool in tools_used {
                 narrative.push_str(&format!("- {}\n", tool));
             }
-            narrative.push_str("\n");
+            narrative.push('\n');
         }
 
         if !lessons.is_empty() {
@@ -154,12 +155,12 @@ impl NarrativeMemory {
             for lesson in lessons {
                 narrative.push_str(&format!("- {}\n", lesson));
             }
-            narrative.push_str("\n");
+            narrative.push('\n');
         }
 
         narrative.push_str("## Reflection\n\n");
         narrative.push_str(&self.generate_reflection(status, tools_used, lessons));
-        narrative.push_str("\n");
+        narrative.push('\n');
 
         narrative
     }
@@ -259,7 +260,7 @@ impl NarrativeMemory {
         
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
-            if path.extension().map_or(false, |ext| ext == "md") {
+            if path.extension().is_some_and(|ext| ext == "md") {
                 entries.push(path);
             }
         }
@@ -283,14 +284,14 @@ impl NarrativeMemory {
         })
     }
 
-    async fn count_files_in(&self, dir: &PathBuf) -> std::io::Result<u32> {
+    async fn count_files_in(&self, dir: &Path) -> std::io::Result<u32> {
         let mut count = 0_u32;
         
         if !dir.exists() {
             return Ok(0);
         }
 
-        let mut stack = vec![dir.clone()];
+        let mut stack = vec![dir.to_path_buf()];
         
         while let Some(current_dir) = stack.pop() {
             let mut entries = fs::read_dir(&current_dir).await?;
@@ -299,7 +300,7 @@ impl NarrativeMemory {
                 let path = entry.path();
                 if path.is_dir() {
                     stack.push(path);
-                } else if path.extension().map_or(false, |ext| ext == "md") {
+                } else if path.extension().is_some_and(|ext| ext == "md") {
                     count += 1;
                 }
             }

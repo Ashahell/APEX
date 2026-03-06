@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
+import { apiFetch, apiPost, apiPut } from '../../lib/api';
 
 interface Task {
   task_id: string;
   status: string;
+  content: string | null;
   output: string | null;
   error: string | null;
   project: string | null;
@@ -50,7 +52,7 @@ export function KanbanBoard() {
       if (selectedProject) params.set('project', selectedProject);
       params.set('limit', '100');
       
-      const res = await fetch(`http://localhost:3000/api/v1/tasks?${params}`);
+      const res = await apiFetch(`/api/v1/tasks?${params}`);
       const data = await res.json();
       setTasks(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -60,7 +62,7 @@ export function KanbanBoard() {
 
   const fetchFilterOptions = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/v1/tasks/filter-options');
+      const res = await apiFetch('/api/v1/tasks/filter-options');
       const data = await res.json();
       setFilterOptions(data);
     } catch (err) {
@@ -84,11 +86,7 @@ export function KanbanBoard() {
 
   const updateTask = async (taskId: string, updates: Record<string, string>) => {
     try {
-      const res = await fetch(`http://localhost:3000/api/v1/tasks/${taskId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates),
-      });
+      const res = await apiPut(`/api/v1/tasks/${taskId}`, updates);
       if (res.ok) {
         await fetchTasks();
       }
@@ -99,15 +97,11 @@ export function KanbanBoard() {
 
   const createTask = async () => {
     try {
-      const res = await fetch('http://localhost:3000/api/v1/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          content: newTask.content,
-          project: newTask.project || undefined,
-          priority: newTask.priority || undefined,
-          category: newTask.category || undefined,
-        }),
+      const res = await apiPost('/api/v1/tasks', {
+        content: newTask.content,
+        project: newTask.project || undefined,
+        priority: newTask.priority || undefined,
+        category: newTask.category || undefined,
       });
       if (res.ok) {
         await fetchTasks();
@@ -123,11 +117,7 @@ export function KanbanBoard() {
   const runTask = async (taskId: string) => {
     setRunningTask(taskId);
     try {
-      const res = await fetch('http://localhost:3000/api/v1/tasks', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: `Execute task ${taskId}` }),
-      });
+      const res = await apiPost('/api/v1/tasks', { content: `Execute task ${taskId}` });
       if (res.ok) {
         await fetchTasks();
       }
@@ -309,6 +299,12 @@ export function KanbanBoard() {
                 <span className="text-muted-foreground">Task ID:</span>
                 <span className="font-mono">{selectedTask.task_id}</span>
               </div>
+              {selectedTask.content && (
+                <div className="mt-2">
+                  <span className="text-muted-foreground">Content:</span>
+                  <p className="mt-1 p-2 bg-muted rounded text-xs font-mono whitespace-pre-wrap">{selectedTask.content}</p>
+                </div>
+              )}
               <div className="flex justify-between items-center">
                 <span className="text-muted-foreground">Status:</span>
                 <select

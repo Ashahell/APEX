@@ -42,6 +42,23 @@
 
 ---
 
+## Future Phases (APEX Update Project Tasks)
+
+| Phase | Focus | Priority | Description |
+|-------|-------|----------|-------------|
+| Phase 27 | Firecracker Integration | High | Implement Firecracker VM integration (requires kernel/rootfs) |
+| Phase 28 | WhatsApp Adapter | High | Implement WhatsApp messaging adapter |
+| Phase 29 | Email Adapter | High | Implement IMAP/SMTP email adapter |
+| Phase 30 | WebSocket Real-time | Medium | Full WebSocket streaming instead of polling |
+| Phase 31 | Development Skills | High | Add 15 development skills (database, docker, k8s, etc.) |
+| Phase 32 | AI Music Skills | Medium | Add 10 AI music generation skills |
+| Phase 33 | AI Video Skills | Medium | Add 8 AI video skills |
+| Phase 34 | Script Writing Skills | Medium | Add 8 script writing skills |
+| Phase 35 | Marketing Skills | Medium | Add 9 marketing skills |
+| Phase 36 | Production Security | High | Security audit and hardening |
+
+---
+
 ## Phase 25: v1.3.0 - Quick Command Bar (✅ COMPLETE)
 
 ### New Features

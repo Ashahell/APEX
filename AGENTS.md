@@ -1,28 +1,78 @@
 # AGENTS.md - APEX Development Guide
 
+> ⚠️ **WARNING: PRE-ALPHA** - This is an experimental research project. Not production ready.
+
 ## Project Overview
 
-APEX is a single-user autonomous agent platform combining messaging interfaces with secure code execution. Multi-tenancy is explicitly out of scope.
+APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. Multi-tenancy is explicitly out of scope.
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
-- **Status**: Phase 6 Complete | Hardening done
+- **Status**: Pre-Alpha (Experimental) ⚠️
+- **Version**: v1.3.0
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
+
+---
+
+## ⚠️ Pre-Alpha Warnings
+
+- **No security audit** - Do not use with sensitive data
+- **Limited testing** - Many features are proof-of-concept
+- **API instability** - Breaking changes expected
+- **No production support** - Use at your own risk
+- **Firecracker/VM isolation** - Requires kernel/rootfs configuration
+- **Missing features** - Dynamic tool generation, subagent pool not implemented
 
 ---
 
 ## Current Status
 
-### Implemented Components
+### Implemented Components (Proof-of-Concept)
 
 | Layer | Component | Status | Location |
 |-------|-----------|--------|----------|
-| L2 | Task Router | ✅ Running | `core/router/` |
-| L3 | Memory Service | ✅ Working | `core/memory/` |
+| L2 | Task Router | ✅ POC | `core/router/` |
+| L3 | Memory Service | ✅ POC | `core/memory/` |
 | L1 | Gateway | ✅ Built | `gateway/` |
 | L4 | Skills Framework | ✅ Built | `skills/` |
 | L6 | React UI | ✅ Built | `ui/` |
-| L5 | Execution Engine | ✅ Built | `execution/` |
-| LLM | Qwen3-4B | ✅ Integrated | llama-server (b8185+) |
+| L5 | Execution Engine | ✅ Docker | `execution/` |
+| LLM | Qwen3-4B | ✅ Optional | llama-server |
+
+### Update Plan Progress
+- **Phase 1: Security & Permissions** ✅ Complete (v0.1.1 - HMAC auth, TOTP)
+- **Phase 2: Core Skills** ✅ Complete (28 skills)
+- **Phase 3: Messaging Adapters** ✅ Complete
+- **Phase 4: Execution Engine** ✅ Complete
+- **Phase 5: UI Enhancements** ✅ Complete (WebSocket, TaskSidebar, ProcessGroup)
+- **Phase 6: Advanced Features** ✅ Complete
+- **Phase 7: UI Overhaul** ✅ Complete (Settings tabs, Memory tabs, Workflows, Audit)
+- **Phase 8: Future Features** ✅ Complete (v0.1.2 - Channels, Journal, WebSocket Server, NATS)
+- **Phase 9: v0.2.0 Upgrade** ✅ Complete (Firecracker, Agent Zero loop, SKILL.md plugins, PostgreSQL, Config files)
+- **Phase 10: Social Context** ✅ Complete (Moltbook Integration)
+- **Phase 11: Governance & Constitution** ✅ Complete
+
+### Recent Optimizations
+- **API Modularization** ✅ Complete - Split 1556-line monolithic `api.rs` into 9 modular files in `core/router/src/api/`
+- **Database Optimization** ✅ Complete - Added composite indexes (012 migration) for common filter queries
+- **Startup Config Validation** ✅ Complete - Added validation at router startup
+- **Worker Supervision** ✅ Complete - Added supervised restart loop to all workers (skill_worker, deep_task_worker, t3_confirm_worker)
+- **Transaction Boundaries** ✅ Complete - Added atomic task update + decision journal writes in deep_task_worker
+
+### v0.3.0 New Features
+- **Real-time Agent Thoughts Streaming** - Execution events stream to UI via WebSocket
+- **Consequence Preview** - Blast radius shown before T2/T3 actions
+- **Runtime Tool Generation** - Agent generates custom Python tools via LLM when needed
+- **TIR (Tool-Integrated Reasoning)** - LLM returns interleaved Thought/Action/Observation
+- **Subagent Pool** - Complex tasks split into parallelizable subtasks
+- **SOUL.md Identity System** - Agent reads identity file on wake
+- **Heartbeat Daemon** - Autonomous wake cycles with configurable intervals
+
+### Skills Registry (33 Total)
+- T0 (Read-only): 3 skills
+- T1 (Tap confirm): 11 skills
+- T2 (Type confirm): 8 skills
+- T3 (TOTP verification): 1 skill (shell.execute)
+- Note: shell.execute moved from T2 to T3 per security audit
 
 ### API Endpoints
 
@@ -32,8 +82,9 @@ APEX is a single-user autonomous agent platform combining messaging interfaces w
 - `GET /api/v1/tasks` - List tasks (supports `project`, `status`, `priority`, `category`, `limit`, `offset` filters)
 - `GET /api/v1/tasks/filter-options` - Get available filter options (projects, categories, priorities, statuses)
 - `GET /api/v1/tasks/:id` - Get task status
-- `PUT /api/v1/tasks/:id` - Update task (project, priority, category)
+- `PUT /api/v1/tasks/:id` - Update task (project, priority, category, status)
 - `POST /api/v1/tasks/:id/cancel` - Cancel task
+- `POST /api/v1/tasks/:id/confirm` - Confirm task (for T1-T3 permission tiers)
 
 **Messages:**
 - `GET /api/v1/messages` - List messages (supports `limit`, `offset`, `channel` params)
@@ -50,17 +101,181 @@ APEX is a single-user autonomous agent platform combining messaging interfaces w
 **Deep Tasks:**
 - `POST /api/v1/deep` - Execute deep task (uses VM pool + LLM)
 
+**TOTP (T3 Verification):**
+- `POST /api/v1/totp/setup` - Generate TOTP secret for user
+- `POST /api/v1/totp/verify` - Verify TOTP token
+- `GET /api/v1/totp/status` - Check if TOTP is configured
+
+**Events:**
+- `GET /api/v1/events` - Server-Sent Events stream (for real-time updates)
+- `GET /api/v1/ws` - WebSocket endpoint for real-time task updates
+
+**Channels:**
+- `GET /api/v1/channels` - List all channels
+- `POST /api/v1/channels` - Create a channel
+- `GET /api/v1/channels/:id` - Get channel details
+- `PUT /api/v1/channels/:id` - Update channel
+- `DELETE /api/v1/channels/:id` - Delete channel
+
+**Decision Journal:**
+- `GET /api/v1/journal` - List journal entries (supports `limit`, `offset`)
+- `POST /api/v1/journal` - Create journal entry
+- `GET /api/v1/journal/:id` - Get journal entry
+- `PUT /api/v1/journal/:id` - Update journal entry
+- `DELETE /api/v1/journal/:id` - Delete journal entry
+- `GET /api/v1/journal/search?q=query` - Search journal entries
+
+**SOUL Identity:**
+- `GET /api/v1/soul` - Get SOUL identity
+- `PUT /api/v1/soul` - Update SOUL identity (with auto-backup)
+- `GET /api/v1/soul/fragments` - Get modular identity fragments
+
+**Heartbeat/Autonomy:**
+- `GET /api/v1/heartbeat/config` - Get heartbeat configuration
+- `POST /api/v1/heartbeat/config` - Update heartbeat configuration
+- `GET /api/v1/heartbeat/stats` - Get heartbeat statistics
+- `POST /api/v1/heartbeat/trigger` - Trigger manual wake cycle
+- `POST /api/v1/heartbeat/toggle` - Enable/disable heartbeat daemon
+
+**Narrative Memory:**
+- `GET /api/v1/memory/stats` - Get memory statistics
+- `GET /api/v1/memory/journal` - Get journal entries
+- `GET /api/v1/memory/entities` - Get entities
+- `GET /api/v1/memory/knowledge` - Get knowledge items
+- `GET /api/v1/memory/reflections` - Get reflections
+- `POST /api/v1/memory/reflections` - Add a reflection
+
+**Moltbook Social:**
+- `GET /api/v1/moltbook/status` - Get Moltbook connection status
+- `GET /api/v1/moltbook/agents` - Get agent directory
+- `POST /api/v1/moltbook/connect` - Connect to Moltbook
+- `POST /api/v1/moltbook/disconnect` - Disconnect from Moltbook
+- `GET /api/v1/social/profile` - Get social profile
+- `POST /api/v1/social/post` - Create social post
+- `GET /api/v1/social/notifications` - Get notifications
+- `GET /api/v1/social/agents/search?q=query` - Search agents
+- `GET /api/v1/social/agents/directory` - Get agent directory
+- `GET /api/v1/social/trust?agent_id=id` - Assess trust
+
+**Governance:**
+- `GET /api/v1/governance/policy` - Get governance policy
+- `POST /api/v1/governance/check` - Check action allowed
+- `GET /api/v1/governance/immutable` - Get immutable values
+- `GET /api/v1/governance/emergency` - Get emergency protocols
+- `POST /api/v1/governance/oracle` - Toggle oracle mode
+- `GET /api/v1/memory/reflections` - Get reflections
+- `POST /api/v1/memory/reflections` - Add a reflection
+
 **System:**
 - `GET /api/v1/metrics` - Get metrics (includes total cost)
+- `GET /api/v1/system/health` - Get system health
+- `GET /api/v1/system/cache` - Get cache statistics
+- `DELETE /api/v1/system/cache` - Clear cache
+- `GET /api/v1/system/ratelimit` - Get rate limit stats
 - `GET /api/v1/vm/stats` - Get VM pool stats
+- `GET /api/v1/skills/pool/stats` - Get Skill Pool stats (latency, errors, slot availability)
 - `GET /health` - Health check
 - `GET /` - Root info
 
-### Task Configuration
+### Authentication
 
-Task limits (`max_steps`, `budget_usd`, `time_limit_secs`) are configured in **Settings** (not the main screen). They are stored in localStorage and:
-- **NOT applied** when using local LLM (`APEX_USE_LLM=1`)
-- Time limit enforcement checks `!config.use_llm` in `can_continue()`
+**HMAC Request Signing:**
+- All API requests require `X-APEX-Signature` and `X-APEX-Timestamp` headers
+- Signature = HMAC-SHA256(timestamp + method + path + body)
+- Timestamp must be within 5 minutes to prevent replay attacks
+- Set `APEX_AUTH_DISABLED=1` for local development
+- Set `APEX_SHARED_SECRET` environment variable for production
+
+**Environment Variables:**
+- `APEX_SHARED_SECRET` - Secret key for HMAC signing
+- `APEX_AUTH_DISABLED` - Disable authentication (dev only)
+- `APEX_NATS_ENABLED` - Enable NATS for distributed deployment
+- `APEX_NATS_URL` - NATS server URL (default: 127.0.0.1:4222)
+- `APEX_NATS_SUBJECT_PREFIX` - NATS subject prefix (default: apex)
+
+### Unified Configuration System
+
+APEX v0.2.0 uses a unified configuration system via `AppConfig` in `core/router/src/unified_config.rs`. All configuration goes through `AppConfig::global()`.
+
+**Configuration API Endpoints:**
+- `GET /api/v1/config` - Get all configuration variables
+- `GET /api/v1/config/summary` - Get configuration summary with validation
+
+**View Configuration in UI:**
+- Settings → Config tab shows all runtime configuration
+
+### Complete Environment Variables Reference
+
+| Variable | Description | Default |
+-|---------|
+||----------|------------ **Server** | | |
+| `APEX_PORT` | Router HTTP port | 3000 |
+| `APEX_HOST` | Router host | 0.0.0.0 |
+| **Authentication** | | |
+| `APEX_SHARED_SECRET` | HMAC signing secret | dev-secret-change-in-production |
+| `APEX_AUTH_DISABLED` | Disable auth (set to 1) | false |
+| **LLM/Agent** | | |
+| `APEX_USE_LLM` | Enable LLM (set to 1) | false (development mode) |
+| `LLAMA_SERVER_URL` | llama-server URL | http://localhost:8080 |
+| `LLAMA_MODEL` | Model name | qwen3-4b |
+
+> **Development Mode**: By default, APEX runs in development mode where the local LLM is disabled to avoid unnecessary LLM usage during development. Enable LLM via the Settings → LLM tab in the UI, or set `APEX_USE_LLM=1` environment variable when testing LLM-powered features.
+
+| **Execution** | | |
+| `APEX_EXECUTION_ISOLATION` | Isolation backend: docker, firecracker, gvisor, mock | docker |
+| `APEX_USE_DOCKER` | Enable Docker execution (legacy) | true (if isolation=docker) |
+| `APEX_DOCKER_IMAGE` | Docker image | apex-execution:latest |
+| `APEX_USE_FIRECRACKER` | Enable Firecracker VMs (Linux only) | false |
+| `APEX_FIRECRACKER_PATH` | firecracker binary path | system PATH |
+| `APEX_VM_VCPU` | VM vCPU count | 2 |
+| `APEX_VM_MEMORY_MIB` | VM memory in MiB | 2048 |
+| `APEX_VM_KERNEL` | Linux kernel path | - |
+| `APEX_VM_ROOTFS` | Root filesystem path | - |
+| `APEX_VM_NETWORK_ISOLATION` | Network isolation mode | none |
+| `APEX_VM_FAST_BOOT` | Enable fast boot | false |
+| `APEX_USE_JAILER` | Use jailer with Firecracker | false |
+| `APEX_USE_GVISOR` | Enable gVisor sandbox (Linux only) | false |
+| `APEX_RUNSC_PATH` | runsc binary path | system PATH |
+| **Database** | | |
+| `APEX_DATABASE_URL` | Database connection string | sqlite:apex.db |
+| `DATABASE_URL` | Fallback DB URL | sqlite:apex.db |
+| `APEX_DB_MAX_CONNECTIONS` | Max pool connections | 10 |
+| `APEX_DB_MIN_CONNECTIONS` | Min pool connections | 1 |
+| **NATS** | | |
+| `APEX_NATS_ENABLED` | Enable NATS | false |
+| `APEX_NATS_URL` | NATS server URL | 127.0.0.1:4222 |
+| `APEX_NATS_SUBJECT_PREFIX` | Subject prefix | apex |
+| **Logging** | | |
+| `APEX_JSON_LOGS` | JSON formatted logs (set to 1) | false |
+| `APEX_LOG_LEVEL` | Log level | info |
+| **Skills** | | |
+| `APEX_SKILLS_CLI` | Skills CLI path | - |
+| `APEX_SKILLS_DIR` | Skills directory | ./skills |
+| **Skill Pool** | | |
+| `APEX_SKILL_POOL_ENABLED` | Enable skill pool (set to 0 to disable) | true |
+| `APEX_SKILL_POOL_SIZE` | Number of pre-warmed workers | 4 |
+| `APEX_SKILL_POOL_WORKER` | Path to Bun dispatcher script | ./skills/pool_worker.ts |
+| `APEX_SKILL_POOL_TIMEOUT` | Request timeout (ms) | 30000 |
+| `APEX_SKILL_POOL_ACQUIRE` | Slot acquire timeout (ms) | 5000 |
+| **Soul/Identity** | | |
+| `APEX_SOUL_DIR` | Soul directory | ~/.apex/soul |
+| `APEX_SOUL_BACKUP` | Enable soul backups (set to 1) | false |
+| **Heartbeat** | | |
+| `APEX_HEARTBEAT_ENABLED` | Enable heartbeat daemon | false |
+| `APEX_HEARTBEAT_INTERVAL` | Interval in minutes | 60 |
+| `APEX_HEARTBEAT_JITTER` | Jitter percentage | 10 |
+| `APEX_HEARTBEAT_COOLDOWN` | Cooldown in seconds | 300 |
+| `APEX_HEARTBEAT_MAX_ACTIONS` | Max actions per wake | 3 |
+| **Moltbook** | | |
+| `APEX_MOLTBOOK_AGENT_ID` | Moltbook agent ID | - |
+
+### Permission Tiers
+
+APEX implements T0-T3 permission tiers for security:
+- **T0**: Read-only queries - no confirmation needed
+- **T1**: File writes, drafts - tap to confirm
+- **T2**: External API calls, git push - type to confirm
+- **T3**: Destructive operations - TOTP verification required
 
 ### Kanban Board
 
@@ -70,8 +285,10 @@ The UI includes a **Task Board** (Kanban) for managing tasks visually:
   - Filter by project
   - Click task to view details
   - Click → buttons to move tasks between columns
+  - Click ▶ Run to execute pending tasks
   - Auto-refresh every 5 seconds
   - Edit project, priority, and category inline
+  - "+ New Task" button to create tasks directly
 - **Access**: Click the 📋 icon in the sidebar
 
 ### Gateway Adapters
@@ -182,9 +399,14 @@ poetry run mypy .
 # Test Docker execution
 .\apex.bat docker-test
 
-# Enable Docker execution (set APEX_USE_DOCKER=1)
+# Start router with Docker isolation (without LLM)
+.\apex.bat router-docker
+
+# Start router with LLM and Docker execution
 .\apex.bat router-llm
 ```
+
+**Important**: On Windows, use `--privileged=false` (with equals) not `--privileged false`.
 
 ### React UI (L6)
 ```bash
@@ -210,6 +432,7 @@ cargo build && pnpm run build
 - **Single-user context**: No user ID fields, no authentication between layers
 - **English-only**: All code, comments, error messages in English
 - **No multi-tenancy**: Reject any PRs adding multi-user features
+- **Authentication**: HMAC-signed requests between Gateway/Router/UI
 
 ### Rust (Core)
 - Follow `rustfmt` defaults
@@ -233,6 +456,9 @@ cargo build && pnpm run build
 - Use `zustand` for state management
 - Use Tailwind CSS + Radix UI components
 - Use `vite` for bundling
+- Use `@tanstack/react-query` for server state
+- Use `socket.io-client` for WebSocket
+- Use `framer-motion` for animations
 
 ---
 
@@ -243,51 +469,78 @@ apex/
 ├── core/                    # Rust (L2/L3)
 │   ├── router/              # Task Router (HTTP API)
 │   │   ├── src/
-│   │   │   ├── api.rs      # HTTP endpoints
+│   │   │   ├── api/        # Modular API endpoints
+│   │   │   │   ├── mod.rs       # Router composer
+│   │   │   │   ├── tasks.rs      # Task endpoints (6)
+│   │   │   │   ├── skills.rs    # Skill endpoints (6)
+│   │   │   │   ├── workflows.rs # Workflow endpoints (6)
+│   │   │   │   ├── notifications.rs # Notification endpoints (7)
+│   │   │   │   ├── webhooks.rs  # Webhook endpoints (5)
+│   │   │   │   ├── adapters.rs  # Adapter endpoints (4)
+│   │   │   │   ├── memory.rs    # Memory endpoints (4)
+│   │   │   │   └── system.rs    # System endpoints (4)
+│   │   │   ├── auth.rs      # HMAC authentication middleware
+│   │   │   ├── totp.rs      # TOTP verification
 │   │   │   ├── classifier.rs # Task classification
-│   │   │   ├── metrics.rs  # Prometheus metrics
+│   │   │   ├── metrics.rs   # Prometheus metrics
 │   │   │   ├── message_bus.rs # Internal message bus
-│   │   │   ├── llama.rs    # LLM client (llama-server)
-│   │   │   ├── vm_pool.rs  # VM pool manager
+│   │   │   ├── llama.rs     # LLM client (llama-server)
+│   │   │   ├── vm_pool.rs   # VM pool manager (Docker/Firecracker)
 │   │   │   ├── agent_loop.rs # Agent execution loop
 │   │   │   ├── deep_task_worker.rs # Deep task worker
-│   │   │   └── skill_worker.rs # Skill execution worker
+│   │   │   ├── skill_worker.rs # Skill execution worker
+│   │   │   └── t3_confirm_worker.rs # T3 confirmation handler
 │   │   ├── tests/
-│   │   │   ├── integration.rs # Integration tests (14)
+│   │   │   ├── integration.rs # Integration tests (41)
 │   │   │   └── e2e.rs      # E2E tests (2, #[ignore])
-│   │   ├── Cargo.toml
-│   │   └── run-with-llm.bat # Start router with LLM enabled
+│   │   └── Cargo.toml
 │   ├── memory/              # Memory Service (SQLite)
 │   │   ├── src/
-│   │   │   ├── db.rs       # Database connection
-│   │   │   ├── tasks.rs    # Task models
+│   │   │   ├── db.rs        # Database connection
+│   │   │   ├── tasks.rs     # Task models
 │   │   │   └── task_repo.rs # Task repository
-│   │   └── migrations/      # SQL migrations
+│   │   └── migrations/      # SQL migrations (012)
 │   └── security/            # Capability tokens
 │
 ├── gateway/                 # TypeScript (L1)
 │   ├── src/
-│   │   ├── index.ts        # Gateway service
-│   │   └── index.test.ts   # Tests (8)
+│   │   ├── index.ts        # Gateway service with HMAC signing
+│   │   └── index.test.ts   # Tests
 │   └── tsconfig.json
 │
 ├── skills/                  # TypeScript (L4)
 │   ├── src/
 │   │   ├── types.ts        # Skill interface
 │   │   ├── loader.ts       # Skill loader
-│   │   └── loader.test.ts  # Tests (8)
+│   │   ├── utils.ts       # Shared utilities
+│   │   └── loader.test.ts  # Tests
 │   └── skills/              # Built-in skills
+│       ├── shell.execute/  # T3 - Shell execution
 │       ├── code.generate/
-│       ├── code.review/
-│       ├── shell.execute/
-│       ├── docs.read/
-│       └── git.commit/
+│       ├── code.review/    # T0 - Code review
+│       ├── git.commit/
+│       └── ...
 │
 ├── ui/                      # React (L6)
 │   └── src/
-│       ├── App.tsx
-│       ├── stores/appStore.ts
+│       ├── App.tsx         # Main app with header, task count, budget
+│       ├── stores/
+│       │   └── appStore.ts # Zustand store with WebSocket state
+│       ├── lib/
+│       │   ├── api.ts      # Signed fetch utilities
+│       │   └── websocket.ts # WebSocket client
 │       └── components/
+│           ├── chat/
+│           │   ├── Chat.tsx        # Main chat with TaskSidebar
+│           │   ├── TaskSidebar.tsx # Active tasks panel
+│           │   ├── ProcessGroup.tsx # Task execution trace
+│           │   └── ConfirmationGate.tsx # T1-T3 inline confirmation
+│           ├── kanban/
+│           ├── skills/
+│           ├── memory/
+│           ├── workflows/
+│           ├── audit/
+│           └── settings/
 │
 └── execution/               # Python (L5)
     └── src/apex_agent/
@@ -310,13 +563,13 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 15 | `core/*/src/*_test.rs` or `mod tests` |
-| **Rust integration tests** | 14 | `core/router/tests/integration.rs` |
+| **Rust unit tests** | 70 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust integration tests** | 41 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
-| **Memory tests** | 3 | `core/memory/src/*_test.rs` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
-| **Total** | **48** | |
+| **UI tests** | 23 | `ui/src/**/*.test.tsx` |
+| **Total** | **150** | |
 
 ### Running Tests
 
@@ -336,6 +589,9 @@ cargo test --test e2e
 # TypeScript tests
 cd gateway && pnpm test
 cd skills && pnpm test
+
+# UI tests
+cd ui && pnpm test
 ```
 
 ### Test Categories
@@ -362,15 +618,28 @@ skill-name/
 - Skills are typed (T0-T3) per permission tier
 - All skills require input/output schema validation via zod
 - Health checks required for each skill
+- **Security**: shell.execute is T3 (requires TOTP), not T2
 
 ---
 
 ## Security
 
-- No secrets in code; use environment variables or encrypted SQLite
-- Firecracker isolation for L5 execution (gVisor fallback in dev)
-- Input validation on all external boundaries
-- Single-user: localhost-only binding by default
+- **HMAC Authentication**: All API requests signed with shared secret
+- **TOTP Verification**: T3 tasks require TOTP code before execution
+- **No secrets in code**: Use environment variables or encrypted SQLite
+- **Firecracker isolation**: For L5 execution (gVisor fallback in dev)
+- **Input validation**: On all external boundaries
+- **Single-user**: localhost-only binding by default
+
+### Environment Variables
+
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `APEX_SHARED_SECRET` | HMAC signing secret | `dev-secret-change-in-production` |
+| `APEX_AUTH_DISABLED` | Disable auth (dev only) | not set |
+| `APEX_USE_FIRECRACKER` | Enable Firecracker VMs | false |
+| `APEX_USE_GVISOR` | Enable gVisor | false |
+| `APEX_USE_DOCKER` | Enable Docker execution | false |
 
 ---
 
@@ -382,19 +651,73 @@ skill-name/
 
 ---
 
+## UI Features (v0.1.1)
+
+### Real-Time Updates
+- WebSocket client with automatic reconnection
+- Polling fallback when WebSocket unavailable
+- Connection state indicator: Connected / Degraded / Disconnected
+
+### Task Sidebar
+- Right panel showing active and recent tasks
+- Status icons with color coding
+- Elapsed time and cost display
+
+### Process Groups
+- Collapsible task execution traces
+- Step badges: GEN (LLM), USE (skill), EXE (code), WWW (web), SUB (subagent), MEM (memory), AUD (audit)
+- Expandable step details with input/output
+
+### Inline Confirmation Gates
+- T1: Tap to confirm
+- T2: Type to confirm (type action text)
+- T3: TOTP verification (6-digit code from authenticator app)
+
+### Budget Ticker
+- Live session cost in header
+- Click to view cost details
+
+### Navigation Tabs
+- Chat, Skills, Memory, Files, Board (Kanban), Workflows, Audit, **Channels**, **Journal**, Settings
+- Keyboard shortcuts: Ctrl+1-10 for navigation
+
+### Channel Management
+- Create, edit, delete conversation channels
+- List view with descriptions
+- Default channels: default, general
+
+### Decision Journal
+- Document and track decisions
+- Fields: title, context, decision, rationale, outcome, tags
+- Link decisions to tasks
+- Search functionality
+
+### Responsive Design
+- Desktop: Full sidebar + main content
+- Mobile: Bottom navigation bar
+- Collapsible sidebar
+
+### Theme Support
+- Dark/Light mode toggle in header
+- OS preference detection on first load
+- Persisted to localStorage
+
+---
+
 ## Important Notes
 
-- Phase 1-5 Complete - All core features implemented
-- Phase 6 (Hardening) Complete - Security audit, prompt injection defense, CSP headers
-- Gateway calls Router API over HTTP (NATS optional)
-- Message bus abstraction ready for NATS integration
+- All core features implemented and tested
+- Security audit fixes applied (HMAC auth, TOTP, shell.execute T3)
+- Gateway → Router calls require HMAC signature
+- UI → Router calls require HMAC signature  
+- T3 tasks require TOTP verification
 - All subsystems build and pass linting
-- Test suite: 48 tests (15 Rust unit + 14 Rust integration + 3 memory + 8 Gateway + 8 Skills)
-- E2E tests spawn router binary and verify HTTP endpoints (run manually with `cargo test --test e2e -- --ignored`)
+- Test suite: 150 tests (70 Rust unit + 41 Rust integration + 8 Gateway + 8 Skills + 23 UI)
+- E2E tests spawn router binary and verify HTTP endpoints
 - Session context: see `docs/SESSION.md`
-- Note: `paseto` crate was removed from router (pulled in OpenSSL). Capability tokens use simple base64 encoding in `apex-security`.
 - Task limits (max_steps, budget_usd, time_limit_secs) configured in Settings, stored in localStorage
 - Time limits NOT enforced when using local LLM (APEX_USE_LLM=1)
 - llama-server requires `-c 4096` flag to limit context size and reduce memory usage
 - Prompt injection defense: User input is sanitized before sending to LLM
 - Logging: Use APEX_JSON_LOGS=1 for JSON formatted logs
+- Unified config: All settings managed via `AppConfig::global()`, see Settings → Config tab

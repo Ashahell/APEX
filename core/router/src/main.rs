@@ -1,4 +1,3 @@
-use axum::routing::get;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -14,6 +13,7 @@ use apex_router::message_bus::MessageBus;
 use apex_router::metrics::RouterMetrics;
 use apex_router::moltbook::MoltbookClient;
 use apex_router::skill_worker::SkillWorker;
+use apex_router::skill_pool::SkillPool;
 use apex_router::unified_config::AppConfig;
 use apex_router::vm_pool::{VmConfig, VmPool};
 use apex_router::rate_limiter::RateLimiter;
@@ -80,6 +80,40 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let config = AppConfig::global();
     
+    let validation_errors = config.validate();
+    if !validation_errors.is_empty() {
+        tracing::warn!("Configuration validation found {} issues:", validation_errors.len());
+        for error in &validation_errors {
+            tracing::warn!("  - {}", error.message);
+        }
+    } else {
+        tracing::info!("Configuration validation passed");
+    }
+
+    let skill_pool = if config.skill_pool.enabled {
+        let pool_config = apex_router::skill_pool::SkillPoolConfig {
+            pool_size: config.skill_pool.pool_size,
+            worker_script: std::path::PathBuf::from(&config.skill_pool.worker_script),
+            skills_dir: std::path::PathBuf::from(&config.skill_pool.skills_dir),
+            request_timeout_ms: config.skill_pool.request_timeout_ms,
+            acquire_timeout_ms: config.skill_pool.acquire_timeout_ms,
+            health_check_interval: std::time::Duration::from_secs(30),
+        };
+        match SkillPool::new(pool_config).await {
+            Ok(pool) => {
+                tracing::info!("SkillPool initialized with {} workers", pool.config().pool_size);
+                Some(pool)
+            }
+            Err(e) => {
+                tracing::warn!("Failed to initialize SkillPool: {}, falling back to spawn", e);
+                None
+            }
+        }
+    } else {
+        tracing::info!("SkillPool disabled via config");
+        None
+    };
+    
     let heartbeat_scheduler = if config.heartbeat.enabled {
         let heartbeat_config = apex_router::heartbeat::HeartbeatConfig::from_config(&config);
         let scheduler = HeartbeatScheduler::new(heartbeat_config);
@@ -123,6 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         message_bus: message_bus.clone(),
         circuit_breakers: circuit_breakers.clone(),
         vm_pool: Some(vm_pool.clone()),
+        skill_pool: skill_pool.clone(),
         execution_streams: ExecutionStreamManager::new(),
         ws_manager: WebSocketManager::new(),
         moltbook,
@@ -134,12 +169,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         webhook_manager: WebhookManager::new(),
         notification_manager: NotificationManager::new(100),
     };
+    
+    let state_arc = std::sync::Arc::new(state);
+    let state_for_router = state_arc.as_ref().clone();
+    let state_for_deep_worker = state_arc.as_ref().clone();
 
-    let worker = SkillWorker::new(pool_for_workers.clone(), message_bus.clone(), circuit_breakers.clone());
+    let worker = SkillWorker::new(pool_for_workers.clone(), skill_pool.clone(), message_bus.clone(), circuit_breakers.clone());
     tokio::spawn(worker.run());
 
     let deep_worker =
-        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state.execution_streams.clone(), state.ws_manager.clone());
+        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone());
     tokio::spawn(deep_worker.run());
 
     if let Some(ref scheduler) = heartbeat_scheduler {
@@ -167,7 +206,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let app = create_router(state).route("/", get(root));
+    let app = create_router(state_for_router)
+        .merge(apex_router::websocket::create_ws_router(state_arc));
 
     let port: u16 = std::env::var("APEX_PORT")
         .ok()

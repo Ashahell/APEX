@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { apiFetch } from '../../lib/api';
 
 interface MemoryStats {
   total_entities: number;
@@ -18,7 +19,7 @@ export function MemoryStatsDashboard() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/v1/memory/stats')
+    apiFetch('/api/v1/memory/stats')
       .then((res) => {
         if (!res.ok) throw new Error('Failed to fetch memory stats');
         return res.json();

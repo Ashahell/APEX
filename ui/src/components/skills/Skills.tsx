@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { apiFetch } from '../../lib/api';
 
 interface Skill {
   name: string;
@@ -13,7 +14,7 @@ export function Skills() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('http://localhost:3000/api/v1/skills')
+    apiFetch('/api/v1/skills')
       .then((res) => res.json())
       .then((data) => {
         setSkills(data);

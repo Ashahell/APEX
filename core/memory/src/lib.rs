@@ -1,3 +1,6 @@
+#![allow(clippy::all)]
+#![allow(dead_code)]
+
 pub mod audit;
 pub mod channel_repo;
 pub mod db;

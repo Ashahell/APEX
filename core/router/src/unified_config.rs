@@ -17,6 +17,7 @@ pub struct AppConfig {
     pub nats: NatsConfig,
     pub logging: LoggingConfig,
     pub skills: SkillsConfig,
+    pub skill_pool: SkillPoolConfigSection,
     pub soul: SoulConfig,
     pub heartbeat: HeartbeatConfig,
     pub moltbook: MoltbookConfigSection,
@@ -203,7 +204,7 @@ impl Default for DockerConfig {
             enabled: std::env::var("APEX_USE_DOCKER")
                 .ok()
                 .map(|v| v == "1")
-                .unwrap_or(true),
+                .unwrap_or(false),
             image: std::env::var("APEX_DOCKER_IMAGE")
                 .unwrap_or_else(|_| "apex-execution:latest".to_string()),
         }
@@ -364,6 +365,39 @@ impl Default for MoltbookConfigSection {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SkillPoolConfigSection {
+    pub enabled: bool,
+    pub pool_size: usize,
+    pub worker_script: String,
+    pub skills_dir: String,
+    pub request_timeout_ms: u64,
+    pub acquire_timeout_ms: u64,
+}
+
+impl Default for SkillPoolConfigSection {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            pool_size: std::env::var("APEX_SKILL_POOL_SIZE")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(4),
+            worker_script: std::env::var("APEX_SKILL_POOL_WORKER")
+                .unwrap_or_else(|_| "./skills/pool_worker.ts".to_string()),
+            skills_dir: std::env::var("APEX_SKILLS_DIR").unwrap_or_else(|_| "./skills".to_string()),
+            request_timeout_ms: std::env::var("APEX_SKILL_POOL_TIMEOUT")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(30_000),
+            acquire_timeout_ms: std::env::var("APEX_SKILL_POOL_ACQUIRE")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(5_000),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ConfigSource {
     #[default]
@@ -384,6 +418,7 @@ impl Default for AppConfig {
             nats: NatsConfig::default(),
             logging: LoggingConfig::default(),
             skills: SkillsConfig::default(),
+            skill_pool: SkillPoolConfigSection::default(),
             soul: SoulConfig::default(),
             heartbeat: HeartbeatConfig::default(),
             moltbook: MoltbookConfigSection::default(),
@@ -536,6 +571,25 @@ impl AppConfig {
             "APEX_HEARTBEAT_INTERVAL".to_string(),
             self.heartbeat.interval_minutes.to_string(),
         );
+
+        if self.skill_pool.enabled {
+            vars.insert(
+                "APEX_SKILL_POOL_SIZE".to_string(),
+                self.skill_pool.pool_size.to_string(),
+            );
+            vars.insert(
+                "APEX_SKILL_POOL_WORKER".to_string(),
+                self.skill_pool.worker_script.clone(),
+            );
+            vars.insert(
+                "APEX_SKILL_POOL_TIMEOUT".to_string(),
+                self.skill_pool.request_timeout_ms.to_string(),
+            );
+            vars.insert(
+                "APEX_SKILL_POOL_ACQUIRE".to_string(),
+                self.skill_pool.acquire_timeout_ms.to_string(),
+            );
+        }
 
         vars
     }

@@ -1,0 +1,14 @@
+[project]
+name = "apex-sdk"
+version = "1.3.0"
+description = "Python SDK for APEX Router API"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["apex_sdk"]

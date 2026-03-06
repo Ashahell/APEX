@@ -26,6 +26,10 @@ echo   build          Build all components (core + UI)
 echo   test           Run tests
 echo   router         Start router only
 echo   router-llm     Start router with LLM enabled
+echo   router-llm-no-llama Start router with LLM (llama already running)
+echo   router-gvisor    Start router with gVisor isolation
+echo   router-firecracker Start router with Firecracker isolation
+echo   router-mock     Start router with Mock isolation
 echo   llama          Start llama-server
 echo   ui             Start UI dev server
 echo   ui-serve       Serve built UI
@@ -54,6 +58,9 @@ if "%CMD%"=="router-llm" goto cmd_router_llm
 if "%CMD%"=="router-llm-no-llama" goto cmd_router_llm_no_start
 if "%CMD%"=="router2" goto cmd_router2
 if "%CMD%"=="router2-llm" goto cmd_router2_llm
+if "%CMD%"=="router-gvisor" goto cmd_router_gvisor
+if "%CMD%"=="router-firecracker" goto cmd_router_firecracker
+if "%CMD%"=="router-mock" goto cmd_router_mock
 if "%CMD%"=="llama" goto cmd_llama
 if "%CMD%"=="llama-test" goto cmd_llama_test
 if "%CMD%"=="docker-build" goto cmd_docker_build
@@ -66,8 +73,6 @@ goto usage
 
 :cmd_start
 echo Starting all services...
-echo Cleaning up old Docker containers...
-docker ps -a --filter "name=apex" -q 2>nul | xargs -r docker rm -f 2>nul
 echo Starting llama-server...
 start "APEX Llama-Server" cmd /c "cd /d "%PROJECT_DIR%" && apex.bat llama"
 echo Waiting for Llama-Server to be ready...
@@ -141,8 +146,6 @@ cargo run --release --bin apex-router
 exit /b 0
 
 :cmd_router_llm
-echo Cleaning up old Docker containers...
-docker ps -a --filter "name=apex" -q 2>nul | xargs -r docker rm -f 2>nul
 echo Starting Llama-Server first...
 call :cmd_llama
 echo Waiting for Llama-Server to be ready...
@@ -164,20 +167,31 @@ echo Starting Router with LLM...
 cd /d "%CORE_DIR%"
 set "APEX_USE_LLM=1"
 set "APEX_USE_DOCKER=1"
+set "APEX_EXECUTION_ISOLATION=docker"
+set "APEX_DOCKER_IMAGE=apex-execution:latest"
 set "LLAMA_SERVER_URL=http://127.0.0.1:%LLAMA_PORT%"
 set "LLAMA_MODEL=%LLAMA_MODEL%"
 cargo run --release --bin apex-router
 exit /b 0
 
 :cmd_router_llm_no_start
-echo Cleaning up old Docker containers...
-docker ps -a --filter "name=apex" -q 2>nul | xargs -r docker rm -f 2>nul
 echo Starting Router with LLM (assuming Llama-Server is already running)...
 cd /d "%CORE_DIR%"
 set "APEX_USE_LLM=1"
 set "APEX_USE_DOCKER=1"
+set "APEX_EXECUTION_ISOLATION=docker"
+set "APEX_DOCKER_IMAGE=apex-execution:latest"
 set "LLAMA_SERVER_URL=http://127.0.0.1:%LLAMA_PORT%"
 set "LLAMA_MODEL=%LLAMA_MODEL%"
+cargo run --release --bin apex-router
+exit /b 0
+
+:cmd_router_docker
+echo Starting Router with Docker isolation...
+cd /d "%CORE_DIR%"
+set "APEX_USE_DOCKER=1"
+set "APEX_EXECUTION_ISOLATION=docker"
+set "APEX_DOCKER_IMAGE=apex-execution:latest"
 cargo run --release --bin apex-router
 exit /b 0
 
@@ -215,6 +229,32 @@ set "LLAMA_MODEL=%LLAMA_MODEL%"
 cargo run --release --bin apex-router
 exit /b 0
 
+:cmd_router_gvisor
+echo Starting Router with gVisor isolation...
+cd /d "%CORE_DIR%"
+set "APEX_EXECUTION_ISOLATION=gvisor"
+set "APEX_RUNSC_PATH=\\wsl$\Ubuntu-20.04\usr\local\bin\runsc"
+cargo run --release --bin apex-router
+exit /b 0
+
+:cmd_router_firecracker
+echo Starting Router with Firecracker isolation...
+cd /d "%CORE_DIR%"
+set "APEX_EXECUTION_ISOLATION=firecracker"
+set "APEX_USE_FIRECRACKER=1"
+set "APEX_VM_KERNEL=\\wsl$\Ubuntu-20.04\usr\local\bin\vmlinux"
+set "APEX_VM_ROOTFS=\\wsl$\Ubuntu-20.04\tmp\rootfs.ext4"
+set "APEX_FIRECRACKER_PATH=\\wsl$\Ubuntu-20.04\usr\local\bin\firecracker"
+cargo run --release --bin apex-router
+exit /b 0
+
+:cmd_router_mock
+echo Starting Router with Mock isolation (no real execution)...
+cd /d "%CORE_DIR%"
+set "APEX_EXECUTION_ISOLATION=mock"
+cargo run --release --bin apex-router
+exit /b 0
+
 :cmd_port
 echo Current port configuration:
 echo   Router: %ROUTER_PORT%
@@ -229,7 +269,20 @@ exit /b 0
 :cmd_llama
 echo Starting llama-server on port %LLAMA_PORT%...
 echo Model: %LLAMA_MODEL%
-start "llama-server" cmd /c ""%LLAMA_SERVER%" -m "%LLAMA_MODEL%" --port %LLAMA_PORT% -c 4096"
+set "LOCAL_LLAMA=%PROJECT_DIR%temp-llama\llama-server.exe"
+if exist "%LOCAL_LLAMA%" (
+    echo Using local llama-server from temp-llama folder
+    start "llama-server" cmd /c ""%LOCAL_LLAMA%" -m "%LLAMA_MODEL%" --port %LLAMA_PORT% -c 4096"
+) else if exist "%LLAMA_SERVER%" (
+    echo Using llama-server from %LLAMA_DIR%
+    start "llama-server" cmd /c ""%LLAMA_SERVER%" -m "%LLAMA_MODEL%" --port %LLAMA_PORT% -c 4096"
+) else (
+    echo ERROR: llama-server.exe not found
+    echo   Local: %LOCAL_LLAMA%
+    echo   External: %LLAMA_SERVER%
+    echo Please check LLAMA_DIR in apex.bat or add llama-server.exe to temp-llama folder
+    exit /b 1
+)
 exit /b 0
 
 :cmd_llama_test

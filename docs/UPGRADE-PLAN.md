@@ -647,7 +647,10 @@ agent:
   model: "qwen3-4b"
 
 execution:
-  isolation: firecracker  # firecracker | gvisor | docker
+  isolation: docker  # docker | firecracker | gvisor | mock
+  docker:
+    enabled: true
+    image: "apex-execution:latest"
   firecracker:
     vcpus: 2
     memory_mib: 2048

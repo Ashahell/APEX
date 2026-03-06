@@ -13,7 +13,7 @@
 
 APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. The system uses a 6-layer architecture with support for Firecracker microVM isolation, Agent Zero's autonomous reasoning loop, and OpenClaw-inspired multi-channel ingress.
 
-> **Note**: Many features are proof-of-concept. Firecracker VM isolation is not implemented (uses mock backend).
+> **Note**: Firecracker VM isolation is implemented but requires configuration. gVisor and Mock backends also available.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -207,13 +207,15 @@ interface GatewayConfig {
 #### Components
 | Component | File | Purpose |
 |-----------|------|---------|
-| API Layer | `src/api.rs` | HTTP endpoints (40+ routes) |
+| API Layer | `src/api/` | Modular HTTP endpoints (43 routes in 8 modules) |
 | MessageBus | `src/message_bus.rs` | Tokio broadcast channels |
 | WebSocket | `src/websocket.rs` | Real-time WebSocket server |
 | NATS | `src/nats_integration.rs` | Distributed messaging |
 | Auth | `src/auth.rs` | HMAC request verification |
 | TOTP | `src/totp.rs` | TOTP-based T3 verification |
-| SkillWorker | `src/skill_worker.rs` | Executes TypeScript skills |
+| SkillWorker | `src/skill_worker.rs` | Executes TypeScript skills (with SkillPool) |
+| SkillPool | `src/skill_pool.rs` | Pre-warmed Bun process pool for low-latency skill execution |
+| SkillPoolIpc | `src/skill_pool_ipc.rs` | UUID-based IPC framing for multiplexed communication |
 | DeepTaskWorker | `src/deep_task_worker.rs` | Handles LLM-powered tasks |
 | T3ConfirmWorker | `src/t3_confirm_worker.rs` | Handles T3 confirmation |
 | VmPool | `src/vm_pool.rs` | Docker/Firecracker/gVisor VM management |
@@ -805,18 +807,41 @@ interface AppState {
    ↓
 4. SkillWorker receives from message bus
    ↓
-5. Load skill from registry
+5. Acquire slot from SkillPool (pre-warmed Bun processes)
    ↓
-6. Validate input against skill's inputSchema
+6. Write IPC request with UUID correlation
    ↓
-7. Execute skill with context
+7. Read IPC response from pool worker (skills/pool_worker.ts)
    ↓
-8. Validate output against skill's outputSchema
+8. Release slot back to pool
    ↓
-9. Update task status and output
+9. Validate output against skill's outputSchema
    ↓
-10. Publish completion to message bus
+10. Update task status and output
+   ↓
+11. Publish completion to message bus
 ```
+
+**Fallback**: If SkillPool unavailable, SkillWorker spawns fresh Bun process (legacy mode)
+
+### SkillPool Architecture
+
+**Purpose**: Reduce skill execution latency from ~100ms to ~10-15ms via pre-warmed processes
+
+**Components**:
+- `SkillPool` (`src/skill_pool.rs`): Pool manager with mpsc-based slot management
+- `SkillPoolIpc` (`src/skill_pool_ipc.rs`): UUID-based request/response framing for multiplexed IPC
+- `pool_worker.ts` (`skills/pool_worker.ts`): Bun REPL dispatcher
+
+**Configuration**:
+| Env Variable | Default | Description |
+|--------------|---------|-------------|
+| `APEX_SKILL_POOL_SIZE` | 4 | Number of pre-warmed workers |
+| `APEX_SKILL_POOL_WORKER` | `./skills/pool_worker.ts` | Path to Bun dispatcher |
+| `APEX_SKILL_POOL_TIMEOUT` | 30000 | Request timeout (ms) |
+| `APEX_SKILL_POOL_ACQUIRE` | 5000 | Slot acquire timeout (ms) |
+
+**Performance Target**: ~10-15ms vs ~100ms (spawn mode)
 
 ### Deep Task (LLM) Flow
 ```

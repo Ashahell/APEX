@@ -1,0 +1,1092 @@
+openapi: 3.0.3
+info:
+  title: APEX Router API
+  description: |
+    APEX is a pre-alpha autonomous agent platform. 
+    
+    ## Authentication
+    All API requests require HMAC signature authentication:
+    - `X-APEX-Signature`: HMAC-SHA256 signature
+    - `X-APEX-Timestamp`: Unix timestamp (within 5 minutes)
+    
+    Set `APEX_AUTH_DISABLED=1` for local development.
+    
+    ## Base URL
+    `http://localhost:3000`
+  version: 1.3.0
+  contact:
+    name: APEX Team
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: http://localhost:3001
+    description: Gateway (proxied)
+
+tags:
+  - name: Tasks
+    description: Task management endpoints
+  - name: Skills
+    description: Skill registry and execution
+  - name: Workflows
+    description: Workflow management
+  - name: Messages
+    description: Message history
+  - name: Notifications
+    description: Notification endpoints
+  - name: Channels
+    description: Channel management
+  - name: Journal
+    description: Decision journal
+  - name: Soul
+    description: Identity management
+  - name: Memory
+    description: Narrative memory
+  - name: Heartbeat
+    description: Autonomous heartbeat daemon
+  - name: Moltbook
+    description: Social agent network
+  - name: Governance
+    description: Constitution and governance
+  - name: System
+    description: Metrics, health, and stats
+  - name: WebSocket
+    description: Real-time event streaming
+
+paths:
+  /:
+    get:
+      summary: Root endpoint
+      tags: [System]
+      responses:
+        '200':
+          description: APEX Router version
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: "APEX Router v1.3.0"
+
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: Health status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /api/v1/tasks:
+    get:
+      summary: List tasks
+      description: List all tasks with optional filtering
+      tags: [Tasks]
+      parameters:
+        - name: project
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, running, completed, failed, cancelled]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 100
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Task'
+    post:
+      summary: Create task
+      description: Create a new task. Auto-tiers based on content classification.
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateTaskRequest'
+      responses:
+        '200':
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskResponse'
+
+  /api/v1/tasks/filter-options:
+    get:
+      summary: Get filter options
+      description: Get available filter values for tasks
+      tags: [Tasks]
+      responses:
+        '200':
+          description: Filter options
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  projects:
+                    type: array
+                    items:
+                      type: string
+                  categories:
+                    type: array
+                    items:
+                      type: string
+                  priorities:
+                    type: array
+                    items:
+                      type: string
+                  statuses:
+                    type: array
+                    items:
+                      type: string
+
+  /api/v1/tasks/{task_id}:
+    get:
+      summary: Get task
+      description: Get task status and result
+      tags: [Tasks]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+    put:
+      summary: Update task
+      description: Update task fields (project, priority, category, status)
+      tags: [Tasks]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTaskRequest'
+      responses:
+        '200':
+          description: Task updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+
+  /api/v1/tasks/{task_id}/cancel:
+    post:
+      summary: Cancel task
+      description: Cancel a running or pending task
+      tags: [Tasks]
+      parameters:
+        - name: task_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Task cancelled
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TaskStatusResponse'
+
+  /api/v1/deep:
+    post:
+      summary: Execute deep task
+      description: Execute a task using the deep reasoning loop with LLM
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - content
+              properties:
+                content:
+                  type: string
+                max_steps:
+                  type: integer
+                  default: 10
+                budget_usd:
+                  type: number
+                  default: 1.0
+                time_limit_secs:
+                  type: integer
+      responses:
+        '200':
+          description: Deep task started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  task_id:
+                    type: string
+                  status:
+                    type: string
+
+  /api/v1/skills:
+    get:
+      summary: List skills
+      description: List all registered skills
+      tags: [Skills]
+      responses:
+        '200':
+          description: List of skills
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Skill'
+    post:
+      summary: Register skill
+      description: Register a new skill
+      tags: [Skills]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - version
+                - tier
+              properties:
+                name:
+                  type: string
+                version:
+                  type: string
+                tier:
+                  type: string
+                  enum: [T0, T1, T2, T3]
+
+  /api/v1/skills/{name}:
+    get:
+      summary: Get skill
+      description: Get skill details by name
+      tags: [Skills]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Skill details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Skill'
+    delete:
+      summary: Delete skill
+      description: Delete a skill by name
+      tags: [Skills]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Skill deleted
+
+  /api/v1/skills/{name}/health:
+    put:
+      summary: Update skill health
+      description: Update skill health status
+      tags: [Skills]
+      parameters:
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                healthy:
+                  type: boolean
+
+  /api/v1/skills/execute:
+    post:
+      summary: Execute skill
+      description: Execute a skill directly
+      tags: [Skills]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - skill_name
+                - input
+              properties:
+                skill_name:
+                  type: string
+                input:
+                  type: object
+
+  /api/v1/skills/pool/stats:
+    get:
+      summary: Get skill pool stats
+      description: Get statistics about the skill pool
+      tags: [Skills]
+      responses:
+        '200':
+          description: Pool statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pool_size:
+                    type: integer
+                  available_slots:
+                    type: integer
+                  total_requests:
+                    type: integer
+                  avg_latency_ms:
+                    type: number
+
+  /api/v1/workflows:
+    get:
+      summary: List workflows
+      description: List all workflows
+      tags: [Workflows]
+      responses:
+        '200':
+          description: List of workflows
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Workflow'
+    post:
+      summary: Create workflow
+      description: Create a new workflow
+      tags: [Workflows]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                steps:
+                  type: array
+                  items:
+                    type: object
+
+  /api/v1/messages:
+    get:
+      summary: List messages
+      description: List messages with optional filtering
+      tags: [Messages]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: channel
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of messages
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/v1/notifications:
+    get:
+      summary: List notifications
+      tags: [Notifications]
+      responses:
+        '200':
+          description: List of notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/v1/channels:
+    get:
+      summary: List channels
+      tags: [Channels]
+      responses:
+        '200':
+          description: List of channels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+    post:
+      summary: Create channel
+      tags: [Channels]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+
+  /api/v1/channels/{id}:
+    get:
+      summary: Get channel
+      tags: [Channels]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel details
+    put:
+      summary: Update channel
+      tags: [Channels]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel updated
+    delete:
+      summary: Delete channel
+      tags: [Channels]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Channel deleted
+
+  /api/v1/journal:
+    get:
+      summary: List journal entries
+      tags: [Journal]
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        '200':
+          description: List of journal entries
+    post:
+      summary: Create journal entry
+      tags: [Journal]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                context:
+                  type: string
+                decision:
+                  type: string
+                rationale:
+                  type: string
+
+  /api/v1/journal/{id}:
+    get:
+      summary: Get journal entry
+      tags: [Journal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Journal entry
+    put:
+      summary: Update journal entry
+      tags: [Journal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Journal entry updated
+    delete:
+      summary: Delete journal entry
+      tags: [Journal]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Journal entry deleted
+
+  /api/v1/journal/search:
+    get:
+      summary: Search journal entries
+      tags: [Journal]
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Search results
+
+  /api/v1/soul:
+    get:
+      summary: Get SOUL identity
+      description: Get the agent's identity configuration
+      tags: [Soul]
+      responses:
+        '200':
+          description: Identity details
+    put:
+      summary: Update SOUL identity
+      description: Update the agent's identity configuration
+      tags: [Soul]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+
+  /api/v1/soul/fragments:
+    get:
+      summary: Get identity fragments
+      description: Get modular identity fragments
+      tags: [Soul]
+      responses:
+        '200':
+          description: List of fragments
+
+  /api/v1/memory/stats:
+    get:
+      summary: Get memory statistics
+      tags: [Memory]
+      responses:
+        '200':
+          description: Memory statistics
+
+  /api/v1/memory/journal:
+    get:
+      summary: Get journal entries from memory
+      tags: [Memory]
+      responses:
+        '200':
+          description: Journal entries
+
+  /api/v1/memory/entities:
+    get:
+      summary: Get entities
+      tags: [Memory]
+      responses:
+        '200':
+          description: List of entities
+
+  /api/v1/memory/knowledge:
+    get:
+      summary: Get knowledge items
+      tags: [Memory]
+      responses:
+        '200':
+          description: List of knowledge items
+
+  /api/v1/memory/reflections:
+    get:
+      summary: Get reflections
+      tags: [Memory]
+      responses:
+        '200':
+          description: List of reflections
+    post:
+      summary: Add reflection
+      tags: [Memory]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                title:
+                  type: string
+                content:
+                  type: string
+
+  /api/v1/heartbeat/config:
+    get:
+      summary: Get heartbeat configuration
+      tags: [Heartbeat]
+      responses:
+        '200':
+          description: Heartbeat configuration
+    post:
+      summary: Update heartbeat configuration
+      tags: [Heartbeat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                interval_minutes:
+                  type: integer
+
+  /api/v1/heartbeat/stats:
+    get:
+      summary: Get heartbeat statistics
+      tags: [Heartbeat]
+      responses:
+        '200':
+          description: Heartbeat statistics
+
+  /api/v1/heartbeat/trigger:
+    post:
+      summary: Trigger manual wake cycle
+      tags: [Heartbeat]
+      responses:
+        '200':
+          description: Wake cycle triggered
+
+  /api/v1/heartbeat/toggle:
+    post:
+      summary: Toggle heartbeat daemon
+      tags: [Heartbeat]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+
+  /api/v1/moltbook/status:
+    get:
+      summary: Get Moltbook connection status
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Connection status
+
+  /api/v1/moltbook/agents:
+    get:
+      summary: Get agent directory
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Agent directory
+
+  /api/v1/moltbook/connect:
+    post:
+      summary: Connect to Moltbook
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Connected
+
+  /api/v1/moltbook/disconnect:
+    post:
+      summary: Disconnect from Moltbook
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Disconnected
+
+  /api/v1/social/profile:
+    get:
+      summary: Get social profile
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Social profile
+
+  /api/v1/social/post:
+    post:
+      summary: Create social post
+      tags: [Moltbook]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Post created
+
+  /api/v1/social/notifications:
+    get:
+      summary: Get notifications
+      tags: [Moltbook]
+      responses:
+        '200':
+          description: Notifications
+
+  /api/v1/governance/policy:
+    get:
+      summary: Get governance policy
+      tags: [Governance]
+      responses:
+        '200':
+          description: Policy details
+
+  /api/v1/governance/check:
+    post:
+      summary: Check action allowed
+      tags: [Governance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                action:
+                  type: string
+      responses:
+        '200':
+          description: Check result
+
+  /api/v1/governance/immutable:
+    get:
+      summary: Get immutable values
+      tags: [Governance]
+      responses:
+        '200':
+          description: Immutable values
+
+  /api/v1/governance/emergency:
+    get:
+      summary: Get emergency protocols
+      tags: [Governance]
+      responses:
+        '200':
+          description: Emergency protocols
+
+  /api/v1/governance/oracle:
+    post:
+      summary: Toggle oracle mode
+      tags: [Governance]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                enable:
+                  type: boolean
+
+  /api/v1/metrics:
+    get:
+      summary: Get metrics
+      description: Get system and task metrics
+      tags: [System]
+      responses:
+        '200':
+          description: Metrics
+          content:
+            application/json:
+              schema:
+                type: object
+
+  /api/v1/vm/stats:
+    get:
+      summary: Get VM pool stats
+      tags: [System]
+      responses:
+        '200':
+          description: VM statistics
+
+  /api/v1/system/health:
+    get:
+      summary: Get system health
+      tags: [System]
+      responses:
+        '200':
+          description: System health
+
+  /api/v1/system/cache:
+    get:
+      summary: Get cache statistics
+      tags: [System]
+      responses:
+        '200':
+          description: Cache stats
+
+  /api/v1/system/ratelimit:
+    get:
+      summary: Get rate limit stats
+      tags: [System]
+      responses:
+        '200':
+          description: Rate limit statistics
+
+  /api/v1/config:
+    get:
+      summary: Get all configuration
+      tags: [System]
+      responses:
+        '200':
+          description: Configuration
+
+  /api/v1/config/summary:
+    get:
+      summary: Get configuration summary
+      tags: [System]
+      responses:
+        '200':
+          description: Configuration summary
+
+  /api/v1/ws:
+    get:
+      summary: WebSocket endpoint
+      description: Real-time task updates via WebSocket
+      tags: [WebSocket]
+      responses:
+        '101':
+          description: Switching to WebSocket protocol
+
+components:
+  schemas:
+    Task:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        content:
+          type: string
+        output:
+          type: string
+        error:
+          type: string
+        project:
+          type: string
+        priority:
+          type: string
+        category:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    CreateTaskRequest:
+      type: object
+      required:
+        - content
+      properties:
+        content:
+          type: string
+        channel:
+          type: string
+        thread_id:
+          type: string
+        author:
+          type: string
+        max_steps:
+          type: integer
+        budget_usd:
+          type: number
+        time_limit_secs:
+          type: integer
+        project:
+          type: string
+        priority:
+          type: string
+        category:
+          type: string
+
+    TaskResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+        tier:
+          type: string
+        capability_token:
+          type: string
+        instant_response:
+          type: string
+
+    TaskStatusResponse:
+      type: object
+      properties:
+        task_id:
+          type: string
+        status:
+          type: string
+        content:
+          type: string
+        output:
+          type: string
+        error:
+          type: string
+        project:
+          type: string
+        priority:
+          type: string
+        category:
+          type: string
+        created_at:
+          type: string
+
+    UpdateTaskRequest:
+      type: object
+      properties:
+        project:
+          type: string
+        priority:
+          type: string
+        category:
+          type: string
+        status:
+          type: string
+
+    Skill:
+      type: object
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        tier:
+          type: string
+        description:
+          type: string
+        healthy:
+          type: boolean
+        last_health_check:
+          type: string
+
+    Workflow:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        status:
+          type: string
+        created_at:
+          type: string

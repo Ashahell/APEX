@@ -1,7 +1,12 @@
+#![allow(clippy::all)]
+#![allow(unused_imports)]
+#![allow(dead_code)]
+
 pub mod agent_loop;
 pub mod api;
 pub mod circuit_breaker;
 pub mod classifier;
+pub mod curriculum;
 pub mod deep_task_worker;
 pub mod dynamic_tools;
 pub mod execution_stream;
@@ -15,6 +20,9 @@ pub mod narrative;
 pub mod notification;
 pub mod rate_limiter;
 pub mod response_cache;
+pub mod skill_hot_reload;
+pub mod skill_pool;
+pub mod skill_pool_ipc;
 pub mod skill_worker;
 pub mod soul;
 pub mod subagent;

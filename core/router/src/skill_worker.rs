@@ -1,13 +1,16 @@
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::TaskStatus;
 use serde_json::Value;
+use std::sync::Arc;
 use tokio::sync::broadcast;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::message_bus::{MessageBus, SkillExecutionMessage};
+use crate::skill_pool::SkillPool;
 
 pub struct SkillWorker {
     pool: sqlx::Pool<sqlx::Sqlite>,
+    skill_pool: Option<Arc<SkillPool>>,
     message_bus: MessageBus,
     circuit_breakers: CircuitBreakerRegistry,
 }
@@ -15,11 +18,13 @@ pub struct SkillWorker {
 impl SkillWorker {
     pub fn new(
         pool: sqlx::Pool<sqlx::Sqlite>,
+        skill_pool: Option<Arc<SkillPool>>,
         message_bus: MessageBus,
         circuit_breakers: CircuitBreakerRegistry,
     ) -> Self {
         Self {
             pool,
+            skill_pool,
             message_bus,
             circuit_breakers,
         }
@@ -28,12 +33,13 @@ impl SkillWorker {
     pub async fn run(self) {
         let mut rx = self.message_bus.subscribe_skills();
         let pool = self.pool.clone();
+        let skill_pool = self.skill_pool.clone();
         let circuit_breakers = self.circuit_breakers.clone();
 
         loop {
             match rx.recv().await {
                 Ok(message) => {
-                    Self::process_skill_execution(&pool, &circuit_breakers, message).await;
+                    Self::process_skill_execution(&pool, skill_pool.as_ref(), &circuit_breakers, message).await;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     tracing::info!("Skill worker: message bus closed");
@@ -46,8 +52,55 @@ impl SkillWorker {
         }
     }
 
+    pub async fn run_supervised(self, worker_name: &str) {
+        loop {
+            tracing::info!(worker = %worker_name, "Starting supervised skill worker");
+            
+            let pool = self.pool.clone();
+            let skill_pool = self.skill_pool.clone();
+            let circuit_breakers = self.circuit_breakers.clone();
+            let rx = self.message_bus.subscribe_skills();
+            
+            let result = Self::run_inner(pool, skill_pool, circuit_breakers, rx).await;
+            
+            match result {
+                Ok(()) => {
+                    tracing::info!(worker = %worker_name, "Skill worker exited normally");
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!(worker = %worker_name, error = %e, "Skill worker crashed, restarting in 1 second...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
+    async fn run_inner(
+        pool: sqlx::Pool<sqlx::Sqlite>,
+        skill_pool: Option<Arc<SkillPool>>,
+        circuit_breakers: CircuitBreakerRegistry,
+        mut rx: broadcast::Receiver<SkillExecutionMessage>,
+    ) -> Result<(), String> {
+        loop {
+            match rx.recv().await {
+                Ok(message) => {
+                    Self::process_skill_execution(&pool, skill_pool.as_ref(), &circuit_breakers, message).await;
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    tracing::info!("Skill worker: message bus closed");
+                    return Ok(());
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    tracing::warn!("Skill worker: lagged behind, skipping message");
+                }
+            }
+        }
+    }
+
     async fn process_skill_execution(
         pool: &sqlx::Pool<sqlx::Sqlite>,
+        skill_pool: Option<&Arc<SkillPool>>,
         circuit_breakers: &CircuitBreakerRegistry,
         message: SkillExecutionMessage,
     ) {
@@ -59,7 +112,21 @@ impl SkillWorker {
 
         let repo = TaskRepository::new(pool);
 
-        match Self::execute_skill(&message).await {
+        let result = if let Some(pool) = skill_pool {
+            pool.execute(&message.skill_name, message.input.clone()).await
+                .map_err(|e| e.to_string())
+                .and_then(|resp| {
+                    if resp.ok {
+                        Ok(resp.output.unwrap_or_default())
+                    } else {
+                        Err(resp.error.unwrap_or_else(|| "Unknown error".to_string()))
+                    }
+                })
+        } else {
+            Self::execute_skill(&message).await
+        };
+
+        match result {
             Ok(result) => {
                 circuit_breakers.record_success(&message.skill_name).await;
 

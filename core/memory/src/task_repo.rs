@@ -3,11 +3,11 @@ use chrono::Utc;
 use sqlx::{Row, SqlitePool};
 
 fn sanitize_identifier(value: &str) -> Result<String, String> {
-    // Validate that the value contains only safe characters (alphanumeric, dash, underscore)
+    // Validate that the value contains only safe characters (alphanumeric, dash, underscore, space)
     if value.is_empty() || value.len() > 100 {
         return Err("Invalid identifier length".to_string());
     }
-    if !value.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+    if !value.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ') {
         return Err("Invalid characters in identifier".to_string());
     }
     Ok(value.to_string())
@@ -262,7 +262,7 @@ impl<'a> TaskRepository<'a> {
         };
 
         let query = format!(
-            "SELECT id, status, tier, input_content, output_content, error_message, channel, thread_id, author, skill_name, project, priority, category, created_at, updated_at FROM tasks{} ORDER BY created_at DESC",
+            "SELECT id, status, tier, input_content, output_content, error_message, channel, thread_id, author, skill_name, project, priority, category, cost_estimate_cents, actual_cost_cents, started_at, completed_at, created_at, updated_at FROM tasks{} ORDER BY created_at DESC",
             where_clause
         );
 
@@ -363,5 +363,9 @@ impl<'a> TaskRepository<'a> {
             .execute(self.pool)
             .await?;
         Ok(())
+    }
+
+    pub fn begin(&self) -> impl sqlx::Executor<'a, Database = sqlx::Sqlite> + '_ {
+        self.pool
     }
 }

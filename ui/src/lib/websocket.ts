@@ -1,4 +1,3 @@
-import { io, Socket } from 'socket.io-client';
 import { useAppStore } from '../stores/appStore';
 
 export type ConnectionState = 'connected' | 'degraded' | 'disconnected';
@@ -8,65 +7,19 @@ export interface TaskUpdate {
   status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
   output?: string;
   error?: string;
-  step?: {
-    type: 'GEN' | 'USE' | 'EXE' | 'WWW' | 'SUB' | 'MEM' | 'AUD';
-    name: string;
-    input?: Record<string, unknown>;
-    output?: string;
-  };
   cost?: number;
 }
 
-export interface ExecutionEvent {
-  type: 'Thought' | 'ToolCall' | 'ToolProgress' | 'ToolResult' | 'ApprovalNeeded' | 'Error' | 'Complete';
-  data: {
-    step?: number;
-    content?: string;
-    tool?: string;
-    input?: Record<string, unknown>;
-    output?: string;
-    success?: boolean;
-    tier?: string;
-    action?: string;
-    consequences?: {
-      files_read: string[];
-      files_written: string[];
-      commands_executed: string[];
-      blast_radius: 'minimal' | 'limited' | 'extensive';
-      summary: string;
-    };
-    message?: string;
-    steps?: number;
-    tools_used?: string[];
-  };
-}
-
-export interface ServerMessage {
-  type: 'task_update' | 'task_created' | 'metrics' | 'execution_event' | 'notification' | 'error';
-  payload: unknown;
-}
-
-export interface NotificationMessage {
-  id: string;
-  notification_type: string;
-  title: string;
-  message: string;
-  severity: string;
-  read: boolean;
-  created_at_ms: number;
-  data?: Record<string, unknown>;
-}
-
 class WebSocketClient {
-  private socket: Socket | null = null;
+  private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
-  private pollingInterval: number | null = null;
   private baseUrl: string;
+  private pollingInterval: number | null = null;
 
   constructor() {
-    this.baseUrl = import.meta.env.VITE_WS_URL || 'http://localhost:3000';
+    this.baseUrl = import.meta.env.VITE_WS_URL?.replace('http', 'ws') || 'ws://localhost:3000';
   }
 
   connect(): void {
@@ -74,66 +27,43 @@ class WebSocketClient {
     store.setConnectionState('disconnected');
 
     try {
-      this.socket = io(this.baseUrl, {
-        path: '/api/v1/ws',
-        transports: ['websocket', 'polling'],
-        reconnection: true,
-        reconnectionAttempts: this.maxReconnectAttempts,
-        reconnectionDelay: this.reconnectDelay,
-        reconnectionDelayMax: 30000,
-        timeout: 10000,
-      });
-
-      this.socket.on('connect', () => {
+      this.ws = new WebSocket(`${this.baseUrl}/api/v1/ws`);
+      
+      this.ws.onopen = () => {
         console.log('WebSocket connected');
         this.reconnectAttempts = 0;
         store.setConnectionState('connected');
         this.stopPolling();
-      });
-
-      this.socket.on('disconnect', (reason) => {
-        console.log('WebSocket disconnected:', reason);
-        store.setConnectionState('disconnected');
-        if (reason === 'io server disconnect') {
-          this.socket?.connect();
+      };
+      
+      this.ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          this.handleMessage(data);
+        } catch (e) {
+          console.error('Failed to parse WebSocket message:', e);
         }
-      });
-
-      this.socket.on('connect_error', (error) => {
-        console.error('WebSocket connection error:', error);
+      };
+      
+      this.ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
         this.reconnectAttempts++;
         if (this.reconnectAttempts >= 2) {
           store.setConnectionState('degraded');
           this.startPolling();
         }
-      });
-
-      this.socket.on('task_update', (data: TaskUpdate) => {
-        this.handleTaskUpdate(data);
-      });
-
-      this.socket.on('task_created', (data: TaskUpdate) => {
-        this.handleTaskUpdate(data);
-      });
-
-      this.socket.on('metrics', (data: { totalCost: number; sessionCost: number }) => {
-        store.setSessionCost(data.sessionCost);
-        store.setTotalCost(data.totalCost);
-      });
-
-      this.socket.on('execution_event', (event: ExecutionEvent) => {
-        this.handleExecutionEvent(event);
-      });
-
-      this.socket.on('notification', (notification: NotificationMessage) => {
-        this.handleNotification(notification);
-      });
-
-      this.socket.on('error', (error: Error) => {
-        console.error('WebSocket error:', error);
-        store.setConnectionState('degraded');
-      });
-
+      };
+      
+      this.ws.onclose = () => {
+        console.log('WebSocket closed');
+        this.reconnectAttempts++;
+        if (this.reconnectAttempts < this.maxReconnectAttempts) {
+          setTimeout(() => this.connect(), this.reconnectDelay * this.reconnectAttempts);
+        } else {
+          store.setConnectionState('disconnected');
+          this.startPolling();
+        }
+      };
     } catch (error) {
       console.error('Failed to create WebSocket:', error);
       store.setConnectionState('disconnected');
@@ -141,65 +71,58 @@ class WebSocketClient {
     }
   }
 
-  private handleTaskUpdate(data: TaskUpdate): void {
+  private handleMessage(data: Record<string, unknown>): void {
     const store = useAppStore.getState();
+    const msgType = data.type as string;
     
-    if (data.status === 'completed' || data.status === 'failed') {
-      store.updateTask(data.taskId, {
-        status: data.status,
-        output: data.output,
-        error: data.error,
-        completedAt: new Date(),
-      });
-    } else {
-      store.updateTask(data.taskId, {
-        status: data.status,
-        output: data.output,
-      });
+    switch (msgType) {
+      case 'task_update':
+      case 'task_created': {
+        const taskId = (data.task_id || data.taskId) as string;
+        const status = data.status as TaskUpdate['status'];
+        if (taskId) {
+          store.updateTask(taskId, {
+            status,
+            output: data.output as string | undefined,
+            error: data.error as string | undefined,
+          });
+        }
+        break;
+      }
+      case 'notification': {
+        const notification = data as unknown as Parameters<typeof store.addNotification>[0];
+        store.addNotification(notification);
+        break;
+      }
+      case 'metrics': {
+        store.setSessionCost((data.sessionCost as number) || 0);
+        store.setTotalCost((data.totalCost as number) || 0);
+        break;
+      }
     }
-  }
-
-  private handleExecutionEvent(event: ExecutionEvent): void {
-    const store = useAppStore.getState();
-    
-    if (event.type === 'ApprovalNeeded') {
-      const data = event.data;
-      const tier = (data.tier as 'T1' | 'T2' | 'T3') || 'T2';
-      
-      store.setPendingConfirmation({
-        taskId: store.pendingConfirmation?.taskId || 'pending',
-        tier,
-        action: data.action || 'Unknown action',
-        consequences: data.consequences,
-      });
-    }
-    
-    if (event.type === 'Thought' || event.type === 'ToolCall' || event.type === 'ToolResult') {
-      console.log('Execution event:', event.type, event.data);
-    }
-  }
-
-  private handleNotification(notification: NotificationMessage): void {
-    console.log('Received notification via WebSocket:', notification);
-    const store = useAppStore.getState();
-    store.addNotification(notification);
   }
 
   private startPolling(): void {
     if (this.pollingInterval) return;
     
-    console.log('Starting polling fallback');
     const store = useAppStore.getState();
+    console.log('Starting polling fallback...');
     
     this.pollingInterval = window.setInterval(async () => {
       try {
-        const response = await fetch(`${this.baseUrl}/api/v1/metrics`);
+        const response = await fetch('http://localhost:3000/api/v1/tasks?status=running&limit=10');
         if (response.ok) {
-          const data = await response.json();
-          store.setSessionCost(data.total_cost_usd || 0);
+          const tasks = await response.json();
+          tasks.forEach((task: TaskUpdate) => {
+            store.updateTask(task.taskId, {
+              status: task.status,
+              output: task.output,
+              error: task.error,
+            });
+          });
         }
-      } catch {
-        // Polling failed
+      } catch (e) {
+        console.error('Polling error:', e);
       }
     }, 5000);
   }
@@ -213,25 +136,15 @@ class WebSocketClient {
 
   disconnect(): void {
     this.stopPolling();
-    if (this.socket) {
-      this.socket.disconnect();
-      this.socket = null;
+    if (this.ws) {
+      this.ws.close();
+      this.ws = null;
     }
   }
 
-  isConnected(): boolean {
-    return this.socket?.connected ?? false;
-  }
-
-  on(event: string, callback: (data: unknown) => void): void {
-    this.socket?.on(event, callback);
-  }
-
-  off(event: string, callback?: (data: unknown) => void): void {
-    if (callback) {
-      this.socket?.off(event, callback);
-    } else {
-      this.socket?.off(event);
+  sendMessage(message: string): void {
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.send(message);
     }
   }
 }

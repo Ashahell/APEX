@@ -156,6 +156,7 @@ pub struct AgentState {
     pub history: Vec<AgentStep>,
     pub is_complete: bool,
     pub error: Option<String>,
+    pub step_timings: Vec<StepTiming>,
 }
 
 impl AgentState {
@@ -168,6 +169,7 @@ impl AgentState {
             history: Vec::new(),
             is_complete: false,
             error: None,
+            step_timings: Vec::new(),
         }
     }
 
@@ -188,7 +190,7 @@ impl AgentState {
             return false;
         }
         if let Some(time_limit) = config.time_limit_secs {
-            if !config.use_llm && start_time.elapsed().as_secs() >= time_limit {
+            if start_time.elapsed().as_secs() >= time_limit {
                 self.error = Some("Time limit exceeded".to_string());
                 return false;
             }
@@ -202,7 +204,27 @@ impl AgentState {
         self.history.push(step);
     }
 
+    pub fn record_step_timing(&mut self, step_number: u32, plan_ms: u64, act_ms: u64) {
+        self.step_timings.push(StepTiming {
+            step_number,
+            plan_ms,
+            act_ms,
+            total_ms: plan_ms + act_ms,
+        });
+    }
+
     pub fn get_result(&self) -> AgentResult {
+        let plan_total: u64 = self.step_timings.iter().map(|s| s.plan_ms).sum();
+        let act_total: u64 = self.step_timings.iter().map(|s| s.act_ms).sum();
+        let total: u64 = self.step_timings.iter().map(|s| s.total_ms).sum();
+        
+        let timing = TimingMetrics {
+            total_ms: total,
+            plan_total_ms: plan_total,
+            act_total_ms: act_total,
+            steps: self.step_timings.clone(),
+        };
+        
         if let Some(ref error) = self.error {
             AgentResult {
                 task_id: self.task_id.clone(),
@@ -211,6 +233,7 @@ impl AgentState {
                 total_cost_usd: self.total_cost_usd,
                 output: error.clone(),
                 history: self.history.clone(),
+                timing_ms: timing,
             }
         } else {
             AgentResult {
@@ -220,6 +243,7 @@ impl AgentState {
                 total_cost_usd: self.total_cost_usd,
                 output: "Task completed".to_string(),
                 history: self.history.clone(),
+                timing_ms: timing,
             }
         }
     }
@@ -242,6 +266,24 @@ pub struct AgentResult {
     pub total_cost_usd: f64,
     pub output: String,
     pub history: Vec<AgentStep>,
+    #[serde(default)]
+    pub timing_ms: TimingMetrics,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+pub struct TimingMetrics {
+    pub total_ms: u64,
+    pub plan_total_ms: u64,
+    pub act_total_ms: u64,
+    pub steps: Vec<StepTiming>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct StepTiming {
+    pub step_number: u32,
+    pub plan_ms: u64,
+    pub act_ms: u64,
+    pub total_ms: u64,
 }
 
 pub type ProgressCallback = dyn Fn(&AgentState) + Send + Sync + 'static;
@@ -373,6 +415,7 @@ impl AgentLoop {
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
             state.record_step(step);
+            state.record_step_timing(step_number, plan_ms as u64, act_ms as u64);
 
             tracing::info!(task_id = %task_id, step = step_number, plan_ms, act_ms, total_ms = step_start.elapsed().as_millis(), "Step complete");
 

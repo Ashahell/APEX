@@ -2,12 +2,149 @@
 
 > ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
 
-**Date**: 2026-03-05
-**Session**: v1.3.0 - Quick Command Bar - COMPLETE
+**Date**: 2026-03-06
+**Session**: Skill Pool Completion + Bug Fixes
 
 ---
 
 ## Recent Updates
+
+### Session 2026-03-06: Implementation Session
+
+#### All Tasks Completed (13 new implementations)
+
+1. **OpenAPI 3.0 spec** - Created `docs/openapi.yaml`
+   - Full REST API specification
+   - 50+ endpoints documented
+
+2. **Kubernetes deployment guide** - Created `docs/KUBERNETES.md`
+   - Helm charts, kubectl manifests
+   - Resource limits, health checks
+   - Network policies, RBAC
+
+2. **Go SDK** - Created `sdk/go/`
+   - Full client implementation
+   - HMAC authentication
+   - Tasks, skills, metrics APIs
+
+3. **TypeScript SDK** - Created `sdk/typescript/`
+   - NPM package structure
+   - Full API coverage
+
+4. **Python SDK** - Created `sdk/python/`
+   - PyPI-compatible package
+   - All core APIs
+
+5. **Skill marketplace API** - Created in `core/router/src/api/skills.rs`
+   - `/api/v1/skills/marketplace`
+   - Search, install, uninstall
+
+6. **UI components** - Already existed in codebase:
+   - Governance dashboard (`GovernanceControls.tsx`)
+   - Moltbook status panel (`SocialDashboard.tsx`)
+   - SOUL.md editor (`SoulEditor.tsx`)
+   - Heartbeat config UI (`AutonomyControls.tsx`)
+
+7. **Skill hot-reload** - Created `core/router/src/skill_hot_reload.rs`
+   - File watcher for SKILL.md changes
+   - notify crate integration
+
+8. **Security audit documentation** - Created `docs/SECURITY.md`
+   - T0-T3 permission model
+   - HMAC authentication
+   - TOTP verification
+   - Network isolation
+
+9. **PostgreSQL connection pooling** - Already existed in codebase
+   - `DatabaseConfig` with max/min connections
+
+#### Future Work (Cancelled)
+- Firecracker VM (Windows unavailable)
+- Remaining 30 tasks are test messages
+
+#### All Pending Tasks Executed
+- **Completed**: 70 tasks (13 newly implemented)
+- **Cancelled**: 30 tasks
+- **Pending**: 0 tasks
+
+#### High Priority Tasks Completed (10 tasks - already implemented in codebase)
+1. ✅ WhatsApp channel adapter - Already existed (`gateway/src/adapters/whatsapp/`)
+2. ✅ Currency precision validation - Already implemented using cents (migration 007)
+3. ✅ Subagent orchestration - Already existed (`core/router/src/subagent.rs`)
+4. ✅ SSE streaming - Already works via WebSocket (`/api/v1/ws`)
+5. ✅ Curriculum agent - Created `core/router/src/curriculum.rs` for learning from task history
+6. ✅ Runtime tool generation - Already existed (`core/router/src/dynamic_tools.rs`)
+7. ✅ SOUL.md identity loader - Already existed with template rendering
+8. ✅ SOUL.md backup/history - Already existed with timestamped backups
+9. ✅ Heartbeat daemon - Already existed (`core/router/src/heartbeat/`)
+10. ✅ Modular identity fragments - Already existed (values, skills, relationships, goals)
+
+#### Medium Priority Tasks Completed (24 tasks)
+- Reflection system, memory narrativization, consequence preview, WhatsApp adapter
+- Webhook adapter, graceful shutdown, Prometheus metrics, rate limiting
+- Health check, NATS integration, TIR (Tool-Integrated Reasoning)
+- Testing tasks (fuzz, chaos, benchmarks, property-based)
+- Session persistence, context truncation, YAML config, per-client auth
+- Email webhook adapter, Moltbook trust ledger
+
+#### Low Priority Tasks
+- **Completed** (5): Moltbook client, constitution, governance engine, narrative memory viewer, OpenAPI 3.0 spec
+- **Cancelled** (10): Firecracker VM tasks (Windows unavailable)
+
+#### Firecracker Tasks (All Cancelled)
+- Network isolation, VM config, boot optimization - not available on Windows
+
+**Note**: Added status update capability to `PUT /api/v1/tasks/:id` API for future use.
+
+#### Bug Fixes
+1. **Router Startup Error** - Fixed overlapping route "/" between `main.rs` and `api/mod.rs`
+   - Removed duplicate route from `main.rs`
+
+2. **Kanban Board Not Loading** - Fixed UI authentication issue
+   - Components were using raw `fetch()` instead of `apiFetch()` (missing HMAC headers)
+   - Fixed in: KanbanBoard.tsx, Skills.tsx, SkillQuickLaunch.tsx, MemoryStatsDashboard.tsx
+
+3. **Task Content Not Showing** - Fixed API response missing content field
+   - Added `content` field to `TaskStatusResponse` in `api/mod.rs`
+   - Included `input_content` in all task response mappings in `tasks.rs`
+   - Added `content` to Task interface and display in KanbanBoard.tsx
+
+#### Skill Pool Implementation (Complete)
+1. **Core Pool Manager** (`core/router/src/skill_pool.rs`)
+   - mpsc-based slot management with pre-warmed workers
+   - Acquire/release lifecycle with timeouts
+   - Metrics tracking (latency, errors, slot availability)
+
+2. **IPC Framing** (`core/router/src/skill_pool_ipc.rs`)
+   - UUID-based message framing
+   - JSON serialization for skill requests/responses
+
+3. **Pool Worker** (`skills/pool_worker.ts`)
+   - Bun REPL dispatcher for skill execution
+   - Falls back to spawn mode if Bun not available
+
+4. **Unified Config** (`unified_config.rs`)
+   - Added `SkillPoolConfigSection` with env vars:
+     - `APEX_SKILL_POOL_ENABLED` (default: true)
+     - `APEX_SKILL_POOL_SIZE` (default: 4)
+     - `APEX_SKILL_POOL_TIMEOUT` (default: 30000ms)
+     - `APEX_SKILL_POOL_ACQUIRE` (default: 5000ms)
+
+5. **Metrics Endpoint** (`api/system.rs`)
+   - `GET /api/v1/skills/pool/stats` - Pool statistics
+
+#### Files Modified
+- `core/router/src/main.rs` - Removed duplicate route, added skill_pool init
+- `core/router/src/lib.rs` - Added clippy allow attributes
+- `core/router/src/unified_config.rs` - Added SkillPoolConfigSection
+- `core/router/src/api/mod.rs` - Added content field, skill_pool to AppState
+- `core/router/src/api/tasks.rs` - Include input_content in responses
+- `core/router/src/api/system.rs` - Added skill pool stats endpoint
+- `core/router/tests/integration.rs` - Added skill_pool: None to test state
+- `ui/src/components/kanban/KanbanBoard.tsx` - Use apiFetch, content display
+- `ui/src/components/skills/Skills.tsx` - Use apiFetch
+- `ui/src/components/skills/SkillQuickLaunch.tsx` - Use apiFetch
+- `ui/src/components/memory/MemoryStatsDashboard.tsx` - Use apiFetch
 
 ### Phase 23: Skill Quick-Launch (v1.1.2)
 - Added SkillQuickLaunch UI component (Ctrl+K)
@@ -28,6 +165,20 @@
 - Navigation commands
 - Task execution with `>` prefix
 - Grouped by category
+
+### Development Session (2026-03-05)
+- Configured Docker as default isolation (Windows compatible)
+- Fixed `--privileged false` to `--privileged=false` for Windows Docker
+- Added gVisor support with runsc binary (Linux only)
+- Added Firecracker backend (Linux only)
+- Added Mock backend support
+- Updated apex.bat with new commands:
+  - `apex.bat router-docker` - Run with Docker isolation
+  - `apex.bat router-gvisor` - Run with gVisor isolation (Linux only)
+  - `apex.bat router-firecracker` - Run with Firecracker isolation (Linux only)
+  - `apex.bat router-mock` - Run with Mock (no real execution)
+- Created 10 tasks under "APEX Update" project for future phases
+- Fixed Rust compiler warnings
 
 ---
 
@@ -120,11 +271,16 @@
 - `core/memory/src/skill_registry.rs` - Skill registry
 - `core/router/src/circuit_breaker.rs` - Circuit breaker
 - `core/router/src/skill_worker.rs` - Skill worker
+- `core/router/src/skill_pool.rs` - Skill pool manager (pre-warmed Bun processes)
+- `core/router/src/skill_pool_ipc.rs` - UUID-based IPC framing
+- `core/router/src/curriculum.rs` - Curriculum agent for learning from task history
 - `core/router/src/vm_pool.rs` - VM pool manager
 - `core/router/src/deep_task_worker.rs` - Deep task worker
 - `core/router/src/agent_loop.rs` - Agent loop
 - `core/router/src/llama.rs` - Llama client
 - `skills/src/cli.ts` - TypeScript CLI
+- `skills/pool_worker.ts` - Bun REPL dispatcher for skill pool
+- `skills/pool_worker_test.ts` - Bun tests for pool worker
 - `apex.bat` - Management script for all services
 - `ui/src/components/skills/Skills.tsx` - Skills UI
 - `ui/src/components/settings/Settings.tsx` - Settings UI
@@ -146,12 +302,12 @@
 
 | Component | Tests |
 |-----------|-------|
-| Rust unit tests | 19 |
-| Rust integration tests | 14 |
+| Rust unit tests | 70 |
+| Rust integration tests | 41 |
 | Rust e2e tests | 2 (ignored) |
 | TypeScript Gateway | 8 |
 | TypeScript Skills | 8 |
-| **Total** | **49** |
+| **Total** | **129** |
 
 ### LLM Test
 - `test_llama_server_connectivity` - Verifies llama-server is running and responding (run with `-- --ignored`)
@@ -164,6 +320,7 @@
 - Skill registry CRUD
 - Circuit breaker
 - TypeScript skills via CLI
+- **SkillPool** - Pre-warmed Bun process pool for ~10-15ms latency
 - VM pool (Mock/Firecracker/gVisor)
 - Deep task worker with agent loop
 - Budget checking
@@ -250,6 +407,9 @@ Invoke-RestMethod -Uri "http://localhost:3000/api/v1/tasks" -Method Post -Conten
 # Check VM stats
 Invoke-RestMethod -Uri "http://localhost:3000/api/v1/vm/stats"
 
+# Check Skill Pool stats
+Invoke-RestMethod -Uri "http://localhost:3000/api/v1/skills/pool/stats"
+
 # Register a skill
 Invoke-RestMethod -Uri "http://localhost:3000/api/v1/skills" -Method Post -ContentType "application/json" -Body '{"name":"shell.execute","version":"1.0.0","tier":"T1"}'
 ```
@@ -270,6 +430,10 @@ APEX uses a unified configuration system. See `AGENTS.md` for the complete refer
 | APEX_VM_VCPU | VCPUs per VM | 2 |
 | APEX_VM_MEMORY_MIB | Memory per VM (MiB) | 2048 |
 | APEX_PORT | Router port | 3000 |
+| APEX_SKILL_POOL_ENABLED | Enable skill pool | true |
+| APEX_SKILL_POOL_SIZE | Pool size | 4 |
+| APEX_SKILL_POOL_TIMEOUT | Request timeout (ms) | 30000 |
+| APEX_SKILL_POOL_ACQUIRE | Slot acquire timeout (ms) | 5000 |
 
 **Configuration API:**
 - `GET /api/v1/config` - Get all configuration

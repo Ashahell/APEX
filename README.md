@@ -10,7 +10,7 @@ APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces
 - **Limited testing** - Many features are proof-of-concept
 - **API instability** - Breaking changes expected
 - **No production support** - Use at your own risk
-- **Mock backends** - Firecracker/VM isolation not fully implemented
+- **Execution isolation** - Firecracker/gVisor/Docker/Mock backends available
 
 ## Status
 
@@ -23,7 +23,7 @@ APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces
 - **L2**: Rust Router (Task routing & classification)
 - **L3**: Rust Memory Service (SQLite persistence)
 - **L4**: TypeScript Skills Framework
-- **L5**: Python Execution Engine (mock/backend)
+- **L5**: Python Execution Engine (Docker)
 - **L6**: React UI
 
 ## Features Implemented (Experimental)
@@ -66,9 +66,11 @@ APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces
 - **Backend**: Rust (Axum, Tokio, Sqlx)
 - **Frontend**: React 18, TypeScript, Tailwind CSS, Zustand
 - **Database**: SQLite
-- **LLM**: llama.cpp (Qwen3-4B) - requires local setup
+- **LLM**: llama.cpp (Qwen3-4B) - requires local setup (disabled in development mode by default)
 
 ## Getting Started (Development)
+
+> **Development Mode**: By default, APEX runs with local LLM disabled to avoid unnecessary LLM usage during development. Enable LLM via Settings → LLM in the UI, or set `APEX_USE_LLM=1` when testing LLM features.
 
 ```powershell
 # Clone and setup
@@ -78,8 +80,14 @@ cd apex
 cargo install  # Rust
 cd ui && pnpm install  # Frontend
 
-# Start services
+# Start all services (with LLM + Docker)
 .\apex.bat start
+
+# Or with different isolation backends:
+.\apex.bat router-docker       # Docker container (default)
+.\apex.bat router-gvisor       # gVisor sandbox (Linux only)
+.\apex.bat router-firecracker # Firecracker VM (Linux only)  
+.\apex.bat router-mock        # No real execution
 
 # Or manually:
 # Terminal 1: llama-server (local LLM)
@@ -94,7 +102,6 @@ See `docs/ARCHITECTURE.md` for API documentation (subject to change).
 ## Roadmap
 
 - [ ] Security audit
-- [ ] Firecracker VM isolation
 - [ ] Dynamic tool generation
 - [ ] Subagent pool
 - [ ] Comprehensive testing

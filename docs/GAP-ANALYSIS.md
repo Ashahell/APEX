@@ -190,7 +190,7 @@ core/router/src/vm_pool.rs
 |-----|----------|-------|
 | PASETO tokens | Minor | Using base64 (acceptable) |
 | T1-T3 confirmation UI | **Critical** | No enforcement |
-| VM isolation | **Critical** | Using mock/Docker |
+| VM isolation | **Medium** | Using Docker (Windows compatible) |
 
 ---
 

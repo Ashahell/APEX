@@ -19,7 +19,69 @@ use axum::{
     http::{Request, StatusCode},
 };
 use std::path::PathBuf;
+use std::time::Instant;
+use std::sync::Mutex;
+use std::collections::HashMap;
 use tower::ServiceExt;
+
+static TEST_TIMINGS: Mutex<Option<HashMap<String, (usize, std::time::Duration)>>> = Mutex::new(None);
+
+fn record_test_time(name: &str, duration: std::time::Duration) {
+    if let Ok(mut guard) = TEST_TIMINGS.lock() {
+        let timings = guard.get_or_insert_with(HashMap::new);
+        let entry = timings.entry(name.to_string()).or_insert((0, Duration::ZERO));
+        entry.0 += 1;
+        entry.1 += duration;
+    }
+}
+
+#[derive(Clone)]
+pub struct TestTimer {
+    name: String,
+    start: Instant,
+}
+
+impl TestTimer {
+    pub fn new(name: &str) -> Self {
+        Self { name: name.to_string(), start: Instant::now() }
+    }
+}
+
+impl Drop for TestTimer {
+    fn drop(&mut self) {
+        record_test_time(&self.name, self.start.elapsed());
+    }
+}
+
+#[tokio::test]
+async fn zz_benchmark_test_harness() {
+    println!("\n=== PERFORMANCE METRICS ===");
+    
+    let timings = {
+        let guard = TEST_TIMINGS.lock().unwrap();
+        guard.clone()
+    };
+    
+    if let Some(timings) = timings {
+        let mut sorted: Vec<_> = timings.iter().collect();
+        sorted.sort_by(|a, b| b.1.1.cmp(&a.1.1));
+        
+        let mut total_time = Duration::ZERO;
+        for (name, (count, duration)) in &sorted {
+            println!("{}: {} runs, {}ms total, {:.2}ms avg", 
+                name, count, duration.as_millis(), 
+                duration.as_millis() as f64 / *count as f64);
+            total_time += *duration;
+        }
+        println!("TOTAL: {}ms", total_time.as_millis());
+    } else {
+        println!("No timing data collected. Run other tests first.");
+    }
+    
+    println!("=== END METRICS ===\n");
+}
+
+use std::time::Duration;
 
 async fn create_test_state() -> AppState {
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
@@ -31,6 +93,7 @@ async fn create_test_state() -> AppState {
         message_bus: MessageBus::new(10),
         circuit_breakers: CircuitBreakerRegistry::new(),
         vm_pool: Some(VmPool::new(Default::default(), 2, 0)),
+        skill_pool: None,
         execution_streams: ExecutionStreamManager::new(),
         ws_manager: WebSocketManager::new(),
         moltbook: None,
@@ -46,6 +109,7 @@ async fn create_test_state() -> AppState {
 
 #[tokio::test]
 async fn test_router_root_endpoint() {
+    let _timer = TestTimer::new("test_router_root_endpoint");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -54,11 +118,12 @@ async fn test_router_root_endpoint() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert_eq!(response.status(), StatusCode::OK);
 }
 
 #[tokio::test]
 async fn test_router_health_endpoint() {
+    let _timer = TestTimer::new("test_router_health_endpoint");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -77,6 +142,7 @@ async fn test_router_health_endpoint() {
 
 #[tokio::test]
 async fn test_create_task_endpoint() {
+    let _timer = TestTimer::new("test_create_task_endpoint");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -99,6 +165,7 @@ async fn test_create_task_endpoint() {
 
 #[tokio::test]
 async fn test_get_nonexistent_task() {
+    let _timer = TestTimer::new("test_get_nonexistent_task");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -123,6 +190,7 @@ async fn test_get_nonexistent_task() {
 
 #[tokio::test]
 async fn test_task_lifecycle() {
+    let _timer = TestTimer::new("test_task_lifecycle");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -153,6 +221,7 @@ async fn test_task_lifecycle() {
 
 #[tokio::test]
 async fn test_list_skills_empty() {
+    let _timer = TestTimer::new("test_list_skills_empty");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -171,6 +240,7 @@ async fn test_list_skills_empty() {
 
 #[tokio::test]
 async fn test_register_skill() {
+    let _timer = TestTimer::new("test_register_skill");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -193,6 +263,7 @@ async fn test_register_skill() {
 
 #[tokio::test]
 async fn test_get_skill() {
+    let _timer = TestTimer::new("test_get_skill");
     let state = create_test_state().await;
     let app = create_router(state.clone());
     let app2 = create_router(state);
@@ -227,6 +298,7 @@ async fn test_get_skill() {
 
 #[tokio::test]
 async fn test_get_nonexistent_skill() {
+    let _timer = TestTimer::new("test_get_nonexistent_skill");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -247,6 +319,7 @@ async fn test_get_nonexistent_skill() {
 
 #[tokio::test]
 async fn test_create_deep_task() {
+    let _timer = TestTimer::new("test_create_deep_task");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -269,6 +342,7 @@ async fn test_create_deep_task() {
 
 #[tokio::test]
 async fn test_create_deep_task_with_budget() {
+    let _timer = TestTimer::new("test_create_deep_task_with_budget");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -291,6 +365,7 @@ async fn test_create_deep_task_with_budget() {
 
 #[tokio::test]
 async fn test_create_deep_task_defaults() {
+    let _timer = TestTimer::new("test_create_deep_task_defaults");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -313,6 +388,7 @@ async fn test_create_deep_task_defaults() {
 
 #[tokio::test]
 async fn test_vm_stats_endpoint() {
+    let _timer = TestTimer::new("test_vm_stats_endpoint");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -331,6 +407,7 @@ async fn test_vm_stats_endpoint() {
 
 #[tokio::test]
 async fn test_deep_task_creates_task_in_db() {
+    let _timer = TestTimer::new("test_deep_task_creates_task_in_db");
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
 
@@ -359,6 +436,7 @@ async fn test_deep_task_creates_task_in_db() {
 
 #[tokio::test]
 async fn test_list_workflows_empty() {
+    let _timer = TestTimer::new("test_list_workflows_empty");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -377,6 +455,7 @@ async fn test_list_workflows_empty() {
 
 #[tokio::test]
 async fn test_create_workflow() {
+    let _timer = TestTimer::new("test_create_workflow");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -404,6 +483,7 @@ async fn test_create_workflow() {
 
 #[tokio::test]
 async fn test_get_workflow() {
+    let _timer = TestTimer::new("test_get_workflow");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -442,6 +522,7 @@ async fn test_get_workflow() {
 
 #[tokio::test]
 async fn test_update_workflow() {
+    let _timer = TestTimer::new("test_update_workflow");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -485,6 +566,7 @@ async fn test_update_workflow() {
 
 #[tokio::test]
 async fn test_delete_workflow() {
+    let _timer = TestTimer::new("test_delete_workflow");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -522,6 +604,7 @@ async fn test_delete_workflow() {
 
 #[tokio::test]
 async fn test_workflow_filter_options() {
+    let _timer = TestTimer::new("test_workflow_filter_options");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -540,6 +623,7 @@ async fn test_workflow_filter_options() {
 
 #[tokio::test]
 async fn test_workflow_executions() {
+    let _timer = TestTimer::new("test_workflow_executions");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -558,6 +642,7 @@ async fn test_workflow_executions() {
 
 #[tokio::test]
 async fn test_list_adapters() {
+    let _timer = TestTimer::new("test_list_adapters");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -576,6 +661,7 @@ async fn test_list_adapters() {
 
 #[tokio::test]
 async fn test_get_adapter() {
+    let _timer = TestTimer::new("test_get_adapter");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -594,6 +680,7 @@ async fn test_get_adapter() {
 
 #[tokio::test]
 async fn test_get_nonexistent_adapter() {
+    let _timer = TestTimer::new("test_get_nonexistent_adapter");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -612,6 +699,7 @@ async fn test_get_nonexistent_adapter() {
 
 #[tokio::test]
 async fn test_update_adapter() {
+    let _timer = TestTimer::new("test_update_adapter");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -634,6 +722,7 @@ async fn test_update_adapter() {
 
 #[tokio::test]
 async fn test_toggle_adapter() {
+    let _timer = TestTimer::new("test_toggle_adapter");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -653,6 +742,7 @@ async fn test_toggle_adapter() {
 
 #[tokio::test]
 async fn test_list_webhooks() {
+    let _timer = TestTimer::new("test_list_webhooks");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -671,6 +761,7 @@ async fn test_list_webhooks() {
 
 #[tokio::test]
 async fn test_create_webhook() {
+    let _timer = TestTimer::new("test_create_webhook");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -698,6 +789,7 @@ async fn test_create_webhook() {
 
 #[tokio::test]
 async fn test_get_webhook() {
+    let _timer = TestTimer::new("test_get_webhook");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -735,6 +827,7 @@ async fn test_get_webhook() {
 
 #[tokio::test]
 async fn test_delete_webhook() {
+    let _timer = TestTimer::new("test_delete_webhook");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -773,6 +866,7 @@ async fn test_delete_webhook() {
 
 #[tokio::test]
 async fn test_toggle_webhook() {
+    let _timer = TestTimer::new("test_toggle_webhook");
     let state = create_test_state().await;
     let app = create_router(state.clone());
 
@@ -811,6 +905,7 @@ async fn test_toggle_webhook() {
 
 #[tokio::test]
 async fn test_list_notifications() {
+    let _timer = TestTimer::new("test_list_notifications");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -829,6 +924,7 @@ async fn test_list_notifications() {
 
 #[tokio::test]
 async fn test_get_unread_count() {
+    let _timer = TestTimer::new("test_get_unread_count");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -847,6 +943,7 @@ async fn test_get_unread_count() {
 
 #[tokio::test]
 async fn test_get_notification() {
+    let _timer = TestTimer::new("test_get_notification");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -865,6 +962,7 @@ async fn test_get_notification() {
 
 #[tokio::test]
 async fn test_mark_notification_read() {
+    let _timer = TestTimer::new("test_mark_notification_read");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -884,6 +982,7 @@ async fn test_mark_notification_read() {
 
 #[tokio::test]
 async fn test_mark_all_read() {
+    let _timer = TestTimer::new("test_mark_all_read");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -903,6 +1002,7 @@ async fn test_mark_all_read() {
 
 #[tokio::test]
 async fn test_delete_notification() {
+    let _timer = TestTimer::new("test_delete_notification");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -922,6 +1022,7 @@ async fn test_delete_notification() {
 
 #[tokio::test]
 async fn test_clear_notifications() {
+    let _timer = TestTimer::new("test_clear_notifications");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -941,6 +1042,7 @@ async fn test_clear_notifications() {
 
 #[tokio::test]
 async fn test_list_files() {
+    let _timer = TestTimer::new("test_list_files");
     let state = create_test_state().await;
     let app = create_router(state);
 
@@ -959,6 +1061,7 @@ async fn test_list_files() {
 
 #[tokio::test]
 async fn test_get_file_content() {
+    let _timer = TestTimer::new("test_get_file_content");
     let state = create_test_state().await;
     let app = create_router(state);
 

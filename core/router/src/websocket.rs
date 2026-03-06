@@ -78,7 +78,7 @@ pub async fn ws_handler(
 }
 
 async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
-    let (mut sender, mut receiver) = socket.split();
+    let (sender, mut receiver) = socket.split();
     let task_id = StdArc::new(RwLock::new(String::new()));
     let (tx, mut rx) = broadcast::channel::<String>(100);
     

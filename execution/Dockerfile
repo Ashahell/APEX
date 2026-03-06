@@ -17,4 +17,4 @@ COPY src/ ./src/
 
 ENV PYTHONPATH=/app
 
-CMD ["python", "-c", "print('APEX Execution Container Ready')"]
+CMD ["python", "-u", "-c", "import sys; print('APEX Execution Container Ready'); import time; time.sleep(365*24*60)"]

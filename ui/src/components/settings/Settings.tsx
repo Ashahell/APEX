@@ -41,7 +41,7 @@ const DEFAULT_CONFIG: TaskConfig = {
   timeLimitSecs: null,
 };
 
-type SettingsTab = 'general' | 'security' | 'vm' | 'config' | 'about';
+type SettingsTab = 'general' | 'security' | 'vm' | 'llm' | 'config' | 'about';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -58,6 +58,13 @@ export function Settings() {
   const [totpSecret, setTotpSecret] = useState<string | null>(null);
   const [totpVerifyCode, setTotpVerifyCode] = useState('');
   const [totpVerified, setTotpVerified] = useState(false);
+  const [llmConfig, setLlmConfig] = useState({
+    useLlm: false,
+    llamaUrl: 'http://localhost:8080',
+    llamaModel: 'qwen3-4b',
+  });
+  const [llmSaving, setLlmSaving] = useState(false);
+  const [llmSaved, setLlmSaved] = useState(false);
 
   const loadTaskHistory = async () => {
     setTasksLoading(true);
@@ -134,6 +141,7 @@ export function Settings() {
 
   const tabs: { id: SettingsTab; label: string }[] = [
     { id: 'general', label: 'General' },
+    { id: 'llm', label: 'LLM' },
     { id: 'security', label: 'Security' },
     { id: 'vm', label: 'VM Pool' },
     { id: 'config', label: 'Config' },
@@ -439,6 +447,107 @@ export function Settings() {
                   <code className="block bg-muted p-2 rounded text-xs">
                     APEX_USE_GVISOR=1
                   </code>
+                </div>
+              </section>
+            </div>
+          </>
+        )}
+
+        {activeTab === 'llm' && (
+          <>
+            <div className="mb-6">
+              <h2 className="text-2xl font-semibold">LLM Settings</h2>
+              <p className="text-muted-foreground">Configure local and cloud LLM providers</p>
+            </div>
+
+            <div className="space-y-6">
+              <section className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-4">Local LLM (llama.cpp)</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure local LLM using llama-server. Requires llama-server to be running separately.
+                </p>
+                <div className="space-y-4 max-w-md">
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm">Enable Local LLM</label>
+                    <input
+                      type="checkbox"
+                      checked={llmConfig.useLlm}
+                      onChange={(e) => setLlmConfig({ ...llmConfig, useLlm: e.target.checked })}
+                      className="w-5 h-5"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm">Server URL</label>
+                    <input
+                      type="text"
+                      value={llmConfig.llamaUrl}
+                      onChange={(e) => setLlmConfig({ ...llmConfig, llamaUrl: e.target.value })}
+                      className="w-48 px-2 py-1 rounded border text-center text-sm"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm">Model</label>
+                    <input
+                      type="text"
+                      value={llmConfig.llamaModel}
+                      onChange={(e) => setLlmConfig({ ...llmConfig, llamaModel: e.target.value })}
+                      className="w-48 px-2 py-1 rounded border text-center text-sm"
+                    />
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <p>Current: {llmConfig.llamaUrl}</p>
+                    <p>Model: {llmConfig.llamaModel}</p>
+                  </div>
+                  <button
+                    onClick={async () => {
+                      setLlmSaving(true);
+                      setLlmSaved(false);
+                      await new Promise(r => setTimeout(r, 500));
+                      setLlmSaving(false);
+                      setLlmSaved(true);
+                      setTimeout(() => setLlmSaved(false), 2000);
+                    }}
+                    disabled={llmSaving}
+                    className="bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90 w-fit"
+                  >
+                    {llmSaving ? 'Saving...' : llmSaved ? 'Saved!' : 'Save LLM Settings'}
+                  </button>
+                </div>
+              </section>
+
+              <section className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-4">Cloud LLM</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Configure cloud LLM providers (OpenAI, Anthropic, etc.). Coming soon.
+                </p>
+                <div className="opacity-50">
+                  <div className="flex items-center justify-between mb-4">
+                    <label className="text-sm">Provider</label>
+                    <select className="w-48 px-2 py-1 rounded border text-center" disabled>
+                      <option>Select provider...</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <label className="text-sm">API Key</label>
+                    <input
+                      type="password"
+                      placeholder="Enter API key"
+                      className="w-48 px-2 py-1 rounded border text-center text-sm"
+                      disabled
+                    />
+                  </div>
+                </div>
+              </section>
+
+              <section className="border rounded-lg p-4">
+                <h3 className="font-semibold mb-4">Development Mode</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  During development, local LLM is disabled by default to avoid unnecessary LLM usage.
+                  Enable it here when you need to test LLM-powered features.
+                </p>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-muted-foreground">Current mode:</span>
+                  <span className="font-semibold">Development (LLM off unless enabled)</span>
                 </div>
               </section>
             </div>

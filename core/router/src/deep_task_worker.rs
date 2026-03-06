@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 
 use crate::agent_loop::{AgentConfig, AgentLoop};
 use crate::circuit_breaker::CircuitBreakerRegistry;
-use crate::execution_stream::{ExecutionEvent, ExecutionStreamManager};
+use crate::execution_stream::ExecutionStreamManager;
 use crate::message_bus::{DeepTaskMessage, MessageBus};
 use crate::vm_pool::VmPool;
 use crate::websocket::WebSocketManager;
@@ -57,6 +57,44 @@ impl DeepTaskWorker {
         }
     }
 
+    pub async fn run_supervised(mut self, worker_name: &str) {
+        loop {
+            tracing::info!(worker = %worker_name, "Starting supervised deep task worker");
+            
+            let result = self.run_inner().await;
+            
+            match result {
+                Ok(()) => {
+                    tracing::info!(worker = %worker_name, "Deep task worker exited normally");
+                    break;
+                }
+                Err(e) => {
+                    tracing::error!(worker = %worker_name, error = %e, "Deep task worker crashed, restarting in 1 second...");
+                    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+                }
+            }
+        }
+    }
+
+    async fn run_inner(&mut self) -> Result<(), String> {
+        let mut rx = self.message_bus.subscribe_deep_tasks();
+        
+        loop {
+            match rx.recv().await {
+                Ok(message) => {
+                    self.process_deep_task(message).await;
+                }
+                Err(broadcast::error::RecvError::Closed) => {
+                    tracing::info!("Deep task worker: message bus closed");
+                    return Ok(());
+                }
+                Err(broadcast::error::RecvError::Lagged(_)) => {
+                    tracing::warn!("Deep task worker: lagged behind, skipping message");
+                }
+            }
+        }
+    }
+
     async fn process_deep_task(&self, message: DeepTaskMessage) {
         let start_time = std::time::Instant::now();
         tracing::info!(
@@ -84,30 +122,85 @@ impl DeepTaskWorker {
 
         let execute_start = std::time::Instant::now();
         let result = self.execute_in_vm(&message, &vm_id).await;
-        tracing::info!(task_id = %message.task_id, execute_ms = execute_start.elapsed().as_millis(), "Execution complete");
+        let execute_ms = execute_start.elapsed().as_millis();
+        tracing::info!(task_id = %message.task_id, execute_ms = execute_ms, "Execution complete");
+
+        let vm_acquire_ms = vm_acquire_start.elapsed().as_millis() as u64;
+        let total_ms = start_time.elapsed().as_millis() as u64;
 
         if let Err(release_err) = self.vm_pool.release(&vm_id).await {
             tracing::warn!(vm_id = %vm_id, error = %release_err, "Failed to release VM");
         }
 
-        tracing::info!(task_id = %message.task_id, total_ms = start_time.elapsed().as_millis(), "Deep task finished");
+        tracing::info!(task_id = %message.task_id, total_ms = total_ms, "Deep task finished");
 
         match result {
-            Ok(output) => {
-                if let Err(e) = repo
-                    .update_completed(
-                        &message.task_id,
-                        TaskStatus::Completed,
-                        Some(output.clone()),
-                        Some(10),  // 10 cents
-                    )
-                    .await
-                {
-                    tracing::error!(task_id = %message.task_id, error = %e, "Failed to update completed task");
+            Ok(output_json) => {
+                let output_val: serde_json::Value = serde_json::from_str(&output_json).unwrap_or_default();
+                let agent_timing = output_val.get("timing").cloned().unwrap_or_default();
+                
+                let final_output = serde_json::json!({
+                    "vm_id": vm_id,
+                    "task_id": message.task_id,
+                    "success": output_val.get("success").unwrap_or(&serde_json::Value::Bool(false)).clone(),
+                    "steps_executed": output_val.get("steps_executed").unwrap_or(&serde_json::Value::Number(0.into())).clone(),
+                    "total_cost_usd": output_val.get("total_cost_usd").unwrap_or(&serde_json::Value::Number(0.into())).clone(),
+                    "output": output_val.get("output").unwrap_or(&serde_json::Value::Null).clone(),
+                    "history": output_val.get("history").unwrap_or(&serde_json::Value::Array(vec![])).clone(),
+                    "timing": {
+                        "agent": agent_timing,
+                        "system": {
+                            "vm_acquire_ms": vm_acquire_ms,
+                            "execute_ms": execute_ms,
+                            "total_ms": total_ms,
+                        }
+                    },
+                }).to_string();
+                
+                let journal_entries = Self::extract_journal_entries(&message.task_id, &final_output);
+                
+                let mut tx = match self.pool.begin().await {
+                    Ok(tx) => tx,
+                    Err(e) => {
+                        tracing::error!(task_id = %message.task_id, error = %e, "Failed to begin transaction");
+                        return;
+                    }
+                };
+                
+                let now = chrono::Utc::now();
+                if let Err(e) = sqlx::query(
+                    "UPDATE tasks SET status = ?, output_content = ?, actual_cost_cents = ?, completed_at = ?, updated_at = ? WHERE id = ?"
+                )
+                .bind(TaskStatus::Completed.as_str())
+                .bind(Some(&final_output))
+                .bind(Some(10))
+                .bind(now)
+                .bind(now)
+                .bind(&message.task_id)
+                .execute(&mut *tx).await {
+                    tracing::error!(task_id = %message.task_id, error = %e, "Failed to update task in transaction");
+                    tx.rollback().await.ok();
+                    return;
                 }
-
-                if let Err(e) = self.write_decision_journal(&message.task_id, &output).await {
-                    tracing::warn!(task_id = %message.task_id, error = %e, "Failed to write decision journal");
+                
+                for (entry_id, title, decision, context) in journal_entries {
+                    if let Err(e) = sqlx::query(
+                        "INSERT INTO decision_journal (id, task_id, title, context, decision) VALUES (?, ?, ?, ?, ?)"
+                    )
+                    .bind(&entry_id)
+                    .bind(&message.task_id)
+                    .bind(&title)
+                    .bind(&context)
+                    .bind(&decision)
+                    .execute(&mut *tx).await {
+                        tracing::error!(error = %e, "Failed to insert journal entry in transaction");
+                        tx.rollback().await.ok();
+                        return;
+                    }
+                }
+                
+                if let Err(e) = tx.commit().await {
+                    tracing::error!(task_id = %message.task_id, error = %e, "Failed to commit transaction");
                 }
             }
             Err(error) => {
@@ -221,8 +314,34 @@ impl DeepTaskWorker {
             "total_cost_usd": result.total_cost_usd,
             "output": result.output,
             "history": result.history,
+            "timing": result.timing_ms,
         });
 
         Ok(output.to_string())
+    }
+
+    fn extract_journal_entries(task_id: &str, output_json: &str) -> Vec<(String, String, String, Option<String>)> {
+        let output: serde_json::Value = match serde_json::from_str(output_json) {
+            Ok(v) => v,
+            Err(_) => return Vec::new(),
+        };
+
+        let history = match output.get("history").and_then(|h| h.as_array()) {
+            Some(h) => h,
+            None => return Vec::new(),
+        };
+
+        history.iter().enumerate().map(|(i, step)| {
+            let step_number = step.get("step_number").and_then(|s| s.as_u64()).unwrap_or(i as u64);
+            let action = step.get("action").and_then(|a| a.as_str()).unwrap_or("unknown");
+            let observation = step.get("observation").and_then(|o| o.as_str()).unwrap_or("");
+            
+            let entry_id = format!("{}-step-{}", task_id, step_number);
+            let title = format!("Step {}", step_number);
+            let decision = format!("Step {}: {}", step_number, action);
+            let context = Some(format!("Observation: {}", observation));
+            
+            (entry_id, title, decision, context)
+        }).collect()
     }
 }

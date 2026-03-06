@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
 import { apiGet, apiPost, apiDelete } from '../../lib/api';
-import { wsClient, type NotificationMessage } from '../../lib/websocket';
 import { useAppStore } from '../../stores/appStore';
 
 interface Notification {
@@ -29,6 +28,13 @@ export function NotificationBell() {
 
   useEffect(() => {
     if (storeNotifications.length > 0) {
+      setNotifications(storeNotifications);
+      setUnreadCount(storeNotifications.filter(n => !n.read).length);
+    }
+  }, [storeNotifications]);
+
+  useEffect(() => {
+    if (storeNotifications.length > 0) {
       setNotifications((prev) => {
         const existingIds = new Set(prev.map((n) => n.id));
         const newNotifs = storeNotifications.filter((n) => !existingIds.has(n.id));
@@ -40,19 +46,6 @@ export function NotificationBell() {
       setUnreadCount(storeNotifications.filter((n) => !n.read).length);
     }
   }, [storeNotifications]);
-
-  useEffect(() => {
-    const handleNotification = (data: unknown) => {
-      const notification = data as NotificationMessage;
-      setNotifications((prev) => [notification, ...prev]);
-      setUnreadCount((prev) => prev + 1);
-    };
-
-    wsClient.on('notification', handleNotification);
-    return () => {
-      wsClient.off('notification', handleNotification);
-    };
-  }, []);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
