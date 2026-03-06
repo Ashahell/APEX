@@ -53,7 +53,9 @@ impl Drop for TestTimer {
 
 #[tokio::test]
 async fn zz_benchmark_test_harness() {
+    let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
     println!("\n=== PERFORMANCE METRICS ===");
+    println!("Timestamp: {}", timestamp);
     
     let timings = {
         let guard = TEST_TIMINGS.lock().unwrap();
@@ -65,18 +67,39 @@ async fn zz_benchmark_test_harness() {
         sorted.sort_by(|a, b| b.1.1.cmp(&a.1.1));
         
         let mut total_time = Duration::ZERO;
+        let mut test_count = 0;
+        
+        println!("\n{:<45} {:>8} {:>12} {:>12}", "Test Name", "Runs", "Total(ms)", "Avg(ms)");
+        println!("{:-<45} {:-<8} {:-<12} {:-<12}", "", "", "", "");
+        
         for (name, (count, duration)) in &sorted {
-            println!("{}: {} runs, {}ms total, {:.2}ms avg", 
-                name, count, duration.as_millis(), 
-                duration.as_millis() as f64 / *count as f64);
+            let avg = duration.as_millis() as f64 / *count as f64;
+            println!("{:<45} {:>8} {:>12} {:>12.2}", 
+                if name.len() > 44 { &name[..44] } else { name }, 
+                count, 
+                duration.as_millis(), 
+                avg);
             total_time += *duration;
+            test_count += count;
         }
-        println!("TOTAL: {}ms", total_time.as_millis());
+        
+        println!("{:-<45} {:-<8} {:-<12} {:-<12}", "", "", "", "");
+        println!("{:<45} {:>8} {:>12}", "TOTAL", test_count, total_time.as_millis());
+        
+        // Performance tiers
+        let fast = sorted.iter().filter(|(_, (_, d))| d.as_millis() < 10).count();
+        let medium = sorted.iter().filter(|(_, (_, d))| d.as_millis() >= 10 && d.as_millis() < 100).count();
+        let slow = sorted.iter().filter(|(_, (_, d))| d.as_millis() >= 100).count();
+        
+        println!("\nPerformance Distribution:");
+        println!("  Fast (<10ms):    {:>3} tests", fast);
+        println!("  Medium (10-100ms): {:>3} tests", medium);
+        println!("  Slow (>100ms):   {:>3} tests", slow);
     } else {
         println!("No timing data collected. Run other tests first.");
     }
     
-    println!("=== END METRICS ===\n");
+    println!("\n=== END METRICS ===\n");
 }
 
 use std::time::Duration;
@@ -84,6 +107,16 @@ use std::time::Duration;
 async fn create_test_state() -> AppState {
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
+
+    let embedder = std::sync::Arc::new(apex_memory::embedder::Embedder::default());
+    let indexer_config = apex_memory::background_indexer::IndexerConfig::default();
+    let background_indexer = std::sync::Arc::new(apex_memory::background_indexer::BackgroundIndexer::new(
+        embedder.clone(),
+        db.pool().clone(),
+        indexer_config,
+    ));
+    let narrative_config = apex_memory::narrative::NarrativeConfig::default();
+    let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(narrative_config));
 
     AppState {
         config: apex_router::unified_config::AppConfig::default(),  // C4 Step 2
@@ -103,6 +136,9 @@ async fn create_test_state() -> AppState {
         workflow_repo: apex_memory::WorkflowRepository::new(&db.pool()),
         webhook_manager: apex_router::webhook::WebhookManager::new(),
         notification_manager: apex_router::notification::NotificationManager::new(100),
+        embedder,
+        background_indexer,
+        narrative_memory,
     }
 }
 

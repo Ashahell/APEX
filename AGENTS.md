@@ -144,6 +144,8 @@ APEX is a **pre-alpha** single-user autonomous agent platform combining messagin
 - `GET /api/v1/memory/knowledge` - Get knowledge items
 - `GET /api/v1/memory/reflections` - Get reflections
 - `POST /api/v1/memory/reflections` - Add a reflection
+- `GET /api/v1/memory/search?q=query&limit=N` - Search memory (hybrid search)
+- `GET /api/v1/memory/index` - Get index statistics
 
 **Moltbook Social:**
 - `GET /api/v1/moltbook/status` - Get Moltbook connection status

@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use apex_memory::db::Database;
+use apex_memory::embedder::{Embedder, EmbeddingProvider};
+use apex_memory::background_indexer::{BackgroundIndexer, IndexerConfig};
+use apex_memory::narrative::NarrativeMemory;
 use apex_router::api::{create_router, AppState};
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
 use apex_router::deep_task_worker::DeepTaskWorker;
@@ -149,6 +152,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let governance = std::sync::Arc::new(std::sync::Mutex::new(GovernanceEngine::default()));
 
+    // Create embedder from config
+    let embedder = {
+        let embedding_url = config.memory.embedding_url.clone();
+        let embedding_model = config.memory.embedding_model.clone();
+        let embedding_dim = config.memory.embedding_dim;
+        
+        let provider = if config.memory.embedding_provider == "openai" {
+            EmbeddingProvider::OpenAI {
+                api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
+                model: embedding_model,
+            }
+        } else {
+            EmbeddingProvider::Local {
+                url: embedding_url,
+                model: embedding_model,
+            }
+        };
+        
+        std::sync::Arc::new(Embedder::new(provider, embedding_dim))
+    };
+    tracing::info!("Embedder initialized with provider: {:?}", embedder);
+
+    // Create background indexer
+    let indexer_config = IndexerConfig {
+        batch_size: config.memory.indexer_batch_size,
+        embed_rate_limit_ms: config.memory.embed_rate_limit_ms,
+        chunk_config: apex_memory::chunker::ChunkerConfig {
+            chunk_size_tokens: config.memory.chunk_size,
+            overlap_tokens: config.memory.chunk_overlap,
+            min_chunk_tokens: 20,
+            respect_headings: true,
+            respect_code_blocks: true,
+        },
+        embedding_dim: config.memory.embedding_dim,
+    };
+    let background_indexer = std::sync::Arc::new(BackgroundIndexer::new(
+        embedder.clone(),
+        pool.clone(),
+        indexer_config.clone(),
+    ));
+    tracing::info!("BackgroundIndexer initialized");
+
+    // Create NarrativeMemory
+    let narrative_config = apex_memory::narrative::NarrativeConfig {
+        base_path: dirs::home_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join(".apex")
+            .join("memory"),
+        retention_days: 90,
+        forgetting_threshold_days: 30,
+    };
+    let narrative_memory = std::sync::Arc::new(NarrativeMemory::new(narrative_config.clone()));
+    if let Err(e) = narrative_memory.initialize().await {
+        tracing::warn!("Failed to initialize NarrativeMemory: {}", e);
+    }
+    tracing::info!("NarrativeMemory initialized at {:?}", narrative_config.base_path);
+
+    // Start initial memory scan
+    let indexer_for_scan = background_indexer.clone();
+    let memory_dir = narrative_config.base_path.clone();
+    tokio::spawn(async move {
+        indexer_for_scan.initial_scan(&memory_dir).await;
+    });
+
     let state = AppState {
         config: config.clone(),  // C4 Step 2: Add config to AppState
         pool: pool_for_workers.clone(),
@@ -167,6 +234,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         workflow_repo: apex_memory::WorkflowRepository::new(&pool_for_workers),
         webhook_manager: WebhookManager::new(),
         notification_manager: NotificationManager::new(100),
+        embedder,
+        background_indexer,
+        narrative_memory,
     };
     
     let state_arc = std::sync::Arc::new(state);
@@ -177,7 +247,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(worker.run());
 
     let deep_worker =
-        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone());
+        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone(), state_for_deep_worker.narrative_memory.clone());
     tokio::spawn(deep_worker.run());
 
     if let Some(ref scheduler) = heartbeat_scheduler {

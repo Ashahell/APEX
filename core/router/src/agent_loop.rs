@@ -7,6 +7,7 @@ use crate::execution_stream::{predict_consequences, ConsequencePreview, Executio
 use crate::llama::LlamaClient;
 use crate::subagent::SubAgentPool;
 use crate::unified_config::AppConfig;
+use apex_memory::working_memory::WorkingMemory;
 
 const SENSITIVE_TOOLS: &[&str] = &["shell.execute", "bash", "write", "delete", "exec"];
 const TOOL_GENERATION_KEYWORDS: &[&str] = &["create", "build", "make", "implement", "develop", "generate"];
@@ -295,6 +296,7 @@ pub struct AgentLoop {
     on_step_complete: Option<Box<ProgressCallback>>,
     stream_callback: Option<Box<StreamCallback>>,
     execution_stream: Option<ExecutionStream>,
+    working_memory: Option<WorkingMemory>,
 }
 
 impl AgentLoop {
@@ -304,11 +306,17 @@ impl AgentLoop {
             on_step_complete: None,
             stream_callback: None,
             execution_stream: None,
+            working_memory: None,
         }
     }
 
     pub fn with_execution_stream(mut self, stream: ExecutionStream) -> Self {
         self.execution_stream = Some(stream);
+        self
+    }
+
+    pub fn with_working_memory(mut self, working_memory: WorkingMemory) -> Self {
+        self.working_memory = Some(working_memory);
         self
     }
 
@@ -357,11 +365,16 @@ impl AgentLoop {
         has_generation_keyword && has_complex_requirement && not_many_steps
     }
 
-    pub async fn run(&self, task_id: String, goal: String) -> AgentResult {
+    pub async fn run(&mut self, task_id: String, goal: String) -> AgentResult {
         let mut state = AgentState::new(task_id.clone(), goal.clone());
         let start_time = AgentState::start_time();
 
         tracing::info!(task_id = %task_id, goal = %state.goal, "Starting agent loop");
+
+        // Initialize working memory scratchpad with goal
+        if let Some(ref mut wm) = self.working_memory {
+            let _ = wm.update_scratchpad(&format!("Goal: {}\n\n", goal)).await;
+        }
 
         self.emit_stream(serde_json::json!({
             "type": "start",
@@ -409,13 +422,27 @@ impl AgentLoop {
 
             let step = AgentStep {
                 step_number,
-                action,
+                action: action.clone(),
                 observation: observation.clone(),
                 cost_usd: self.config.step_cost_usd,
                 timestamp: chrono::Utc::now().to_rfc3339(),
             };
             state.record_step(step);
             state.record_step_timing(step_number, plan_ms as u64, act_ms as u64);
+
+            // Record step to working memory
+            if let Some(ref mut wm) = self.working_memory {
+                let action_preview = action.chars().take(200).collect::<String>();
+                let observation_preview = observation.chars().take(500).collect::<String>();
+                let step_entry = format!(
+                    "[Step {}] Action: {}\nObservation: {}\n\n",
+                    step_number,
+                    action_preview,
+                    observation_preview
+                );
+                let current = wm.get_scratchpad().to_string();
+                let _ = wm.update_scratchpad(&format!("{}{}", current, step_entry)).await;
+            }
 
             tracing::info!(task_id = %task_id, step = step_number, plan_ms, act_ms, total_ms = step_start.elapsed().as_millis(), "Step complete");
 
@@ -430,6 +457,18 @@ impl AgentLoop {
 
         if state.current_step == 0 && state.error.is_none() {
             state.is_complete = true;
+        }
+
+        // Finalize working memory
+        if let Some(ref mut wm) = self.working_memory {
+            let summary = format!(
+                "\n\n## Summary\n- Steps executed: {}\n- Total cost: ${:.4}\n- Completed: {}\n",
+                state.current_step,
+                state.total_cost_usd,
+                state.is_complete
+            );
+            let current = wm.get_scratchpad().to_string();
+            let _ = wm.update_scratchpad(&format!("{}{}", current, summary)).await;
         }
 
         let elapsed = start_time.elapsed();
@@ -776,7 +815,7 @@ mod tests {
             ..Default::default()
         };
 
-        let agent = AgentLoop::new(config);
+        let mut agent = AgentLoop::new(config);
         let result = agent
             .run("test-1".to_string(), "Build a website".to_string())
             .await;

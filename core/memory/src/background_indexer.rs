@@ -295,3 +295,58 @@ pub struct IndexStats {
     pub indexed_files: usize,
     pub queue_depth: usize,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::embedder::EmbeddingProvider;
+    use std::sync::Arc;
+
+    fn create_test_embedder() -> Arc<Embedder> {
+        let provider = EmbeddingProvider::Local {
+            url: "http://localhost:8081".to_string(),
+            model: "nomic-embed-text".to_string(),
+        };
+        Arc::new(Embedder::new(provider, 768))
+    }
+
+    #[tokio::test]
+    async fn test_indexer_config_default() {
+        let config = IndexerConfig::default();
+        assert_eq!(config.batch_size, 16);
+        assert_eq!(config.embed_rate_limit_ms, 50);
+        assert_eq!(config.embedding_dim, 768);
+    }
+
+    #[tokio::test]
+    async fn test_indexer_config_clone() {
+        let config = IndexerConfig::default();
+        let cloned = config.clone();
+        assert_eq!(config.batch_size, cloned.batch_size);
+        assert_eq!(config.embedding_dim, cloned.embedding_dim);
+    }
+
+    #[tokio::test]
+    async fn test_index_stats_default() {
+        let stats = IndexStats {
+            total_chunks: 0,
+            indexed_files: 0,
+            queue_depth: 0,
+        };
+        assert_eq!(stats.total_chunks, 0);
+        assert_eq!(stats.indexed_files, 0);
+        assert_eq!(stats.queue_depth, 0);
+    }
+
+    #[tokio::test]
+    async fn test_index_stats_values() {
+        let stats = IndexStats {
+            total_chunks: 100,
+            indexed_files: 5,
+            queue_depth: 2,
+        };
+        assert_eq!(stats.total_chunks, 100);
+        assert_eq!(stats.indexed_files, 5);
+        assert_eq!(stats.queue_depth, 2);
+    }
+}

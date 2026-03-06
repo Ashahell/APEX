@@ -38,6 +38,7 @@ use crate::rate_limiter::RateLimiter;
 use apex_memory::{Workflow, WorkflowExecution};
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskTier};
+use apex_memory::{embedder::Embedder, background_indexer::BackgroundIndexer, narrative::NarrativeMemory};
 use crate::unified_config::AppConfig;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -175,6 +176,9 @@ pub struct AppState {
     pub workflow_repo: apex_memory::WorkflowRepository,
     pub webhook_manager: crate::webhook::WebhookManager,
     pub notification_manager: crate::notification::NotificationManager,
+    pub embedder: std::sync::Arc<Embedder>,
+    pub background_indexer: std::sync::Arc<BackgroundIndexer>,
+    pub narrative_memory: std::sync::Arc<NarrativeMemory>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]

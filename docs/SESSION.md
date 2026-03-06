@@ -3,11 +3,62 @@
 > ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
 
 **Date**: 2026-03-06
-**Session**: Enhanced Memory System Implementation
+**Session**: Memory Components Integration Complete
 
 ---
 
-## Session 2026-03-06: Enhanced Memory System
+## Session 2026-03-06: Memory Components Integration Complete
+
+### Completed Implementation
+
+All memory components are now fully wired:
+
+#### 1. MemoryConfig to UnifiedConfig (`unified_config.rs`)
+- `MemoryConfig` struct with all memory settings
+- Environment variables: `APEX_MEMORY_EMBEDDING_PROVIDER`, `APEX_MEMORY_EMBEDDING_URL`, etc.
+
+#### 2. Memory Components in AppState (`api/mod.rs`)
+```rust
+pub struct AppState {
+    // ... existing fields
+    pub embedder: std::sync::Arc<Embedder>,
+    pub background_indexer: std::sync::Arc<BackgroundIndexer>,
+    pub narrative_memory: std::sync::Arc<NarrativeMemory>,
+}
+```
+
+#### 3. Wired in main.rs
+- Embedder created from config (local/OpenAI)
+- BackgroundIndexer spawned with config
+- NarrativeMemory initialized with default path
+- Initial memory scan started on startup
+
+#### 4. WorkingMemory in DeepTaskWorker + AgentLoop
+- Each deep task gets a working memory scratchpad
+- WorkingMemory passed to AgentLoop for use during execution
+- Each step recorded to scratchpad (action + observation)
+- Summary written at completion
+- Persisted to SQLite after each update
+- Flushed to long-term storage on task completion
+
+#### 5. Search API - Vector Similarity (`api/memory.rs`)
+- Fetches embeddings from `memory_vec` table
+- Computes cosine similarity with query embedding
+- Falls back to keyword matching for chunks without embeddings
+
+#### 6. NarrativeMemory Integration
+- Writes narrative on task completion
+- Writes narrative on task failure
+
+#### 7. Database Migration
+- Added `memory_vec` table for storing embeddings as JSON (fallback without sqlite-vec extension)
+
+#### Test Results
+- All Rust tests: **144 passing** (30 memory + 73 router unit + 41 integration)
+
+---
+
+## Session 2026-03-06: Memory Components Integration
 
 ### Completed Implementation (Phase 1)
 

@@ -1,6 +1,8 @@
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::TaskStatus;
 use apex_memory::decision_journal::{DecisionJournalRepository, CreateDecisionEntry};
+use apex_memory::working_memory::WorkingMemory;
+use apex_memory::narrative::NarrativeMemory;
 use tokio::sync::broadcast;
 
 use crate::agent_loop::{AgentConfig, AgentLoop};
@@ -17,6 +19,7 @@ pub struct DeepTaskWorker {
     circuit_breakers: CircuitBreakerRegistry,
     execution_streams: ExecutionStreamManager,
     ws_manager: WebSocketManager,
+    narrative_memory: std::sync::Arc<NarrativeMemory>,
 }
 
 impl DeepTaskWorker {
@@ -27,6 +30,7 @@ impl DeepTaskWorker {
         circuit_breakers: CircuitBreakerRegistry,
         execution_streams: ExecutionStreamManager,
         ws_manager: WebSocketManager,
+        narrative_memory: std::sync::Arc<NarrativeMemory>,
     ) -> Self {
         Self {
             pool,
@@ -35,6 +39,7 @@ impl DeepTaskWorker {
             circuit_breakers,
             execution_streams,
             ws_manager,
+            narrative_memory,
         }
     }
 
@@ -105,6 +110,18 @@ impl DeepTaskWorker {
 
         let repo = TaskRepository::new(&self.pool);
 
+        // Create or restore working memory for this task
+        let working_memory = match WorkingMemory::new(&message.task_id, self.pool.clone()).await {
+            Ok(wm) => {
+                tracing::debug!(task_id = %message.task_id, "Working memory initialized");
+                Some(wm)
+            }
+            Err(e) => {
+                tracing::warn!(task_id = %message.task_id, error = %e, "Failed to create working memory, continuing without it");
+                None
+            }
+        };
+
         let vm_acquire_start = std::time::Instant::now();
         let vm_id = match self.vm_pool.acquire().await {
             Ok(id) => id,
@@ -121,7 +138,7 @@ impl DeepTaskWorker {
         tracing::debug!(vm_id = %vm_id, "Acquired VM for deep task");
 
         let execute_start = std::time::Instant::now();
-        let result = self.execute_in_vm(&message, &vm_id).await;
+        let result = self.execute_in_vm(&message, &vm_id, working_memory).await;
         let execute_ms = execute_start.elapsed().as_millis();
         tracing::info!(task_id = %message.task_id, execute_ms = execute_ms, "Execution complete");
 
@@ -158,6 +175,23 @@ impl DeepTaskWorker {
                 }).to_string();
                 
                 let journal_entries = Self::extract_journal_entries(&message.task_id, &final_output);
+                
+                // Write narrative to long-term memory
+                let tools_used: Vec<String> = output_val.get("history")
+                    .and_then(|h| h.as_array())
+                    .map(|arr| arr.iter().filter_map(|s| s.get("action").and_then(|a| a.as_str()).map(String::from)).collect())
+                    .unwrap_or_default();
+                
+                if let Err(e) = self.narrative_memory.narrativize_task(
+                    &message.task_id,
+                    &message.content,
+                    Some(&final_output),
+                    "completed",
+                    &tools_used,
+                    &[],
+                ).await {
+                    tracing::warn!(task_id = %message.task_id, error = %e, "Failed to write narrative");
+                }
                 
                 let mut tx = match self.pool.begin().await {
                     Ok(tx) => tx,
@@ -211,6 +245,18 @@ impl DeepTaskWorker {
                     error = %error,
                     "Deep task execution failed"
                 );
+
+                // Write failure narrative
+                if let Err(e) = self.narrative_memory.narrativize_task(
+                    &message.task_id,
+                    &message.content,
+                    Some(&error.to_string()),
+                    "failed",
+                    &[],
+                    &[error.to_string()],
+                ).await {
+                    tracing::warn!(task_id = %message.task_id, error = %e, "Failed to write narrative");
+                }
 
                 if let Err(e) = repo
                     .update_failed(&message.task_id, &error.to_string())
@@ -270,19 +316,21 @@ impl DeepTaskWorker {
         &self,
         message: &DeepTaskMessage,
         vm_id: &str,
+        mut working_memory: Option<WorkingMemory>,
     ) -> Result<String, String> {
         tracing::debug!(vm_id = %vm_id, "Executing deep task in VM");
 
         let stream = self.execution_streams.create_stream(&message.task_id);
         let task_id = message.task_id.clone();
+        let task_id_for_spawn = task_id.clone();
         let execution_streams = self.execution_streams.clone();
         let ws_manager = self.ws_manager.clone();
         
         tokio::spawn(async move {
-            if let Some(mut rx) = execution_streams.subscribe(&task_id) {
+            if let Some(mut rx) = execution_streams.subscribe(&task_id_for_spawn) {
                 while let Ok(event) = rx.recv().await {
                     if let Ok(json) = serde_json::to_string(&event) {
-                        ws_manager.broadcast_task_update(&task_id, &json).await;
+                        ws_manager.broadcast_task_update(&task_id_for_spawn, &json).await;
                     }
                 }
             }
@@ -298,13 +346,27 @@ impl DeepTaskWorker {
 
         tracing::info!(use_llm = config.use_llm, llama_url = ?config.llama_url, "Agent config");
 
-        let agent = AgentLoop::new(config)
+        let mut agent_builder = AgentLoop::new(config)
             .with_execution_stream(stream);
+        
+        // Pass working memory to agent if available
+        if let Some(wm) = working_memory.take() {
+            agent_builder = agent_builder.with_working_memory(wm);
+        }
+        
+        let mut agent = agent_builder;
         let result = agent
             .run(message.task_id.clone(), message.content.clone())
             .await;
 
         self.execution_streams.remove_stream(&message.task_id);
+
+        // Flush working memory if it was used
+        if let Some(ref wm) = working_memory {
+            if let Err(e) = wm.flush_to_longterm(&format!("{}/working_memory.md", dirs::data_local_dir().unwrap_or_default().join("apex").display())).await {
+                tracing::warn!(task_id = %task_id, error = %e, "Failed to flush working memory");
+            }
+        }
 
         let output = serde_json::json!({
             "vm_id": vm_id,

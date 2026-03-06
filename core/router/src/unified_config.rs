@@ -27,6 +27,7 @@ pub struct AppConfig {
     pub soul: SoulConfig,
     pub heartbeat: HeartbeatConfig,
     pub moltbook: MoltbookConfigSection,
+    pub memory: MemoryConfig,
     #[serde(skip)]
     pub config_source: ConfigSource,
 }
@@ -372,6 +373,71 @@ impl Default for MoltbookConfigSection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryConfig {
+    pub embedding_provider: String,
+    pub embedding_url: String,
+    pub embedding_model: String,
+    pub embedding_dim: usize,
+    pub rrf_k: usize,
+    pub max_results: usize,
+    pub mmr_lambda: f64,
+    pub half_life_days: f64,
+    pub chunk_size: usize,
+    pub chunk_overlap: usize,
+    pub embed_rate_limit_ms: u64,
+    pub indexer_batch_size: usize,
+}
+
+impl Default for MemoryConfig {
+    fn default() -> Self {
+        Self {
+            embedding_provider: std::env::var("APEX_MEMORY_EMBEDDING_PROVIDER")
+                .unwrap_or_else(|_| "local".to_string()),
+            embedding_url: std::env::var("APEX_MEMORY_EMBEDDING_URL")
+                .unwrap_or_else(|_| "http://localhost:8081".to_string()),
+            embedding_model: std::env::var("APEX_MEMORY_EMBEDDING_MODEL")
+                .unwrap_or_else(|_| "nomic-embed-text".to_string()),
+            embedding_dim: std::env::var("APEX_MEMORY_EMBEDDING_DIM")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(768),
+            rrf_k: std::env::var("APEX_MEMORY_RRF_K")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(60),
+            max_results: std::env::var("APEX_MEMORY_MAX_RESULTS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(8),
+            mmr_lambda: std::env::var("APEX_MEMORY_MMR_LAMBDA")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(0.7),
+            half_life_days: std::env::var("APEX_MEMORY_HALF_LIFE_DAYS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(30.0),
+            chunk_size: std::env::var("APEX_MEMORY_CHUNK_SIZE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(256),
+            chunk_overlap: std::env::var("APEX_MEMORY_CHUNK_OVERLAP")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(32),
+            embed_rate_limit_ms: std::env::var("APEX_MEMORY_EMBED_RATE_LIMIT_MS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(50),
+            indexer_batch_size: std::env::var("APEX_MEMORY_INDEXER_BATCH_SIZE")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(16),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SkillPoolConfigSection {
     pub enabled: bool,
     pub pool_size: usize,
@@ -428,6 +494,7 @@ impl Default for AppConfig {
             soul: SoulConfig::default(),
             heartbeat: HeartbeatConfig::default(),
             moltbook: MoltbookConfigSection::default(),
+            memory: MemoryConfig::default(),
             config_source: ConfigSource::Environment,
         }
     }

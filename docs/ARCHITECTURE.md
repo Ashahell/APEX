@@ -2,7 +2,7 @@
 
 > ⚠️ **WARNING: PRE-ALPHA** - This document describes an experimental research system. Not production ready.
 > 
-> **Production Gaps**: No security audit performed, limited test coverage (180 tests), no formal load testing, no disaster recovery procedures, single-node deployment only.
+> **Production Gaps**: No security audit performed, limited test coverage (144 tests), no formal load testing, no disaster recovery procedures, single-node deployment only.
 
 **Date**: 2026-03-06
 **Version**: v1.3.0
@@ -409,6 +409,20 @@ interface GatewayConfig {
 | GET | `/health` | Health check |
 | GET | `/` | Root info |
 
+**Memory (v1.3.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/memory/stats` | Get memory statistics |
+| GET | `/api/v1/memory/reflections` | Get reflections |
+| GET | `/api/v1/memory/search?q=&limit=` | Search memory (hybrid) |
+| GET | `/api/v1/memory/index` | Get index statistics |
+
+**Files**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/files` | List files |
+| GET | `/api/v1/files/content?path=` | Get file content |
+
 #### Message Bus Types
 ```rust
 // Four broadcast channels:
@@ -421,27 +435,34 @@ interface GatewayConfig {
 #### AppState Structure
 ```rust
 pub struct AppState {
+    pub config: AppConfig,           // C4: Unified config
     pub pool: sqlx::SqlitePool,
     pub metrics: RouterMetrics,
     pub message_bus: MessageBus,
     pub circuit_breakers: CircuitBreakerRegistry,
     pub vm_pool: Option<VmPool>,
-    pub auth_config: AuthConfig,
-    pub totp_manager: TotpManager,
-    pub ws_manager: Arc<WebSocketManager>,
     pub skill_pool: Option<Arc<SkillPool>>,
-    pub narrative_memory: Arc<NarrativeMemory>,
+    pub execution_streams: ExecutionStreamManager,
+    pub ws_manager: WebSocketManager,
+    pub moltbook: Option<MoltbookClient>,
+    pub governance: Arc<Mutex<GovernanceEngine>>,
+    pub system_monitor: SystemMonitor,
+    pub cache: ResponseCache,
+    pub rate_limiter: RateLimiter,
+    pub workflow_repo: WorkflowRepository,
+    pub webhook_manager: WebhookManager,
+    pub notification_manager: NotificationManager,
+    pub embedder: Arc<Embedder>,              // v1.3.0: Embedding client
+    pub background_indexer: Arc<BackgroundIndexer>, // v1.3.0: File indexer
+    Arc<Narrative pub narrative_memory:Memory>,      // v1.3.0: Long-term memory
 }
 ```
 
-> **Note on Component Wiring**: Some components are accessed via global static or lazy initialization rather than through `AppState`:
-> - `Heartbeat`: Initialized in `main.rs`, runs as background daemon
-> - `Soul`: Loaded via `Soul::load()` at startup, accessible via `SOUL.get()`
-> - `Governance`: Initialized in router, accessed via `Governance::check()`
-> - `Moltbook`: Lazy-loaded on first use via `MoltbookClient::new()`
-> - `BackgroundIndexer`: Created in main.rs, spawned as async task
-> - `Embedder`: Created on demand via `Embedder::new()`
-> - `WorkingMemory`: Created per-task via `WorkingMemory::new()`
+> **Note on Component Wiring** (v1.3.0): All memory components are now wired into AppState:
+> - `Embedder`: Created at startup from config, stored in AppState
+> - `BackgroundIndexer`: Spawned at startup, scans ~/.apex/memory/
+> - `NarrativeMemory`: Initialized at startup, manages journal/entities/knowledge/reflections
+> - `WorkingMemory`: Created per-task via `WorkingMemory::new()`, passed to AgentLoop, each step recorded to scratchpad, persisted to SQLite, flushed on completion
 
 ---
 
@@ -1202,7 +1223,7 @@ See `AGENTS.md` for the complete reference. Key variables:
 > **Note on versioning**: v1.x marks production-readiness milestones. v0.x were internal development versions. v1.3.0 represents the current pre-alpha state with full feature set.
 
 - **v1.3.1** (2026-03-06): Architecture fixes - Migration 013, WAL mode, atomic writes, Bun pool tier enforcement, cache invalidation, C4 config injection
-- **v1.3.0** (2026-03-06): Enhanced Memory System - sqlite-vec, hybrid search (RRF), working memory, background indexer
+- **v1.3.0** (2026-03-06): Enhanced Memory System - vector similarity search, FTS5, working memory (per-task scratchpad), background indexer, narrative integration
 - **v1.2.0** (2026-03-05): UI overhaul, settings tabs, memory viewer, workflow visualizer
 - **v1.1.0** (2026-03-04): Skill quick-launch, command bar, task board
 - **v1.0.0** (2026-03-03): Core feature freeze - Firecracker VM, Agent Zero loop, SKILL.md plugins, PostgreSQL support

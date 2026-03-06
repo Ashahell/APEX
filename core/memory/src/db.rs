@@ -296,6 +296,16 @@ impl Database {
             )
         "#).execute(&self.pool).await?;
 
+        // memory_vec: Vector storage (fallback - stores embeddings as JSON)
+        // Note: sqlite-vec (vec0) provides better performance but requires extension loading
+        // This table provides basic functionality without the extension
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS memory_vec (
+                chunk_id TEXT PRIMARY KEY NOT NULL,
+                embedding TEXT NOT NULL
+            )
+        "#).execute(&self.pool).await?;
+
         // Create indexes for enhanced memory
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_memory_chunks_type ON memory_chunks(memory_type)")
             .execute(&self.pool).await.ok();

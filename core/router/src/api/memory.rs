@@ -1,10 +1,27 @@
 use axum::{
     extract::Query,
-    routing::get,
+    routing::{get, post},
     Json, Router,
 };
+use serde::{Deserialize, Serialize};
+use axum::extract::State;
 
 use super::{AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse, ReflectionItem};
+
+#[derive(Debug, Deserialize)]
+pub struct SearchMemoryQuery {
+    pub q: String,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct MemorySearchResult {
+    pub chunk_id: String,
+    pub file_path: String,
+    pub content: String,
+    pub score: f64,
+    pub memory_type: String,
+}
 
 pub fn router() -> Router<AppState> {
     Router::new()
@@ -12,6 +29,8 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/files/content", get(get_file_content))
         .route("/api/v1/memory/stats", get(get_memory_stats))
         .route("/api/v1/memory/reflections", get(get_reflections))
+        .route("/api/v1/memory/search", get(search_memory))
+        .route("/api/v1/memory/index", get(get_index_stats))
 }
 
 async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<FileItem>>, String> {
@@ -172,4 +191,96 @@ async fn get_reflections() -> Result<Json<Vec<ReflectionItem>>, String> {
     }
 
     Ok(Json(reflections))
+}
+
+async fn search_memory(
+    State(state): State<AppState>,
+    Query(query): Query<SearchMemoryQuery>,
+) -> Result<Json<Vec<MemorySearchResult>>, String> {
+    let limit = query.limit.unwrap_or(8);
+    
+    // Get query embedding
+    let query_embedding = state.embedder
+        .embed_query(&query.q)
+        .await
+        .map_err(|e| format!("Failed to embed query: {}", e))?;
+    
+    // Fetch all chunks with their embeddings
+    let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT mc.id, mc.file_path, mc.content, mc.memory_type, mv.embedding
+         FROM memory_chunks mc
+         LEFT JOIN memory_vec mv ON mc.id = mv.chunk_id"
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| format!("Search failed: {}", e))?;
+    
+    // Compute similarity scores and sort
+    let mut scored_results: Vec<(String, String, String, f64, String)> = rows
+        .into_iter()
+        .filter_map(|(chunk_id, file_path, content, memory_type, embedding_json)| {
+            if let Some(emb_json) = embedding_json {
+                if let Ok(embedding) = serde_json::from_str::<Vec<f32>>(&emb_json) {
+                    let sim = cosine_similarity_f32(&query_embedding, &embedding);
+                    return Some((chunk_id, file_path, content, sim, memory_type));
+                }
+            }
+            // Fallback: keyword match for chunks without embeddings
+            let query_lower = query.q.to_lowercase();
+            let content_lower = content.to_lowercase();
+            let count = content_lower.matches(&query_lower).count();
+            let score = (count as f64).min(10.0) / 10.0;
+            Some((chunk_id, file_path, content, score, memory_type))
+        })
+        .collect();
+    
+    // Sort by score descending
+    scored_results.sort_by(|a, b| b.3.partial_cmp(&a.3).unwrap_or(std::cmp::Ordering::Equal));
+    scored_results.truncate(limit);
+    
+    let search_results: Vec<MemorySearchResult> = scored_results
+        .into_iter()
+        .map(|(chunk_id, file_path, content, score, memory_type)| {
+            MemorySearchResult {
+                chunk_id,
+                file_path,
+                content: content.chars().take(500).collect(),
+                score,
+                memory_type,
+            }
+        })
+        .collect();
+    
+    Ok(Json(search_results))
+}
+
+fn cosine_similarity_f32(a: &[f32], b: &[f32]) -> f64 {
+    if a.len() != b.len() || a.is_empty() {
+        return 0.0;
+    }
+
+    let dot_product: f64 = a.iter().zip(b.iter()).map(|(x, y)| (*x as f64) * (*y as f64)).sum();
+    let magnitude_a: f64 = a.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+    let magnitude_b: f64 = b.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+
+    if magnitude_a == 0.0 || magnitude_b == 0.0 {
+        return 0.0;
+    }
+
+    dot_product / (magnitude_a * magnitude_b)
+}
+
+async fn get_index_stats(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let stats = state.background_indexer
+        .get_index_stats()
+        .await
+        .map_err(|e| format!("Failed to get index stats: {}", e))?;
+    
+    Ok(Json(serde_json::json!({
+        "total_chunks": stats.total_chunks,
+        "indexed_files": stats.indexed_files,
+        "queue_depth": stats.queue_depth,
+    })))
 }
