@@ -59,7 +59,7 @@ See `docs/APEX_Memory_System_Spec_v2.md` for the full specification.
 #### Test Results
 
 - Memory unit tests: 30 passing
-- All Rust tests: 146 passing
+- All Rust tests: 144 passing (73 unit) + 41 integration
 
 #### Files Created
 - `core/memory/src/embedder.rs`
@@ -70,6 +70,48 @@ See `docs/APEX_Memory_System_Spec_v2.md` for the full specification.
 - `core/memory/migrations/013_enhanced_memory.sql`
 - `docs/APEX_Memory_System_Spec_v2.md`
 - `docs/MEMORY-ENHANCEMENT.md`
+
+---
+
+## Session 2026-03-06: Architecture Fixes
+
+### Implemented Recommendations from APEX_Architecture_Recommendations.md
+
+#### Correctness Fixes
+
+1. **Migration 013** - Wired in `db.rs`:
+   - `memory_chunks`, `memory_fts`, `memory_entities`, `memory_index_state`, `working_memory`
+
+2. **D1 - WAL Mode** - SQLite pragma in `db.rs`:
+   - WAL mode, synchronous=NORMAL, cache_size=-64000, temp_store=MEMORY
+
+3. **A3 - Atomic Writes** - NarrativeService:
+   - All writes use tmp+rename pattern
+   - Prevents corrupt index entries
+
+#### Security Fixes
+
+4. **B1 - Capability Enforcement** - `pool_worker.ts`:
+   - Tier validation before skill execution
+   - `permitted_tier` in IPC protocol
+
+5. **B2 - Cache Invalidation** - `pool_worker.ts`:
+   - `__cache_bust__` message support
+   - Can bust single skill or all
+
+#### Complexity Reduction
+
+6. **C4 - Config Injection**:
+   - Thread-local config override (`with_test_config_async`)
+   - `config` field in `AppState`
+   - 11 remaining `AppConfig::global()` in init code (acceptable)
+
+#### apex.bat Updates
+
+7. **Embedding Server Support**:
+   - `apex.bat embed` - Start embedding server
+   - `apex.bat embed-test` - Test embedding server
+   - `apex.bat start-full` - Start all services
 
 ---
 

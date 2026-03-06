@@ -1185,13 +1185,13 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| Router (unit) | 70 | `core/router/src/*_test.rs` |
+| Router (unit) | 73 | `core/router/src/*_test.rs` |
 | Router (integration) | 41 | `core/router/tests/` |
 | Memory (unit) | 30 | `core/memory/src/*_test.rs` |
 | Gateway | 8 | `gateway/src/*.test.ts` |
 | Skills | 8 | `skills/src/*.test.ts` |
 | UI | 23 | `ui/src/**/*.test.tsx` |
-| **Total** | **180** | |
+| **Total** | **183** | |
 
 > Note: 1 test ignored (requires llama-server running)
 
@@ -1201,6 +1201,7 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 > **Note on versioning**: v1.x marks production-readiness milestones. v0.x were internal development versions. v1.3.0 represents the current pre-alpha state with full feature set.
 
+- **v1.3.1** (2026-03-06): Architecture fixes - Migration 013, WAL mode, atomic writes, Bun pool tier enforcement, cache invalidation, C4 config injection
 - **v1.3.0** (2026-03-06): Enhanced Memory System - sqlite-vec, hybrid search (RRF), working memory, background indexer
 - **v1.2.0** (2026-03-05): UI overhaul, settings tabs, memory viewer, workflow visualizer
 - **v1.1.0** (2026-03-04): Skill quick-launch, command bar, task board
@@ -1208,6 +1209,22 @@ See `AGENTS.md` for the complete reference. Key variables:
 - **v0.1.2** (2026-03-03): Added Channels, Decision Journal, WebSocket server, NATS integration
 - **v0.1.1** (2026-01-XX): Added HMAC auth, TOTP verification, shell.execute → T3
 - **v0.1.0** (2026-01-XX): Initial release
+
+---
+
+## Architecture Fixes Applied (v1.3.1)
+
+### Correctness Fixes
+- **Migration 013**: Added memory_chunks, memory_fts, memory_entities, memory_index_state, working_memory tables
+- **WAL Mode**: SQLite now uses WAL mode with optimized pragma settings for concurrency
+- **Atomic Writes**: NarrativeService writes to .tmp then renames - prevents corrupt index entries
+
+### Security Fixes  
+- **B1 - Capability Enforcement**: Bun pool validates tier permissions before executing skills
+- **B2 - Cache Invalidation**: Added `__cache_bust__` message to clear skill cache
+
+### Complexity Reduction
+- **C4 - Config Injection**: Thread-local config override for test isolation, config in AppState
 
 ---
 
