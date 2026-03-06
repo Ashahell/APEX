@@ -114,10 +114,11 @@ The filesystem is the **source of truth**. The database is the **search index**.
 Load in llama-server:
 
 ```bash
+# Using LM Studio model path:
 llama-server \
-  --model nomic-embed-text-v1.5.Q4_K_M.gguf \
+  --model "C:\Program Files\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\omic-embed-text-v1.5-GGUF\omic-embed-text-v1.5.Q4_K_M.gguf" \
   --embedding \
-  --port 8081 \        # separate port from LLM server
+  --port 8081 \
   --ctx-size 8192
 ```
 

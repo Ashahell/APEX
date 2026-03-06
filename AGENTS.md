@@ -222,7 +222,16 @@ APEX v0.2.0 uses a unified configuration system via `AppConfig` in `core/router/
 > **Development Mode**: By default, APEX runs in development mode where the local LLM is disabled to avoid unnecessary LLM usage during development. Enable LLM via the Settings → LLM tab in the UI, or set `APEX_USE_LLM=1` environment variable when testing LLM-powered features.
 
 > **Embedding Server**: For semantic memory search, run a separate llama-server instance on port 8081 with nomic-embed-text model loaded:
-> `llama-server --model nomic-embed-text-v1.5.Q4_K_M.gguf --embedding --port 8081`
+> 
+> Using LM Studio (recommended):
+> ```
+> LM Studio → Select model → nomic-embed-text-v1.5.Q4_K_M.gguf → Start Server → Enable Embeddings
+> ```
+> 
+> Or using llama-server directly:
+> ```
+> llama-server --model "C:\Program Files\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\omic-embed-text-v1.5-GGUF\omic-embed-text-v1.5.Q4_K_M.gguf" --embedding --port 8081
+> ```
 
 | **Execution** | | |
 | `APEX_EXECUTION_ISOLATION` | Isolation backend: docker, firecracker, gvisor, mock | docker |
