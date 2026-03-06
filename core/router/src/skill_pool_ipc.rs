@@ -13,6 +13,7 @@ pub struct IpcRequest {
     pub skill: String,
     pub input: serde_json::Value,
     pub timeout_ms: u64,
+    pub permitted_tier: Option<String>,  // B1: tier passed from Router
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -59,6 +60,7 @@ impl IpcChannel {
         skill: &str,
         input: serde_json::Value,
         timeout_ms: u64,
+        permitted_tier: Option<String>,
     ) -> Result<IpcResponse, SkillPoolError> {
         let id = Uuid::new_v4().to_string();
         let req = IpcRequest {
@@ -66,6 +68,7 @@ impl IpcChannel {
             skill: skill.to_string(),
             input,
             timeout_ms,
+            permitted_tier,
         };
 
         let (tx, rx) = oneshot::channel::<IpcResponse>();
@@ -122,6 +125,7 @@ mod tests {
             skill: "test.skill".to_string(),
             input: serde_json::json!({"key": "value"}),
             timeout_ms: 5000,
+            permitted_tier: Some("T1".to_string()),
         };
         let json = serde_json::to_string(&req).unwrap();
         assert!(json.contains("test-uuid"));

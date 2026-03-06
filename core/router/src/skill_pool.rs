@@ -155,6 +155,7 @@ impl SkillPool {
         &self,
         skill: &str,
         input: serde_json::Value,
+        tier: Option<String>,
     ) -> Result<IpcResponse, SkillPoolError> {
         let start = std::time::Instant::now();
         let acquire_timeout = Duration::from_millis(self.config.acquire_timeout_ms);
@@ -175,7 +176,7 @@ impl SkillPool {
 
         let result = {
             let slot = self.slots[slot_index].lock().await;
-            slot.channel.send(skill, input, self.config.request_timeout_ms).await
+            slot.channel.send(skill, input, self.config.request_timeout_ms, tier).await
         };
 
         let _ = self.free_tx.send(slot_index).await;
@@ -218,7 +219,7 @@ impl SkillPool {
                     let slot = self.slots[i].lock().await;
                     match tokio::time::timeout(
                         Duration::from_secs(2),
-                        slot.channel.send("__ping__", serde_json::json!({}), 2000)
+                        slot.channel.send("__ping__", serde_json::json!({}), 2000, None)
                     ).await {
                         Ok(Ok(resp)) => resp.ok,
                         _ => false,

@@ -88,9 +88,17 @@ impl NarrativeMemory {
             now,
         );
 
-        let mut file = fs::File::create(&file_path).await?;
-        file.write_all(narrative.as_bytes()).await?;
-        file.flush().await?;
+        // A3: Atomic write - write to .tmp, then rename
+        // This ensures BackgroundIndexer never reads partial files
+        let tmp_path = file_path.with_extension("tmp");
+        {
+            let mut file = fs::File::create(&tmp_path).await?;
+            file.write_all(narrative.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_all().await?;
+        }
+        // Atomic rename (POSIX) / near-atomic (Windows)
+        fs::rename(&tmp_path, &file_path).await?;
 
         Ok(NarrativeEntry {
             id: uuid::Uuid::new_v4().to_string(),
@@ -208,10 +216,17 @@ impl NarrativeMemory {
             title.to_lowercase().replace(' ', "-")
         );
         let file_path = reflections_dir.join(&file_name);
-
-        let mut file = fs::File::create(&file_path).await?;
-        file.write_all(format!("# {}\n\n**Date**: {}\n\n{}\n", title, now.format("%Y-%m-%d %H:%M UTC"), content).as_bytes()).await?;
-        file.flush().await?;
+        
+        // Atomic write
+        let tmp_path = file_path.with_extension("tmp");
+        let file_content = format!("# {}\n\n**Date**: {}\n\n{}\n", title, now.format("%Y-%m-%d %H:%M UTC"), content);
+        {
+            let mut file = fs::File::create(&tmp_path).await?;
+            file.write_all(file_content.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_all().await?;
+        }
+        fs::rename(&tmp_path, &file_path).await?;
 
         Ok(file_path)
     }
@@ -223,9 +238,15 @@ impl NarrativeMemory {
         let file_name = format!("{}.md", name.to_lowercase().replace(' ', "-"));
         let file_path = entity_dir.join(&file_name);
 
-        let mut file = fs::File::create(&file_path).await?;
-        file.write_all(content.as_bytes()).await?;
-        file.flush().await?;
+        // Atomic write
+        let tmp_path = file_path.with_extension("tmp");
+        {
+            let mut file = fs::File::create(&tmp_path).await?;
+            file.write_all(content.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_all().await?;
+        }
+        fs::rename(&tmp_path, &file_path).await?;
 
         Ok(file_path)
     }
@@ -237,9 +258,15 @@ impl NarrativeMemory {
         let file_name = format!("{}.md", title.to_lowercase().replace(' ', "-"));
         let file_path = knowledge_dir.join(&file_name);
 
-        let mut file = fs::File::create(&file_path).await?;
-        file.write_all(content.as_bytes()).await?;
-        file.flush().await?;
+        // Atomic write
+        let tmp_path = file_path.with_extension("tmp");
+        {
+            let mut file = fs::File::create(&tmp_path).await?;
+            file.write_all(content.as_bytes()).await?;
+            file.flush().await?;
+            file.sync_all().await?;
+        }
+        fs::rename(&tmp_path, &file_path).await?;
 
         Ok(file_path)
     }

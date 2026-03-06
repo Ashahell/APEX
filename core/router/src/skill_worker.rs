@@ -113,7 +113,7 @@ impl SkillWorker {
         let repo = TaskRepository::new(pool);
 
         let result = if let Some(pool) = skill_pool {
-            pool.execute(&message.skill_name, message.input.clone()).await
+            pool.execute(&message.skill_name, message.input.clone(), Some(message.permission_tier)).await
                 .map_err(|e| e.to_string())
                 .and_then(|resp| {
                     if resp.ok {

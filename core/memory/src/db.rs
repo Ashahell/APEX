@@ -16,7 +16,12 @@ impl Database {
             .connect(&connection_string)
             .await?;
 
-        Ok(Self { pool })
+        let db = Self { pool };
+        
+        db.run_migrations().await?;
+        db.configure_pragma().await?;
+
+        Ok(db)
     }
 
     pub fn pool(&self) -> &SqlitePool {
@@ -202,7 +207,125 @@ impl Database {
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_actual_cost_cents ON tasks(actual_cost_cents)")
             .execute(&self.pool).await.ok();
 
+        // Migration 013: Enhanced Memory System
+        // memory_chunks: Chunked text from memory files
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS memory_chunks (
+                id TEXT PRIMARY KEY NOT NULL,
+                file_path TEXT NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                word_count INTEGER NOT NULL,
+                memory_type TEXT NOT NULL,
+                task_id TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                access_count INTEGER NOT NULL DEFAULT 0,
+                UNIQUE(file_path, chunk_index)
+            )
+        "#).execute(&self.pool).await?;
+
+        // memory_fts: FTS5 for BM25 keyword search
+        sqlx::query(r#"
+            CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(
+                content,
+                memory_type,
+                tokenize='porter unicode61'
+            )
+        "#).execute(&self.pool).await?;
+
+        // Triggers to keep FTS in sync with memory_chunks
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS memory_chunks_ai AFTER INSERT ON memory_chunks BEGIN
+                INSERT INTO memory_fts(rowid, content, memory_type)
+                VALUES (new.rowid, new.content, new.memory_type);
+            END
+        "#).execute(&self.pool).await?;
+
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS memory_chunks_ad AFTER DELETE ON memory_chunks BEGIN
+                INSERT INTO memory_fts(memory_fts, rowid, content, memory_type)
+                VALUES ('delete', old.rowid, old.content, old.memory_type);
+            END
+        "#).execute(&self.pool).await?;
+
+        sqlx::query(r#"
+            CREATE TRIGGER IF NOT EXISTS memory_chunks_au AFTER UPDATE ON memory_chunks BEGIN
+                INSERT INTO memory_fts(memory_fts, rowid, content, memory_type)
+                VALUES ('delete', old.rowid, old.content, old.memory_type);
+                INSERT INTO memory_fts(rowid, content, memory_type)
+                VALUES (new.rowid, new.content, new.memory_type);
+            END
+        "#).execute(&self.pool).await?;
+
+        // memory_entities: Lightweight entity store
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS memory_entities (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                attributes TEXT NOT NULL DEFAULT '{}',
+                first_seen TEXT NOT NULL DEFAULT (datetime('now')),
+                last_updated TEXT NOT NULL DEFAULT (datetime('now')),
+                mention_count INTEGER NOT NULL DEFAULT 1
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE UNIQUE INDEX IF NOT EXISTS idx_memory_entities_name_type ON memory_entities(name, entity_type)")
+            .execute(&self.pool).await.ok();
+
+        // memory_index_state: Tracks which files have been indexed
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS memory_index_state (
+                file_path TEXT PRIMARY KEY NOT NULL,
+                mtime_unix INTEGER NOT NULL,
+                chunk_count INTEGER NOT NULL,
+                indexed_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        // working_memory: Per-task scratchpad
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS working_memory (
+                task_id TEXT PRIMARY KEY NOT NULL,
+                scratchpad TEXT NOT NULL DEFAULT '',
+                entities_json TEXT NOT NULL DEFAULT '{}',
+                causal_links_json TEXT NOT NULL DEFAULT '[]',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        // Create indexes for enhanced memory
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_memory_chunks_type ON memory_chunks(memory_type)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_memory_chunks_task ON memory_chunks(task_id)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_memory_chunks_accessed ON memory_chunks(accessed_at DESC)")
+            .execute(&self.pool).await.ok();
+
         tracing::info!("Migrations completed successfully");
+        Ok(())
+    }
+
+    pub async fn configure_pragma(&self) -> Result<(), sqlx::Error> {
+        // Enable WAL mode for better concurrency (D1 recommendation)
+        sqlx::query("PRAGMA journal_mode=WAL")
+            .execute(&self.pool).await?;
+
+        // Safe with WAL, faster than FULL
+        sqlx::query("PRAGMA synchronous=NORMAL")
+            .execute(&self.pool).await?;
+
+        // 64MB cache
+        sqlx::query("PRAGMA cache_size=-64000")
+            .execute(&self.pool).await?;
+
+        // Temp tables in memory
+        sqlx::query("PRAGMA temp_store=MEMORY")
+            .execute(&self.pool).await?;
+
+        tracing::info!("SQLite pragma configured: WAL mode enabled");
         Ok(())
     }
 }

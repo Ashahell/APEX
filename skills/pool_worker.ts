@@ -7,6 +7,52 @@ import { createInterface } from "readline";
 
 const skillCache = new Map<string, SkillModule>();
 
+// B1: Skill tier registry - maps skill names to their required tiers
+const SKILL_TIERS: Record<string, string> = {
+  "code.review": "T0",
+  "docs.read": "T0",
+  "deps.check": "T0",
+  "repo.search": "T0",
+  "code.generate": "T1",
+  "code.refactor": "T1",
+  "code.document": "T1",
+  "api.design": "T1",
+  "ci.configure": "T1",
+  "db.schema": "T1",
+  "copy.generate": "T1",
+  "script.draft": "T1",
+  "script.outline": "T1",
+  "seo.optimize": "T1",
+  "git.commit": "T2",
+  "code.test": "T2",
+  "db.migrate": "T2",
+  "docker.build": "T2",
+  "video.edit": "T2",
+  "video.generate": "T2",
+  "music.generate": "T2",
+  "music.extend": "T2",
+  "music.remix": "T2",
+  "shell.execute": "T3",
+  "file.delete": "T3",
+  "git.force_push": "T3",
+  "db.drop": "T3",
+  "aws.lambda": "T3",
+  "deploy.kubectl": "T3",
+};
+
+const TIER_LEVELS: Record<string, number> = {
+  T0: 0,
+  T1: 1,
+  T2: 2,
+  T3: 3,
+};
+
+function tierPermits(permitted: string, required: string): boolean {
+  const permittedLevel = TIER_LEVELS[permitted] ?? 0;
+  const requiredLevel = TIER_LEVELS[required] ?? 0;
+  return permittedLevel >= requiredLevel;
+}
+
 interface SkillModule {
   execute: (input: unknown) => Promise<SkillResult>;
   healthCheck?: () => Promise<boolean>;
@@ -24,6 +70,7 @@ interface PoolRequest {
   skill: string;
   input: unknown;
   timeout_ms: number;
+  permitted_tier?: string;  // B1: tier passed from Router
 }
 
 interface PoolResponse {
@@ -59,6 +106,35 @@ async function loadSkill(name: string): Promise<SkillModule> {
 
 async function handleRequest(req: PoolRequest): Promise<PoolResponse> {
   const start = performance.now();
+
+  // B2: Skill cache invalidation
+  if (req.skill === "__cache_bust__") {
+    const target = req.input as { skill?: string } | undefined;
+    if (target?.skill) {
+      skillCache.delete(target.skill);
+    } else {
+      skillCache.clear();
+    }
+    return {
+      id: req.id,
+      ok: true,
+      output: "cache cleared",
+      duration_ms: Math.round(performance.now() - start),
+    };
+  }
+
+  // B1: Validate tier permissions before executing
+  const permittedTier = req.permitted_tier || "T0";
+  const declaredTier = SKILL_TIERS[req.skill] || "T0";
+  
+  if (!tierPermits(permittedTier, declaredTier)) {
+    return {
+      id: req.id,
+      ok: false,
+      error: `Tier violation: ${req.skill} requires ${declaredTier}, but request has ${permittedTier}`,
+      duration_ms: Math.round(performance.now() - start),
+    };
+  }
 
   const timeoutPromise = new Promise<never>((_, reject) =>
     setTimeout(() => reject(new Error("timeout")), req.timeout_ms)
