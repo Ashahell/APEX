@@ -409,6 +409,9 @@ See `docs/APEX_Memory_System_Spec_v2.md` for the full specification.
 # Start all services (llama-server, router, UI)
 .\apex.bat start
 
+# Start all services INCLUDING embedding server (for memory search)
+.\apex.bat start-full
+
 # Stop all services
 .\apex.bat stop
 
@@ -422,7 +425,9 @@ See `docs/APEX_Memory_System_Spec_v2.md` for the full specification.
 .\apex.bat test
 
 # Individual services
-.\apex.bat llama          # Start llama-server
+.\apex.bat llama          # Start llama-server (LLM)
+.\apex.bat embed         # Start embedding server (nomic-embed-text)
+.\apex.bat embed-test   # Test embedding server
 .\apex.bat router         # Start router (no LLM)
 .\apex.bat router-llm     # Start router with LLM (starts llama-server first)
 .\apex.bat ui            # Start UI dev server
@@ -519,6 +524,9 @@ APEX uses a unified configuration system. See `AGENTS.md` for the complete refer
 - Added port conflict detection for UI
 - Fixed router-llm to not start duplicate llama-server
 - Added `router-llm-no-start` for when llama already running
+- Added `embed` command to start embedding server (nomic-embed-text)
+- Added `embed-test` command to test embedding server
+- Added `start-full` command to start all services including embedding server
 
 ### LLM Integration Fixes
 - Fixed model name mismatch (Qwen2.5 vs Qwen3)

@@ -83,11 +83,19 @@ cd ui && pnpm install  # Frontend
 # Start all services (with LLM + Docker)
 .\apex.bat start
 
+# Start all services INCLUDING embedding server (for memory search)
+.\apex.bat start-full
+
 # Or with different isolation backends:
 .\apex.bat router-docker       # Docker container (default)
 .\apex.bat router-gvisor       # gVisor sandbox (Linux only)
 .\apex.bat router-firecracker # Firecracker VM (Linux only)  
 .\apex.bat router-mock        # No real execution
+
+# Individual services:
+.\apex.bat llama    # LLM server (port 8080)
+.\apex.bat embed   # Embedding server (port 8081)
+.\apex.bat router  # Router
 
 # Or manually:
 # Terminal 1: llama-server (local LLM)

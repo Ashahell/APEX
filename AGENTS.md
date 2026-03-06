@@ -339,6 +339,9 @@ The gateway (`gateway/`) provides adapters for external integrations:
 # Start all services (llama-server, router with LLM, UI)
 .\apex.bat start
 
+# Start all services INCLUDING embedding server (for memory search)
+.\apex.bat start-full
+
 # Stop all services
 .\apex.bat stop
 
@@ -349,15 +352,33 @@ The gateway (`gateway/`) provides adapters for external integrations:
 .\apex.bat build
 ```
 
+**Individual Services:**
+
+```powershell
+.\apex.bat llama          # Start LLM server (port 8080)
+.\apex.bat embed         # Start embedding server (port 8081)
+.\apex.bat embed-test    # Test embedding server
+.\apex.bat router         # Start router (no LLM)
+.\apex.bat router-llm     # Start router with LLM
+.\apex.bat ui             # Start UI dev server
+.\apex.bat ui-serve       # Serve built UI
+.\apex.bat status         # Show all service status
+```
+
 **Manual (Alternative)**
 
 ```powershell
-# Terminal 1 - Start llama-server (requires b8185+, -c 4096 limits context to reduce memory)
+# Terminal 1 - Start llama-server for LLM (requires b8185+, -c 4096 limits context)
 D:\Users\ashah\Documents\llama.cpp\llama-server.exe -m "C:\Users\ashah\.ollama\models\Qwen3-4B-Instruct-2507-Q4_K_M.gguf" --port 8080 -c 4096
+
+# Terminal 1b - Start llama-server for embeddings (nomic-embed-text)
+# Only needed for memory search feature
+"C:\Program Files\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\omic-embed-text-v1.5-GGUF\omic-embed-text-v1.5.Q4_K_M.gguf" --embedding --port 8081
 
 # Terminal 2 - Start Router (with LLM)
 cd core
 set APEX_USE_LLM=1
+set APEX_MEMORY_EMBEDDING_URL=http://localhost:8081
 cargo run --release --bin apex-router
 
 # Terminal 3 - Start UI

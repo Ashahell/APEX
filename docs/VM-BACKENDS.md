@@ -30,6 +30,9 @@ Docker provides excellent isolation with resource limits:
 ```powershell
 # In apex.bat, router-llm mode sets APEX_USE_DOCKER=1 automatically
 .\apex.bat router-llm
+
+# For memory search, also start embedding server:
+.\apex.bat embed
 ```
 
 ## gVisor (Recommended for Production)
