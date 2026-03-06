@@ -2,7 +2,7 @@
 
 > ⚠️ **WARNING: PRE-ALPHA** - This document describes an experimental research system. Not production ready.
 
-**Date**: 2026-03-05
+**Date**: 2026-03-06
 **Version**: v1.3.0
 **Status**: Pre-Alpha (Experimental)
 **Scope**: All directories (core/, gateway/, skills/, ui/, execution/)
@@ -12,6 +12,12 @@
 ## Executive Summary
 
 APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. The system uses a 6-layer architecture with support for Firecracker microVM isolation, Agent Zero's autonomous reasoning loop, and OpenClaw-inspired multi-channel ingress.
+
+The system now includes an **enhanced memory system** with:
+- Semantic search via sqlite-vec (768-dim embeddings)
+- Hybrid search combining vector + BM25 (RRF)
+- Working memory (per-task scratchpad)
+- Background indexer for automatic file indexing
 
 > **Note**: Firecracker VM isolation is implemented but requires configuration. gVisor and Mock backends also available.
 
@@ -379,7 +385,7 @@ pub struct AppState {
 
 ### L3: Memory (Rust)
 **Location**: `core/memory/`
-**Technology**: Rust, SQLite, SQLx
+**Technology**: Rust, SQLite, SQLx, sqlite-vec
 
 #### Responsibilities
 - SQLite database persistence
@@ -390,9 +396,55 @@ pub struct AppState {
 - Channel management
 - Decision journal
 - User preferences
-- Vector store for embeddings
+- Vector store for embeddings (sqlite-vec)
 - Narrative memory (markdown files)
 - TTL-based cleanup
+- **Enhanced Semantic Search** (v1.3.0):
+  - sqlite-vec for vector storage (768-dim)
+  - FTS5 for BM25 keyword search
+  - Hybrid search with RRF (Reciprocal Rank Fusion)
+  - Temporal decay and MMR (Max Marginal Relevance)
+  - Working memory (per-task scratchpad)
+  - Background indexer for automatic file indexing
+
+#### Enhanced Memory Schema (v1.3.0)
+
+**memory_chunks**
+```sql
+CREATE TABLE memory_chunks (
+    id          TEXT PRIMARY KEY,
+    file_path   TEXT NOT NULL,
+    chunk_index INTEGER NOT NULL,
+    content     TEXT NOT NULL,
+    word_count  INTEGER NOT NULL,
+    memory_type TEXT NOT NULL,
+    task_id     TEXT,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+    access_count INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(file_path, chunk_index)
+);
+```
+
+**memory_vec** (sqlite-vec)
+```sql
+CREATE VIRTUAL TABLE IF NOT EXISTS memory_vec USING vec0(
+    chunk_id    TEXT PARTITION KEY,
+    embedding   float[768]
+);
+```
+
+**working_memory** (per-task scratchpad)
+```sql
+CREATE TABLE working_memory (
+    task_id           TEXT PRIMARY KEY,
+    scratchpad        TEXT NOT NULL DEFAULT '',
+    entities_json     TEXT NOT NULL DEFAULT '{}',
+    causal_links_json TEXT NOT NULL DEFAULT '[]',
+    created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at        TEXT NOT NULL DEFAULT (datetime('now'))
+);
+```
 
 #### Database Schema
 
@@ -493,6 +545,11 @@ CREATE TABLE skill_registry (
 | Audit | `src/audit.rs` | Audit logging with hash chain |
 | Preferences | `src/preferences.rs` | User preferences |
 | TtlCleanup | `src/ttl_cleanup.rs` | Data retention |
+| **Embedder** | `src/embedder.rs` | Local (nomic-embed-text) + OpenAI embeddings |
+| **Chunker** | `src/chunker.rs` | Text chunking with markdown awareness |
+| **HybridSearch** | `src/hybrid_search.rs` | RRF + temporal decay + MMR |
+| **WorkingMemory** | `src/working_memory.rs` | Per-task scratchpad |
+| **BackgroundIndexer** | `src/background_indexer.rs` | Async file indexing |
 
 #### Public API
 ```rust
@@ -1013,11 +1070,13 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| Router (unit) | 69 | `core/router/src/*_test.rs` |
-| Router (integration) | 19 | `core/router/tests/` |
+| Router (unit) | 70 | `core/router/src/*_test.rs` |
+| Router (integration) | 41 | `core/router/tests/` |
+| Memory (unit) | 30 | `core/memory/src/*_test.rs` |
 | Gateway | 8 | `gateway/src/*.test.ts` |
 | Skills | 8 | `skills/src/*.test.ts` |
-| **Total** | **104** | |
+| UI | 23 | `ui/src/**/*.test.tsx` |
+| **Total** | **180** | |
 
 > Note: 1 test ignored (requires llama-server running)
 
@@ -1025,6 +1084,7 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 ## Version History
 
+- **v1.3.0** (2026-03-06): Enhanced Memory System - sqlite-vec, hybrid search (RRF), working memory, background indexer
 - **v0.2.0** (2026-03-03): Major upgrade - Firecracker VM, Agent Zero loop, SKILL.md plugins, PostgreSQL support, YAML config, per-client auth
 - **v0.1.2** (2026-03-03): Added Channels, Decision Journal, WebSocket server, NATS integration
 - **v0.1.1** (2026-01-XX): Added HMAC auth, TOTP verification, shell.execute → T3
@@ -1032,4 +1092,4 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 ---
 
-*Documentation generated: 2026-03-03*
+*Documentation generated: 2026-03-06*

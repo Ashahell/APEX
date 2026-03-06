@@ -221,6 +221,9 @@ APEX v0.2.0 uses a unified configuration system via `AppConfig` in `core/router/
 
 > **Development Mode**: By default, APEX runs in development mode where the local LLM is disabled to avoid unnecessary LLM usage during development. Enable LLM via the Settings → LLM tab in the UI, or set `APEX_USE_LLM=1` environment variable when testing LLM-powered features.
 
+> **Embedding Server**: For semantic memory search, run a separate llama-server instance on port 8081 with nomic-embed-text model loaded:
+> `llama-server --model nomic-embed-text-v1.5.Q4_K_M.gguf --embedding --port 8081`
+
 | **Execution** | | |
 | `APEX_EXECUTION_ISOLATION` | Isolation backend: docker, firecracker, gvisor, mock | docker |
 | `APEX_USE_DOCKER` | Enable Docker execution (legacy) | true (if isolation=docker) |
@@ -266,6 +269,19 @@ APEX v0.2.0 uses a unified configuration system via `AppConfig` in `core/router/
 | `APEX_HEARTBEAT_JITTER` | Jitter percentage | 10 |
 | `APEX_HEARTBEAT_COOLDOWN` | Cooldown in seconds | 300 |
 | `APEX_HEARTBEAT_MAX_ACTIONS` | Max actions per wake | 3 |
+| **Memory (Enhanced)** | | |
+| `APEX_MEMORY_EMBEDDING_PROVIDER` | Embedding provider: local \| openai | local |
+| `APEX_MEMORY_EMBEDDING_MODEL` | Embedding model | nomic-embed-text |
+| `APEX_MEMORY_EMBEDDING_URL` | Embedding server URL | http://localhost:8081 |
+| `APEX_MEMORY_EMBEDDING_DIM` | Embedding dimension (768 local, 1536 OpenAI) | 768 |
+| `APEX_MEMORY_RRF_K` | RRF constant | 60 |
+| `APEX_MEMORY_MAX_RESULTS` | Max search results | 8 |
+| `APEX_MEMORY_MMR_LAMBDA` | MMR lambda (0-1) | 0.7 |
+| `APEX_MEMORY_HALF_LIFE_DAYS` | Temporal decay half-life | 30 |
+| `APEX_MEMORY_CHUNK_SIZE` | Chunk size in tokens | 256 |
+| `APEX_MEMORY_CHUNK_OVERLAP` | Chunk overlap in tokens | 32 |
+| `APEX_MEMORY_EMBED_RATE_LIMIT_MS` | Embedding rate limit (ms) | 50 |
+| `APEX_MEMORY_INDEXER_BATCH_SIZE` | Indexer batch size | 16 |
 | **Moltbook** | | |
 | `APEX_MOLTBOOK_AGENT_ID` | Moltbook agent ID | - |
 

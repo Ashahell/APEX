@@ -3,7 +3,73 @@
 > ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
 
 **Date**: 2026-03-06
-**Session**: Skill Pool Completion + Bug Fixes
+**Session**: Enhanced Memory System Implementation
+
+---
+
+## Session 2026-03-06: Enhanced Memory System
+
+### Completed Implementation (Phase 1)
+
+Implemented the enhanced memory system per `docs/APEX_Memory_System_Spec_v2.md`:
+
+#### New Components
+
+1. **Embedder** (`core/memory/src/embedder.rs`)
+   - Local provider: nomic-embed-text via llama-server (768-dim)
+   - OpenAI fallback: text-embedding-3-small (1536-dim)
+   - Dimension validation at startup
+
+2. **Chunker** (`core/memory/src/chunker.rs`)
+   - 256 tokens chunk size (configurable)
+   - 32 tokens overlap
+   - Markdown-aware (respects headings, code blocks)
+   - Unicode word segmentation
+
+3. **Hybrid Search** (`core/memory/src/hybrid_search.rs`)
+   - Reciprocal Rank Fusion (RRF) for vector + BM25
+   - Temporal decay (half-life: 30 days default)
+   - Max Marginal Relevance (MMR) for diversity
+
+4. **Working Memory** (`core/memory/src/working_memory.rs`)
+   - Per-task scratchpad
+   - Entity tracking
+   - Causal link recording
+   - Write-through to SQLite (survives restarts)
+
+5. **Background Indexer** (`core/memory/src/background_indexer.rs`)
+   - Async file indexing
+   - Rate-limited embedding calls
+   - mtime-based change detection
+   - Automatic FTS5 sync
+
+#### New Database Tables (Migration 013)
+
+- `memory_chunks` - Chunked text from memory files
+- `memory_vec` - sqlite-vec vector storage (768-dim)
+- `memory_fts` - FTS5 virtual table for BM25
+- `memory_entities` - Entity store
+- `memory_index_state` - Index tracking
+- `working_memory` - Per-task scratchpad
+
+#### Specification
+
+See `docs/APEX_Memory_System_Spec_v2.md` for the full specification.
+
+#### Test Results
+
+- Memory unit tests: 30 passing
+- All Rust tests: 146 passing
+
+#### Files Created
+- `core/memory/src/embedder.rs`
+- `core/memory/src/chunker.rs`
+- `core/memory/src/hybrid_search.rs`
+- `core/memory/src/working_memory.rs`
+- `core/memory/src/background_indexer.rs`
+- `core/memory/migrations/013_enhanced_memory.sql`
+- `docs/APEX_Memory_System_Spec_v2.md`
+- `docs/MEMORY-ENHANCEMENT.md`
 
 ---
 
