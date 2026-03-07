@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, API_BASE } from '../../lib/api';
+import { apiGet, apiPost, setSetting, deleteSetting, Setting, API_BASE } from '../../lib/api';
 import { ConfigViewer } from './ConfigViewer';
 
 interface VmStats {
@@ -41,7 +41,7 @@ const DEFAULT_CONFIG: TaskConfig = {
   timeLimitSecs: null,
 };
 
-type SettingsTab = 'general' | 'security' | 'vm' | 'llm' | 'config' | 'about';
+type SettingsTab = 'general' | 'security' | 'vm' | 'llm' | 'config' | 'preferences' | 'about';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('general');
@@ -65,6 +65,11 @@ export function Settings() {
   });
   const [llmSaving, setLlmSaving] = useState(false);
   const [llmSaved, setLlmSaved] = useState(false);
+  const [preferences, setPreferences] = useState<Setting[]>([]);
+  const [prefSaving, setPrefSaving] = useState(false);
+  const [newPrefKey, setNewPrefKey] = useState('');
+  const [newPrefValue, setNewPrefValue] = useState('');
+  const [newPrefEncrypt, setNewPrefEncrypt] = useState(false);
 
   const loadTaskHistory = async () => {
     setTasksLoading(true);
@@ -145,6 +150,7 @@ export function Settings() {
     { id: 'security', label: 'Security' },
     { id: 'vm', label: 'VM Pool' },
     { id: 'config', label: 'Config' },
+    { id: 'preferences', label: 'Preferences' },
     { id: 'about', label: 'About' },
   ];
 
@@ -591,6 +597,106 @@ export function Settings() {
         )}
 
         {activeTab === 'config' && <ConfigViewer />}
+
+        {activeTab === 'preferences' && (
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-lg font-semibold mb-4">User Preferences</h3>
+              <p className="text-sm text-muted-foreground mb-4">
+                Store and retrieve key-value preferences. Use encryption for sensitive data like API keys.
+              </p>
+            </div>
+
+            <div className="bg-card rounded-lg border p-4">
+              <h4 className="font-medium mb-3">Add New Preference</h4>
+              <div className="grid gap-3">
+                <div>
+                  <label className="text-sm text-muted-foreground">Key</label>
+                  <input
+                    type="text"
+                    value={newPrefKey}
+                    onChange={(e) => setNewPrefKey(e.target.value)}
+                    placeholder="e.g., theme, language, api_key"
+                    className="w-full mt-1 px-3 py-2 bg-background border rounded-md text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-sm text-muted-foreground">Value</label>
+                  <input
+                    type="text"
+                    value={newPrefValue}
+                    onChange={(e) => setNewPrefValue(e.target.value)}
+                    placeholder="Value"
+                    className="w-full mt-1 px-3 py-2 bg-background border rounded-md text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    id="encrypt"
+                    checked={newPrefEncrypt}
+                    onChange={(e) => setNewPrefEncrypt(e.target.checked)}
+                    className="rounded"
+                  />
+                  <label htmlFor="encrypt" className="text-sm">Encrypt value (base64)</label>
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!newPrefKey.trim() || !newPrefValue.trim()) return;
+                    setPrefSaving(true);
+                    try {
+                      await setSetting(newPrefKey, newPrefValue, newPrefEncrypt);
+                      setNewPrefKey('');
+                      setNewPrefValue('');
+                      setNewPrefEncrypt(false);
+                    } catch (e) {
+                      console.error('Failed to save preference:', e);
+                    }
+                    setPrefSaving(false);
+                  }}
+                  disabled={prefSaving || !newPrefKey.trim() || !newPrefValue.trim()}
+                  className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm disabled:opacity-50"
+                >
+                  {prefSaving ? 'Saving...' : 'Save Preference'}
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-card rounded-lg border p-4">
+              <h4 className="font-medium mb-3">Saved Preferences</h4>
+              {preferences.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No preferences saved. Add one above.</div>
+              ) : (
+                <div className="space-y-2">
+                  {preferences.map((pref) => (
+                    <div key={pref.key} className="flex items-center justify-between p-2 bg-background rounded border">
+                      <div className="flex-1 min-w-0">
+                        <div className="font-mono text-sm truncate">{pref.key}</div>
+                        <div className="text-xs text-muted-foreground truncate">{pref.value}</div>
+                        {pref.encrypted && (
+                          <span className="text-xs bg-yellow-100 text-yellow-800 px-1 rounded">Encrypted</span>
+                        )}
+                      </div>
+                      <button
+                        onClick={async () => {
+                          try {
+                            await deleteSetting(pref.key);
+                            setPreferences(preferences.filter(p => p.key !== pref.key));
+                          } catch (e) {
+                            console.error('Failed to delete preference:', e);
+                          }
+                        }}
+                        className="ml-2 px-2 py-1 text-xs text-red-500 hover:bg-red-50 rounded"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {selectedTask && (

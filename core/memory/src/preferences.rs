@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use sqlx::{FromRow, SqlitePool};
+use sqlx::{FromRow, Pool, Sqlite};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct Preference {
@@ -15,19 +15,20 @@ pub struct ApiKey {
     pub key: String,
 }
 
-pub struct PreferencesRepository<'a> {
-    pool: &'a SqlitePool,
+#[derive(Clone)]
+pub struct PreferencesRepository {
+    pool: Pool<Sqlite>,
 }
 
-impl<'a> PreferencesRepository<'a> {
-    pub fn new(pool: &'a SqlitePool) -> Self {
-        Self { pool }
+impl PreferencesRepository {
+    pub fn new(pool: &Pool<Sqlite>) -> Self {
+        Self { pool: pool.clone() }
     }
 
     pub async fn get(&self, key: &str) -> Result<Option<Preference>, sqlx::Error> {
         sqlx::query_as::<_, Preference>("SELECT * FROM preferences WHERE key = ?")
             .bind(key)
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await
     }
 
@@ -50,7 +51,7 @@ impl<'a> PreferencesRepository<'a> {
         .bind(encrypt)
         .bind(&final_value)
         .bind(encrypt)
-        .execute(self.pool)
+        .execute(&self.pool)
         .await?;
 
         Ok(())
@@ -59,7 +60,7 @@ impl<'a> PreferencesRepository<'a> {
     pub async fn delete(&self, key: &str) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM preferences WHERE key = ?")
             .bind(key)
-            .execute(self.pool)
+            .execute(&self.pool)
             .await?;
         Ok(())
     }

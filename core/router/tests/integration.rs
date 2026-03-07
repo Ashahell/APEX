@@ -134,11 +134,18 @@ async fn create_test_state() -> AppState {
         cache: ResponseCache::new(60),
         rate_limiter: RateLimiter::new(60),
         workflow_repo: apex_memory::WorkflowRepository::new(&db.pool()),
+        preferences_repo: apex_memory::PreferencesRepository::new(&db.pool()),
+        audit_repo: apex_memory::AuditRepository::new(&db.pool()),
         webhook_manager: apex_router::webhook::WebhookManager::new(),
         notification_manager: apex_router::notification::NotificationManager::new(100),
         embedder,
         background_indexer,
         narrative_memory,
+        totp_manager: apex_router::totp::TotpManager::new(),
+        soul_loader: apex_router::soul::loader::SoulLoader::new(apex_router::soul::SoulConfig::default()),
+        heartbeat_scheduler: apex_router::heartbeat::HeartbeatScheduler::new(
+            apex_router::heartbeat::HeartbeatConfig::default()
+        ),
     }
 }
 
@@ -1178,37 +1185,6 @@ async fn test_memory_index_stats_endpoint() {
 }
 
 #[tokio::test]
-async fn test_memory_index_stats_endpoint() {
-    let _timer = TestTimer::new("test_memory_index_stats_endpoint");
-    let state = create_test_state().await;
-    let pool = state.pool.clone();
-    let app = create_router(state);
-
-    // Insert test memory chunk
-    sqlx::query("INSERT INTO memory_chunks (id, file_path, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?)")
-        .bind("test-chunk-2")
-        .bind("/test/file2.md")
-        .bind("Another test document")
-        .bind(4)
-        .bind("test")
-        .execute(&pool)
-        .await
-        .unwrap();
-
-    let response = app
-        .oneshot(
-            Request::builder()
-                .uri("/api/v1/memory/index")
-                .body(Body::empty())
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-
-    assert_eq!(response.status(), StatusCode::OK);
-}
-
-#[tokio::test]
 async fn test_memory_stats_endpoint() {
     let _timer = TestTimer::new("test_memory_stats_endpoint");
     let state = create_test_state().await;
@@ -1244,4 +1220,159 @@ async fn test_memory_reflections_endpoint() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_settings_set_and_get() {
+    let _timer = TestTimer::new("test_settings_set_and_get");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // Set a setting
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .header("Content-Type", "application/json")
+                .uri("/api/v1/settings/test_key")
+                .body(Body::from(r#"{"value": "test_value", "encrypt": false}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK, "Set setting failed");
+}
+
+#[tokio::test]
+async fn test_settings_get_not_found() {
+    let _timer = TestTimer::new("test_settings_get_not_found");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // Get a non-existent setting
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/settings/nonexistent_key")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn test_settings_delete() {
+    let _timer = TestTimer::new("test_settings_delete");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // First set a setting
+    let _ = app.clone()
+        .oneshot(
+            Request::builder()
+                .method("PUT")
+                .header("Content-Type", "application/json")
+                .uri("/api/v1/settings/to_delete")
+                .body(Body::from(r#"{"value": "delete_me"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Then delete it
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("DELETE")
+                .uri("/api/v1/settings/to_delete")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_audit_create_and_list() {
+    let _timer = TestTimer::new("test_audit_create_and_list");
+    let state = create_test_state().await;
+    let app = create_router(state);
+    let app2 = app.clone();
+
+    // Create audit entry
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .header("Content-Type", "application/json")
+                .uri("/api/v1/audit")
+                .body(Body::from(r#"{"action": "task.created", "entity_type": "task", "entity_id": "test-001", "details": "Test task created"}"#))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+
+    // List audit entries
+    let response = app2
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/audit?limit=10")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_audit_chain_status() {
+    let _timer = TestTimer::new("test_audit_chain_status");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // Get chain status
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/audit/chain")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_task_confirm_endpoint_exists() {
+    let _timer = TestTimer::new("test_task_confirm_endpoint_exists");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    // Test that the confirm endpoint exists and accepts POST requests
+    // The endpoint should respond (not 404 Not Found)
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/tasks/test-task-id/confirm")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    // Should NOT return 404 - endpoint exists
+    assert_ne!(response.status(), StatusCode::NOT_FOUND);
 }

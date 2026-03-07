@@ -131,4 +131,70 @@ export async function searchJournal(query: string, limit = 50): Promise<Decision
   return response.json();
 }
 
+export interface Setting {
+  key: string;
+  value: string;
+  encrypted: boolean;
+}
+
+export async function getSetting(key: string): Promise<Setting> {
+  const response = await apiGet(`/api/v1/settings/${encodeURIComponent(key)}`);
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error('Setting not found');
+    }
+    throw new Error('Failed to get setting');
+  }
+  return response.json();
+}
+
+export async function setSetting(key: string, value: string, encrypt = false): Promise<Setting> {
+  const response = await apiPut(`/api/v1/settings/${encodeURIComponent(key)}`, { value, encrypt });
+  if (!response.ok) throw new Error('Failed to set setting');
+  return response.json();
+}
+
+export async function deleteSetting(key: string): Promise<void> {
+  const response = await apiDelete(`/api/v1/settings/${encodeURIComponent(key)}`);
+  if (!response.ok) throw new Error('Failed to delete setting');
+}
+
+export interface AuditEntry {
+  id: number;
+  prev_hash: string;
+  hash: string;
+  timestamp: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: string | null;
+}
+
+export interface AuditChainStatus {
+  valid: boolean;
+  total_entries: number;
+}
+
+export async function listAudit(limit = 50, offset = 0, entityType?: string, entityId?: string): Promise<AuditEntry[]> {
+  let url = `/api/v1/audit?limit=${limit}&offset=${offset}`;
+  if (entityType && entityId) {
+    url = `/api/v1/audit/entity/${entityType}/${entityId}`;
+  }
+  const response = await apiGet(url);
+  if (!response.ok) throw new Error('Failed to list audit');
+  return response.json();
+}
+
+export async function getAuditChainStatus(): Promise<AuditChainStatus> {
+  const response = await apiGet('/api/v1/audit/chain');
+  if (!response.ok) throw new Error('Failed to get audit chain status');
+  return response.json();
+}
+
+export async function createAudit(action: string, entityType: string, entityId: string, details?: string): Promise<AuditEntry> {
+  const response = await apiPost('/api/v1/audit', { action, entity_type: entityType, entity_id: entityId, details });
+  if (!response.ok) throw new Error('Failed to create audit');
+  return response.json();
+}
+
 export { API_BASE };

@@ -8,6 +8,14 @@ pub mod webhooks;
 pub mod adapters;
 pub mod memory;
 pub mod system;
+pub mod settings;
+pub mod audit;
+pub mod channels;
+pub mod journal;
+pub mod totp;
+pub mod soul;
+pub mod heartbeat;
+pub mod moltbook;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -25,9 +33,12 @@ use lazy_static::lazy_static;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::governance::GovernanceEngine;
+use crate::heartbeat::HeartbeatScheduler;
 use crate::message_bus::{DeepTaskMessage, MessageBus};
 use crate::metrics::RouterMetrics;
 use crate::moltbook::MoltbookClient;
+use crate::soul::loader::SoulLoader;
+use crate::totp::TotpManager;
 use crate::vm_pool::VmPool;
 use crate::skill_pool::SkillPool;
 use crate::execution_stream::ExecutionStreamManager;
@@ -174,11 +185,16 @@ pub struct AppState {
     pub cache: ResponseCache,
     pub rate_limiter: RateLimiter,
     pub workflow_repo: apex_memory::WorkflowRepository,
+    pub preferences_repo: apex_memory::PreferencesRepository,
+    pub audit_repo: apex_memory::AuditRepository,
     pub webhook_manager: crate::webhook::WebhookManager,
     pub notification_manager: crate::notification::NotificationManager,
     pub embedder: std::sync::Arc<Embedder>,
     pub background_indexer: std::sync::Arc<BackgroundIndexer>,
     pub narrative_memory: std::sync::Arc<NarrativeMemory>,
+    pub totp_manager: TotpManager,
+    pub soul_loader: SoulLoader,
+    pub heartbeat_scheduler: HeartbeatScheduler,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -453,6 +469,14 @@ pub fn create_router(state: AppState) -> Router {
         .merge(webhooks::router())
         .merge(adapters::router())
         .merge(memory::router())
+        .merge(settings::router())
+        .merge(audit::router())
+        .merge(channels::create_router())
+        .merge(journal::create_router())
+        .merge(totp::create_router())
+        .merge(soul::create_router())
+        .merge(heartbeat::create_router())
+        .merge(moltbook::create_router())
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

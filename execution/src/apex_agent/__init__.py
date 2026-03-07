@@ -6,6 +6,7 @@ It follows Agent Zero's plan → act → observe → reflect pattern,
 adapted for APEX's Firecracker VM isolation and permission system.
 """
 
+from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
@@ -13,7 +14,7 @@ from typing import Any, Optional
 import json
 
 import loguru
-import requests
+import httpx
 
 
 class TaskStatus(str, Enum):
@@ -30,13 +31,17 @@ class AgentConfig:
 
     max_steps: int = 50
     max_cost_usd: float = 5.0
-    max_cost_cents: int = 500
+    max_cost_cents: int = field(default=0)
     allowed_domains: list[str] = field(default_factory=list)
     allowed_skills: list[str] = field(default_factory=list)
     timeout_seconds: int = 300
     llm_url: str = "http://localhost:8080"
     llm_model: str = "qwen3-4b"
     context_window_tokens: int = 32768  # 32k tokens (qwen3-4b supports up to 32k-128k)
+
+    def __post_init__(self):
+        if self.max_cost_cents == 0 and self.max_cost_usd > 0:
+            self.max_cost_cents = int(self.max_cost_usd * 100)
 
 
 @dataclass
@@ -251,16 +256,16 @@ When you have completed the task, respond with "TASK_COMPLETE: <summary of what 
         )
 
         try:
-            response = requests.post(
-                f"{self.config.llm_url}/v1/chat/completions",
-                json={
-                    "model": self.config.llm_model,
-                    "messages": messages,
-                    "temperature": 0.7,
-                    "max_tokens": 512,
-                },
-                timeout=30,
-            )
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.config.llm_url}/v1/chat/completions",
+                    json={
+                        "model": self.config.llm_model,
+                        "messages": messages,
+                        "temperature": 0.7,
+                        "max_tokens": 512,
+                    },
+                )
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -272,7 +277,7 @@ When you have completed the task, respond with "TASK_COMPLETE: <summary of what 
                 self.logger.warning("Failed to parse LLM response as JSON: {}", content[:100])
                 return {"action": "respond", "content": content}
 
-        except requests.RequestException as e:
+        except httpx.HTTPError as e:
             self.logger.error("LLM request failed: {}", e)
             return {"action": "respond", "content": f"Error: LLM unavailable - {e}"}
 
@@ -330,18 +335,60 @@ When you have completed the task, respond with "TASK_COMPLETE: <summary of what 
         )
 
     async def _tool_code_generate(self, input_data: Any, context: AgentContext) -> ToolResult:
-        """Generate code."""
+        """Generate code using LLM."""
         language = input_data.get("language", "python")
         description = input_data.get("description", "")
+        requirements = input_data.get("requirements", "")
 
-        self.logger.info("Generating {} code: {}", language, description[:50])
+        if not description and not requirements:
+            return ToolResult(
+                tool_name="code.generate",
+                success=False,
+                error="No description or requirements provided",
+                cost_cents=0,
+            )
 
-        return ToolResult(
-            tool_name="code.generate",
-            success=True,
-            output=f"# Generated {language} code\n# Description: {description}\n\n# Implementation placeholder",
-            cost_cents=5,
-        )
+        prompt = f"""Generate {language} code for the following:
+
+Description: {description}
+Requirements: {requirements}
+
+Provide only the code, no explanations. Include necessary imports."""
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.config.llm_url}/v1/chat/completions",
+                    json={
+                        "model": self.config.llm_model,
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a code generator. Output only valid code, no markdown formatting unless requested.",
+                            },
+                            {"role": "user", "content": prompt},
+                        ],
+                        "temperature": 0.3,
+                        "max_tokens": 1024,
+                    },
+                )
+            response.raise_for_status()
+            data = response.json()
+            code = data["choices"][0]["message"]["content"]
+
+            return ToolResult(
+                tool_name="code.generate",
+                success=True,
+                output=code,
+                cost_cents=5,
+            )
+        except httpx.HTTPError as e:
+            return ToolResult(
+                tool_name="code.generate",
+                success=False,
+                error=f"Code generation failed: {str(e)}",
+                cost_cents=1,
+            )
 
     async def _tool_code_review(self, input_data: Any, context: AgentContext) -> ToolResult:
         """Review code."""
@@ -357,13 +404,76 @@ When you have completed the task, respond with "TASK_COMPLETE: <summary of what 
         )
 
     async def _tool_docs_read(self, input_data: Any, context: AgentContext) -> ToolResult:
-        """Read documentation."""
+        """Read documentation from a URL or local path."""
         topic = input_data.get("topic", "")
+        url = input_data.get("url", "")
+
+        if url:
+            # Fetch from URL
+            try:
+                async with httpx.AsyncClient(timeout=10.0) as client:
+                    response = await client.get(url, headers={"User-Agent": "Mozilla/5.0"})
+                response.raise_for_status()
+
+                # Parse as markdown-like or plain text
+                from bs4 import BeautifulSoup
+
+                soup = BeautifulSoup(response.text, "html.parser")
+
+                # Try to find main content
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                text = soup.get_text(separator="\n", strip=True)
+
+                if len(text) > 5000:
+                    text = text[:5000] + "\n... (truncated)"
+
+                return ToolResult(
+                    tool_name="docs.read",
+                    success=True,
+                    output=f"Documentation from {url}:\n\n{text}",
+                    cost_cents=2,
+                )
+            except Exception as e:
+                return ToolResult(
+                    tool_name="docs.read",
+                    success=False,
+                    error=f"Failed to fetch docs: {str(e)}",
+                    cost_cents=1,
+                )
+
+        if not topic:
+            return ToolResult(
+                tool_name="docs.read",
+                success=False,
+                error="No topic or URL provided",
+                cost_cents=0,
+            )
+
+        # Search for common documentation sites
+        doc_urls = {
+            "python": "https://docs.python.org/3/",
+            "javascript": "https://developer.mozilla.org/en-US/docs/Web/JavaScript",
+            "rust": "https://doc.rust-lang.org/book/",
+            "git": "https://git-scm.com/doc",
+            "docker": "https://docs.docker.com/",
+            "linux": "https://www.kernel.org/doc/html/latest/",
+        }
+
+        topic_lower = topic.lower()
+        for key, doc_url in doc_urls.items():
+            if key in topic_lower:
+                return ToolResult(
+                    tool_name="docs.read",
+                    success=True,
+                    output=f"Documentation for '{topic}': {doc_url}",
+                    cost_cents=1,
+                )
 
         return ToolResult(
             tool_name="docs.read",
             success=True,
-            output=f"Documentation for {topic}: (placeholder)",
+            output=f"No specific docs found for '{topic}'. Try providing a specific URL.",
             cost_cents=1,
         )
 
@@ -382,48 +492,240 @@ When you have completed the task, respond with "TASK_COMPLETE: <summary of what 
 
     async def _tool_file_read(self, input_data: Any, context: AgentContext) -> ToolResult:
         """Read a file."""
-        path = input_data.get("path", "")
+        import os
 
-        return ToolResult(
-            tool_name="file.read",
-            success=True,
-            output=f"File content from {path}: (placeholder)",
-            cost_cents=1,
-        )
+        path = input_data.get("path", "")
+        if not path:
+            return ToolResult(
+                tool_name="file.read",
+                success=False,
+                error="No path provided",
+                cost_cents=0,
+            )
+
+        # Security: prevent path traversal
+        abs_path = os.path.abspath(path)
+        if ".." in path or abs_path.startswith("/etc") or abs_path.startswith("/root"):
+            return ToolResult(
+                tool_name="file.read",
+                success=False,
+                error="Access denied: path traversal not allowed",
+                cost_cents=0,
+            )
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # Limit output size
+            if len(content) > 10000:
+                content = content[:10000] + "\n... (truncated)"
+            return ToolResult(
+                tool_name="file.read",
+                success=True,
+                output=content,
+                cost_cents=1,
+            )
+        except FileNotFoundError:
+            return ToolResult(
+                tool_name="file.read",
+                success=False,
+                error=f"File not found: {path}",
+                cost_cents=0,
+            )
+        except PermissionError:
+            return ToolResult(
+                tool_name="file.read",
+                success=False,
+                error=f"Permission denied: {path}",
+                cost_cents=0,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool_name="file.read",
+                success=False,
+                error=f"Error reading {path}: {str(e)}",
+                cost_cents=0,
+            )
 
     async def _tool_file_write(self, input_data: Any, context: AgentContext) -> ToolResult:
         """Write to a file."""
+        import os
+
         path = input_data.get("path", "")
         content = input_data.get("content", "")
 
-        return ToolResult(
-            tool_name="file.write",
-            success=True,
-            output=f"Written to {path}: {len(content)} bytes",
-            cost_cents=2,
-        )
+        if not path:
+            return ToolResult(
+                tool_name="file.write",
+                success=False,
+                error="No path provided",
+                cost_cents=0,
+            )
+
+        # Security: prevent path traversal
+        abs_path = os.path.abspath(path)
+        if ".." in path or abs_path.startswith("/etc") or abs_path.startswith("/root"):
+            return ToolResult(
+                tool_name="file.write",
+                success=False,
+                error="Access denied: path traversal not allowed",
+                cost_cents=0,
+            )
+
+        try:
+            # Create parent directories if needed
+            parent_dir = os.path.dirname(path)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+
+            return ToolResult(
+                tool_name="file.write",
+                success=True,
+                output=f"Successfully wrote {len(content)} bytes to {path}",
+                cost_cents=2,
+            )
+        except PermissionError:
+            return ToolResult(
+                tool_name="file.write",
+                success=False,
+                error=f"Permission denied: {path}",
+                cost_cents=0,
+            )
+        except Exception as e:
+            return ToolResult(
+                tool_name="file.write",
+                success=False,
+                error=f"Error writing {path}: {str(e)}",
+                cost_cents=0,
+            )
 
     async def _tool_web_search(self, input_data: Any, context: AgentContext) -> ToolResult:
-        """Search the web."""
+        """Search the web using DuckDuckGo."""
         query = input_data.get("query", "")
 
-        return ToolResult(
-            tool_name="web.search",
-            success=True,
-            output=f"Search results for '{query}': (placeholder)",
-            cost_cents=5,
-        )
+        if not query:
+            return ToolResult(
+                tool_name="web.search",
+                success=False,
+                error="No query provided",
+                cost_cents=0,
+            )
+
+        try:
+            # Use DuckDuckGo HTML for scraping (no API key needed)
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": query},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+            response.raise_for_status()
+
+            # Parse results from HTML
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            results = []
+
+            for i, result in enumerate(soup.select(".result__body")[:5]):
+                title = result.select_one(".result__a")
+                snippet = result.select_one(".result__snippet")
+                if title:
+                    results.append(
+                        {
+                            "title": title.get_text(strip=True),
+                            "url": title.get("href", ""),
+                            "snippet": snippet.get_text(strip=True) if snippet else "",
+                        }
+                    )
+
+            if not results:
+                output = f"No results found for: {query}"
+            else:
+                output_lines = [f"Search results for '{query}':\n"]
+                for r in results:
+                    output_lines.append(f"- {r['title']}")
+                    output_lines.append(f"  {r['snippet'][:150]}...")
+                    output_lines.append(f"  URL: {r['url']}\n")
+                output = "\n".join(output_lines)
+
+            return ToolResult(
+                tool_name="web.search",
+                success=True,
+                output=output,
+                cost_cents=5,
+            )
+        except httpx.HTTPError as e:
+            return ToolResult(
+                tool_name="web.search",
+                success=False,
+                error=f"Search failed: {str(e)}",
+                cost_cents=1,
+            )
 
     async def _tool_web_fetch(self, input_data: Any, context: AgentContext) -> ToolResult:
         """Fetch content from a URL."""
         url = input_data.get("url", "")
 
-        return ToolResult(
-            tool_name="web.fetch",
-            success=True,
-            output=f"Content from {url}: (placeholder)",
-            cost_cents=3,
-        )
+        if not url:
+            return ToolResult(
+                tool_name="web.fetch",
+                success=False,
+                error="No URL provided",
+                cost_cents=0,
+            )
+
+        # Validate URL
+        if not url.startswith(("http://", "https://")):
+            return ToolResult(
+                tool_name="web.fetch",
+                success=False,
+                error="Invalid URL: must start with http:// or https://",
+                cost_cents=0,
+            )
+
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                response = await client.get(
+                    url, headers={"User-Agent": "Mozilla/5.0 (compatible; APEX/1.0)"}
+                )
+            response.raise_for_status()
+
+            content = response.text
+
+            # Extract title if HTML
+            if "text/html" in response.headers.get("Content-Type", ""):
+                from bs4 import BeautifulSoup
+
+                soup = BeautifulSoup(content, "html.parser")
+                title = soup.title.string if soup.title else "No title"
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                text = soup.get_text(separator="\n", strip=True)
+                text = "\n".join(line for line in text.split("\n") if line)
+                content = f"Title: {title}\n\n{text[:5000]}"
+            else:
+                # Plain text, truncate if too long
+                if len(content) > 5000:
+                    content = content[:5000] + "\n... (truncated)"
+
+            return ToolResult(
+                tool_name="web.fetch",
+                success=True,
+                output=content,
+                cost_cents=3,
+            )
+        except httpx.HTTPError as e:
+            return ToolResult(
+                tool_name="web.fetch",
+                success=False,
+                error=f"Failed to fetch {url}: {str(e)}",
+                cost_cents=1,
+            )
 
     def _is_complete(self, output: str) -> bool:
         """Check if the task is complete."""

@@ -188,6 +188,18 @@ pub struct SoulConfig {
     pub backup_enabled: bool,
 }
 
+impl Default for SoulConfig {
+    fn default() -> Self {
+        let base = std::env::temp_dir().join("apex").join("soul");
+        Self {
+            soul_dir: base.clone(),
+            fragments_dir: base.join("fragments"),
+            history_dir: base.join("history"),
+            backup_enabled: false,
+        }
+    }
+}
+
 impl SoulConfig {
     pub fn default_path() -> Self {
         Self::from_config(&AppConfig::global())

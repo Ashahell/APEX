@@ -16,20 +16,20 @@ describe('Sidebar', () => {
     expect(chatButton).toBeInTheDocument();
   });
 
-  it('renders sidebar with Skills tab', () => {
+  it('renders sidebar with Board tab', () => {
     render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
     
-    const skillsButton = screen.getByTitle('Skills');
-    expect(skillsButton).toBeInTheDocument();
+    const boardButton = screen.getByTitle('Board');
+    expect(boardButton).toBeInTheDocument();
   });
 
-  it('calls onTabChange when tab is clicked', () => {
+  it('calls onTabChange when top-level tab is clicked', () => {
     render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
     
-    const skillsButton = screen.getByTitle('Skills');
-    fireEvent.click(skillsButton);
+    const boardButton = screen.getByTitle('Board');
+    fireEvent.click(boardButton);
     
-    expect(mockOnTabChange).toHaveBeenCalledWith('skills');
+    expect(mockOnTabChange).toHaveBeenCalledWith('board');
   });
 
   it('highlights active tab', () => {
@@ -45,13 +45,42 @@ describe('Sidebar', () => {
     expect(screen.getByTitle('Settings')).toBeInTheDocument();
   });
 
-  it('renders multiple navigation items by title', () => {
+  it('renders top-level navigation items', () => {
+    render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
+    
+    expect(screen.getByTitle('Chat')).toBeInTheDocument();
+    expect(screen.getByTitle('Board')).toBeInTheDocument();
+    expect(screen.getByTitle('Workflows')).toBeInTheDocument();
+    expect(screen.getByTitle('Settings')).toBeInTheDocument();
+    expect(screen.getByTitle('Theme')).toBeInTheDocument();
+  });
+
+  it('renders Memory group icon', () => {
     render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
     
     expect(screen.getByTitle('Memory')).toBeInTheDocument();
-    expect(screen.getByTitle('Files')).toBeInTheDocument();
-    expect(screen.getByTitle('Board')).toBeInTheDocument();
-    expect(screen.getByTitle('Workflows')).toBeInTheDocument();
+  });
+
+  it('expands submenu when group icon is clicked', () => {
+    render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
+    
+    const memoryGroup = screen.getByTitle('Memory');
+    fireEvent.click(memoryGroup);
+    
+    expect(screen.getAllByText('Stats').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Narrative').length).toBeGreaterThan(0);
+  });
+
+  it('calls onTabChange when submenu item is clicked', () => {
+    render(<Sidebar activeTab="chat" onTabChange={mockOnTabChange} />);
+    
+    const memoryGroup = screen.getByTitle('Memory');
+    fireEvent.click(memoryGroup);
+    
+    const statsItem = screen.getByText('Stats');
+    fireEvent.click(statsItem);
+    
+    expect(mockOnTabChange).toHaveBeenCalledWith('memoryStats');
   });
 
   it('calls onTabChange with different tab ids', () => {
@@ -60,10 +89,7 @@ describe('Sidebar', () => {
     fireEvent.click(screen.getByTitle('Settings'));
     expect(mockOnTabChange).toHaveBeenCalledWith('settings');
     
-    fireEvent.click(screen.getByTitle('Files'));
-    expect(mockOnTabChange).toHaveBeenCalledWith('files');
-    
     fireEvent.click(screen.getByTitle('Board'));
-    expect(mockOnTabChange).toHaveBeenCalledWith('kanban');
+    expect(mockOnTabChange).toHaveBeenCalledWith('board');
   });
 });

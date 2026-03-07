@@ -1,5 +1,4 @@
 use sqlx::SqlitePool;
-use std::time::Duration;
 
 pub struct TtlCleanup {
     pool: SqlitePool,

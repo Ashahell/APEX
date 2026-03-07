@@ -3,3 +3,44 @@ target/
 dist/
 *.db
 .DS_Store
+
+# Build artifacts
+core/target/
+core/router/target/
+core/memory/target/
+core/security/target/
+
+# Temporary/LLama
+temp-llama/
+*.log
+
+# Development logs
+ui/dev.log
+ui/dev.err
+ui/node_modules/
+ui/.vite/
+ui/dist/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+Thumbs.db

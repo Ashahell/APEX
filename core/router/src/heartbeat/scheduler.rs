@@ -182,6 +182,18 @@ impl HeartbeatScheduler {
         tracing::info!("Forcing immediate wake cycle");
         self.trigger_wake().await;
     }
+
+    pub async fn is_running(&self) -> bool {
+        *self.is_running.read().await
+    }
+
+    pub async fn get_wake_count(&self) -> u64 {
+        *self.wake_count.read().await
+    }
+
+    pub async fn get_last_wake(&self) -> Option<String> {
+        self.last_wake.read().await.clone()
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize)]

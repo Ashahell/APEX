@@ -4,6 +4,7 @@ use tokio::sync::RwLock;
 
 use super::SoulIdentity;
 
+#[derive(Clone)]
 pub struct SoulLoader {
     config: super::SoulConfig,
     cached_identity: Arc<RwLock<Option<SoulIdentity>>>,

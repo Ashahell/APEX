@@ -2,8 +2,156 @@
 
 > ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
 
-**Date**: 2026-03-06
-**Session**: Memory Components Integration Complete
+**Date**: 2026-03-07
+**Session**: Codebase Cleanup + Analysis Complete
+
+> **Test Count**: 77 Rust lib + 51 integration + 20 Python = 148 total
+
+---
+
+## Session 2026-03-07: Codebase Cleanup + Analysis
+
+### Completed Implementation
+
+#### Codebase Analysis
+Ran comprehensive analysis identifying:
+- Stubs (empty/hardcoded returns)
+- Code smells (console.log, magic numbers)
+- Incomplete code (TODO/FIXME)
+- Missing UI components
+- Broken wiring
+- Inefficient dataflows
+
+#### Issues Fixed
+
+| Issue | File | Fix |
+|-------|------|-----|
+| console.log | `Chat.tsx:247` | Removed unused parameters |
+| console.log | `Chat.tsx:280` | Removed debug statement |
+| Panic on LLM test | `llama.rs:186` | Changed to `eprintln` (graceful) |
+| Hardcoded dates | `memory.rs:118,185` | Now uses actual file `modified()` time |
+| Moltbook stubs | `moltbook.rs` | Fixed to use real MoltbookClient |
+
+#### Codebase Status After Cleanup
+
+| Metric | Count |
+|--------|-------|
+| TODO/FIXME markers | 0 |
+| console.log in prod | 0 |
+| Unwired APIs | 0 |
+| Missing indexes | 0 |
+
+#### Skipped (Low Priority)
+- Magic number constants extraction - too extensive, not critical
+
+---
+
+## Session 2026-03-07: API Endpoints + Moltbook Integration Complete
+
+### Completed Implementation
+
+#### 1. Missing API Endpoints Wired Up
+
+All previously stubbed API endpoints are now fully functional:
+
+| API | File | Status |
+|-----|------|--------|
+| Channels | `core/router/src/api/channels.rs` | ✅ Complete |
+| Decision Journal | `core/router/src/api/journal.rs` | ✅ Complete |
+| TOTP | `core/router/src/api/totp.rs` | ✅ Complete |
+| Soul Identity | `core/router/src/api/soul.rs` | ✅ Complete |
+| Heartbeat | `core/router/src/api/heartbeat.rs` | ✅ Complete |
+| Moltbook/Social | `core/router/src/api/moltbook.rs` | ✅ Complete |
+
+#### 2. Rust Clone Architecture Fix
+
+**Problem**: Axum requires AppState to implement Clone, but storing repositories with pool references caused issues.
+
+**Solution**: 
+- Repositories now construct on-demand in handlers (not stored in AppState)
+- Services with real state are Arc-wrapped in AppState
+- Added new fields to AppState:
+  - `totp_manager: TotpManager`
+  - `soul_loader: SoulLoader` (added `#[derive(Clone)]`)
+  - `heartbeat_scheduler: HeartbeatScheduler`
+
+#### 3. Moltbook Integration Fixed
+
+**Problem**: API handlers returned empty vectors/stubbed responses, didn't use actual MoltbookClient.
+
+**Changes to `MoltbookClient` (`core/router/src/moltbook/client.rs`):**
+- Added `connected: Arc<RwLock<bool>>` for connection state tracking
+- Added `agent_id()`, `server_url()`, `is_enabled()` accessor methods
+- Added `connect_ref()` - works with `&self` (uses interior mutability)
+- Added `disconnect()` method
+- Added `is_connected()` method
+
+**Rewrote `api/moltbook.rs`:**
+- `get_moltbook_status` - Returns actual connection status
+- `connect_moltbook` - Calls `client.connect_ref().await`
+- `disconnect_moltbook` - Calls `client.disconnect().await`
+- `list_agents` - Returns agents from `get_agent_directory()`
+- `get_social_profile` - Returns profile from `get_profile()`
+- `create_post` - Posts via `post_update()`
+- `get_notifications` - Gets via `check_notifications()`
+- `search_agents` - Searches via `search_agents()`
+- `assess_trust` - Assesses via `assess_trust()`
+
+#### 4. Python Test Runner Fix
+
+**Problem**: `test_agent_config.py` couldn't run - module import errors.
+
+**Solution**: Added `pythonpath = ["src"]` to `pyproject.toml` pytest config.
+
+#### 5. AgentConfig USD→Cents Conversion
+
+**Problem**: `max_cost_usd` and `max_cost_cents` were independent fields.
+
+**Solution**: Added `__post_init__` to `AgentConfig`:
+```python
+def __post_init__(self):
+    if self.max_cost_cents == 0 and self.max_cost_usd > 0:
+        self.max_cost_cents = int(self.max_cost_usd * 100)
+```
+
+#### 6. Minor Fixes
+- Fixed unused variable warning in `moltbook.rs` (`query` → `_query`)
+- Added `Default` impl for `SoulConfig`
+- Added public methods to `HeartbeatScheduler`: `is_running()`, `get_wake_count()`, `get_last_wake()`
+
+### Test Results
+
+| Component | Tests | Status |
+|-----------|-------|--------|
+| Rust lib tests | 77 | ✅ Pass |
+| Rust integration tests | 51 | ✅ Pass |
+| Python tests | 20 | ✅ Pass |
+| Clippy lint | - | ✅ Clean |
+| UI build | - | ✅ Pass |
+| Release build | - | ✅ Pass |
+
+### Files Modified
+
+**Rust Backend:**
+- `core/memory/src/channel_repo.rs` - NEW
+- `core/router/src/api/channels.rs` - NEW
+- `core/router/src/api/journal.rs` - NEW
+- `core/router/src/api/totp.rs` - NEW
+- `core/router/src/api/soul.rs` - NEW
+- `core/router/src/api/heartbeat.rs` - NEW
+- `core/router/src/api/moltbook.rs` - COMPLETE REWRITE
+- `core/router/src/moltbook/client.rs` - Added connection methods
+- `core/memory/src/lib.rs` - Added ChannelRepository exports
+- `core/router/src/api/mod.rs` - Added new modules
+- `core/router/src/main.rs` - Added new AppState fields
+- `core/router/src/soul/loader.rs` - Added Clone derive
+- `core/router/src/soul/mod.rs` - Added Default for SoulConfig
+- `core/router/src/heartbeat/scheduler.rs` - Added public methods
+- `core/router/tests/integration.rs` - Added test AppState fields
+
+**Python:**
+- `execution/pyproject.toml` - Added pythonpath
+- `execution/src/apex_agent/__init__.py` - Added __post_init__
 
 ---
 
@@ -986,7 +1134,7 @@ skills/skills/seo.optimize/         -- NEW
 | Skills TypeScript | 8 | ✅ Pass |
 | UI React | 23 | ✅ Pass |
 
-**Total: 163 tests passing**
+**Total: 170+ tests passing**
 
 ### Files Created/Modified
 ```
@@ -1000,3 +1148,92 @@ core/router/src/execution_stream.rs       -- Fixed test
 core/router/src/heartbeat/scheduler.rs    -- Fixed test
 core/router/tests/integration.rs          -- Added 26 new tests
 ```
+
+---
+
+## Current Session (2026-03-07) - Theme System & Sidebar Reorganization
+
+### What We Did
+
+#### Phase 1: Theme System Implementation
+
+1. **Created Theme Architecture**
+   - Defined `Theme` and `ThemeTokens` types in `ui/src/themes/types.ts`
+   - Created `modern-2026` theme (default dark with cyan accents)
+   - Created `amiga` theme (classic Amiga Workbench aesthetic)
+   - Enhanced `useTheme` hook to inject CSS variables into `:root`
+
+2. **Theme Tokens**
+   - Background: `--color-bg-base`, `--color-bg-elevated`, `--color-bg-overlay`
+   - Text: `--color-text-primary`, `--color-text-secondary`, `--color-text-muted`
+   - Primary: `--color-primary`, `--color-primary-hover`, `--color-primary-active`
+   - Accent: `--color-accent-success`, `--color-accent-warning`, `--color-accent-error`
+   - Agent states: `--color-agent-active`, `--color-agent-thinking`, `--color-agent-alert`
+   - Badges: `--color-badge-gen`, `--color-badge-use`, `--color-badge-exe`, etc.
+   - Amiga chrome: `--color-chrome-titlebar-active`, `--color-chrome-button-raised`, etc.
+
+3. **Theme Switching**
+   - Toggle between Modern 2026 and Amiga themes
+   - Theme preference persisted in localStorage (`apex-theme-id`)
+   - Header button shows current theme icon (🖥️ = Amiga, 🎨 = Modern)
+
+#### Phase 2: Sidebar Reorganization
+
+1. **Reduced from 28 flat items to logical groups**
+   - **Top-level (5)**: Chat, Board (Kanban), Workflows, Settings, Theme
+   - **Memory submenu (3)**: Memory, Stats, Narrative
+   - **Skills submenu (3)**: Registry, Marketplace, Deep Tasks
+   - **Work submenu (5)**: Files, Channels, Journal, Audit, Preview
+   - **System submenu (4)**: Metrics, Monitor, Health, VMs
+   - **Security submenu (2)**: 2FA, Clients
+   - **Integrations submenu (3)**: Adapters, Webhooks, Social
+   - **Agent submenu (3)**: Identity (Soul), Autonomy, Governance
+
+2. **Collapsible Submenus**
+   - Click group icon (🧠⚡📁🖥️🔒🔌🤖) to expand
+   - Click outside or toggle to close
+   - Mobile shows top-level only
+
+3. **Keyboard Shortcuts**
+   - Ctrl+1: Chat
+   - Ctrl+2: Board (Kanban)
+   - Ctrl+3: Workflows
+   - Ctrl+,: Settings
+
+### Files Created
+```
+ui/src/themes/types.ts              -- NEW: Theme type definitions
+ui/src/themes/modern-2026.ts        -- NEW: Modern theme tokens
+ui/src/themes/amiga.ts              -- NEW: Amiga theme tokens
+ui/src/themes/index.ts              -- NEW: Theme exports
+ui/src/hooks/useTheme.ts            -- UPDATED: Full token injection
+ui/src/components/ui/Sidebar.tsx    -- UPDATED: Collapsible submenus
+ui/src/App.tsx                     -- UPDATED: New tab routing, theme UI
+docs/APEX_Theme_System_v5.md        -- NEW: Theme system specification
+```
+
+### Files Modified
+```
+docs/ARCHITECTURE.md                -- Added theme system documentation
+docs/SESSION.md                     -- This session notes
+```
+
+### Usage
+
+**Theme Switching:**
+1. Click 🎨 in sidebar to access Theme tab
+2. Select "Modern 2026" or "Amiga Workbench"
+3. Or click the theme toggle in the header (🖥️/🎨)
+
+**Sidebar Navigation:**
+- Top-level items always visible
+- Click group icons to expand submenus
+- Click item to navigate, submenu auto-closes
+
+### Design Decisions
+
+1. **Simple vs v4**: Rejected v4's complex inheritance, server-side validation, and APEX-OS desktop emulator
+2. **CSS Variables**: Themes inject directly into CSS custom properties on `:root`
+3. **Progressive Migration**: Components can use tokens or fallback to Tailwind defaults
+4. **No Layout Changes**: Amiga theme applies colors only, not layout (unlike full APEX-OS)
+5. **Logical Grouping**: 28 items → 5 top-level + 7 submenus based on usage frequency

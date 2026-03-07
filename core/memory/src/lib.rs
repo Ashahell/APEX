@@ -15,12 +15,16 @@ pub mod preferences;
 pub mod skill_registry;
 pub mod task_repo;
 pub mod tasks;
-pub mod vector_store;
+pub mod ttl_cleanup;
 pub mod working_memory;
 pub mod workflow_repo;
 
+#[cfg(feature = "vector-search")]
+pub mod sqlite_vec;
+
+pub use audit::{AuditEntry, AuditRepository, CreateAuditEntry};
 pub use background_indexer::{BackgroundIndexer, IndexerConfig, IndexStats};
-pub use channel_repo::{Channel, ChannelRepository};
+pub use channel_repo::{Channel, ChannelRepository, CreateChannel};
 pub use chunker::{chunk_text, ChunkerConfig};
 pub use decision_journal::{CreateDecisionEntry, DecisionJournalEntry, DecisionJournalRepository};
 pub use embedder::{Embedder, EmbeddingProvider, EmbedError};
@@ -30,7 +34,10 @@ pub use hybrid_search::{
 };
 pub use narrative::{NarrativeConfig, NarrativeEntry, NarrativeMemory, MemoryStats};
 pub use skill_registry::{SkillRegistry, SkillRegistryEntry};
-pub use vector_store::{SearchResult as VectorSearchResult, VectorEntry, VectorStore};
+pub use task_repo::TaskRepository;
+pub use tasks::{CreateTask, Task, TaskPriority, TaskStatus, TaskTier};
+pub use ttl_cleanup::{CleanupReport, TtlCleanup};
+pub use preferences::PreferencesRepository;
 pub use working_memory::{CausalLink, Entity, WorkingMemory};
 pub use workflow_repo::{CreateWorkflow, UpdateWorkflow, Workflow, WorkflowExecution, WorkflowRepository};
 

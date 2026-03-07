@@ -17,6 +17,9 @@ use apex_router::metrics::RouterMetrics;
 use apex_router::moltbook::MoltbookClient;
 use apex_router::skill_worker::SkillWorker;
 use apex_router::skill_pool::SkillPool;
+use apex_router::soul::loader::SoulLoader;
+use apex_router::soul::SoulConfig;
+use apex_router::totp::TotpManager;
 use apex_router::unified_config::AppConfig;
 use apex_router::vm_pool::{VmConfig, VmPool};
 use apex_router::rate_limiter::RateLimiter;
@@ -115,16 +118,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         None
     };
     
-    let heartbeat_scheduler = if config.heartbeat.enabled {
-        let heartbeat_config = apex_router::heartbeat::HeartbeatConfig::from_config(&config);
-        let scheduler = HeartbeatScheduler::new(heartbeat_config);
-        tracing::info!("Heartbeat scheduler enabled, interval: {} minutes", config.heartbeat.interval_minutes);
-        Some(scheduler)
-    } else {
-        tracing::info!("Heartbeat daemon disabled");
-        None
-    };
-    
     let moltbook = if config.moltbook.enabled {
         let moltbook_config = apex_router::moltbook::MoltbookConfig {
             enabled: config.moltbook.enabled,
@@ -151,6 +144,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
 
     let governance = std::sync::Arc::new(std::sync::Mutex::new(GovernanceEngine::default()));
+
+    // Create TOTP manager
+    let totp_manager = TotpManager::new();
+    tracing::info!("TOTP manager initialized");
+
+    // Create SoulLoader
+    let soul_base_dir = dirs::home_dir()
+        .unwrap_or_else(|| PathBuf::from("."))
+        .join(".apex")
+        .join("soul");
+    std::fs::create_dir_all(&soul_base_dir).ok();
+    let soul_config = SoulConfig {
+        soul_dir: soul_base_dir.clone(),
+        fragments_dir: soul_base_dir.join("fragments"),
+        history_dir: soul_base_dir.join("history"),
+        backup_enabled: config.soul.backup_enabled,
+    };
+    let soul_loader = SoulLoader::new(soul_config);
+    tracing::info!("SoulLoader initialized");
+
+    // Create heartbeat scheduler
+    let heartbeat_config = apex_router::heartbeat::HeartbeatConfig::from_config(&config);
+    let heartbeat_scheduler = HeartbeatScheduler::new(heartbeat_config);
+    tracing::info!("Heartbeat scheduler initialized");
 
     // Create embedder from config
     let embedder = {
@@ -232,11 +249,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cache: ResponseCache::new(60),
         rate_limiter: RateLimiter::new(60),
         workflow_repo: apex_memory::WorkflowRepository::new(&pool_for_workers),
+        preferences_repo: apex_memory::PreferencesRepository::new(&pool_for_workers),
+        audit_repo: apex_memory::AuditRepository::new(&pool_for_workers),
         webhook_manager: WebhookManager::new(),
         notification_manager: NotificationManager::new(100),
         embedder,
         background_indexer,
         narrative_memory,
+        totp_manager,
+        soul_loader,
+        heartbeat_scheduler,
     };
     
     let state_arc = std::sync::Arc::new(state);
@@ -249,13 +271,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let deep_worker =
         DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone(), state_for_deep_worker.narrative_memory.clone());
     tokio::spawn(deep_worker.run());
-
-    if let Some(ref scheduler) = heartbeat_scheduler {
-        let scheduler_clone = scheduler.clone();
-        tokio::spawn(async move {
-            scheduler_clone.start().await;
-        });
-    }
 
     let cleanup_pool = pool_for_workers.clone();
     tokio::spawn(async move {
@@ -290,10 +305,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;
-            tracing::info!("Shutdown signal received, stopping heartbeat...");
-            if let Some(ref scheduler) = heartbeat_scheduler {
-                scheduler.stop().await;
-            }
+            tracing::info!("Shutdown signal received");
             tracing::info!("Shutdown complete");
         })
         .await?;

@@ -61,6 +61,7 @@ pub struct MoltbookClient {
     http_client: Client,
     profile: Arc<RwLock<Option<AgentProfile>>>,
     experiences: Arc<RwLock<Vec<DirectExperience>>>,
+    connected: Arc<RwLock<bool>>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -82,17 +83,39 @@ impl MoltbookClient {
             http_client: client,
             profile: Arc::new(RwLock::new(None)),
             experiences: Arc::new(RwLock::new(Vec::new())),
+            connected: Arc::new(RwLock::new(false)),
         })
     }
 
+    pub fn agent_id(&self) -> &str {
+        &self.config.agent_id
+    }
+
+    pub fn server_url(&self) -> &str {
+        &self.config.server_url
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        self.config.enabled
+    }
+
     pub async fn connect(&mut self) -> Result<(), MoltbookError> {
+        self.connect_inner().await
+    }
+
+    pub async fn connect_ref(&self) -> Result<(), MoltbookError> {
+        self.connect_inner().await
+    }
+
+    async fn connect_inner(&self) -> Result<(), MoltbookError> {
         if !self.config.enabled {
             return Err(MoltbookError::NotEnabled);
         }
 
         let url = format!("{}/api/v1/agents/{}", self.config.server_url, self.config.agent_id);
         
-        let response = self.http_client
+        let http_client = self.http_client.clone();
+        let response = http_client
             .get(&url)
             .send()
             .await
@@ -105,6 +128,11 @@ impl MoltbookClient {
             if let Some(profile) = api_response.data {
                 let mut profile_lock = self.profile.write().await;
                 *profile_lock = Some(profile);
+                drop(profile_lock);
+                
+                let mut connected_lock = self.connected.write().await;
+                *connected_lock = true;
+                
                 Ok(())
             } else {
                 Err(MoltbookError::NotFound("Agent profile not found".to_string()))
@@ -116,6 +144,20 @@ impl MoltbookClient {
 
     pub async fn get_profile(&self) -> Option<AgentProfile> {
         self.profile.read().await.clone()
+    }
+
+    pub async fn is_connected(&self) -> bool {
+        *self.connected.read().await
+    }
+
+    pub async fn disconnect(&self) -> Result<(), MoltbookError> {
+        let mut connected_lock = self.connected.write().await;
+        *connected_lock = false;
+        
+        let mut profile_lock = self.profile.write().await;
+        *profile_lock = None;
+        
+        Ok(())
     }
 
     pub async fn post_update(&self, content: &str) -> Result<Post, MoltbookError> {

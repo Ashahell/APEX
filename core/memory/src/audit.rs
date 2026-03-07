@@ -1,7 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use sqlx::{FromRow, Row, SqlitePool};
+use sqlx::{FromRow, Row, Pool, Sqlite};
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct AuditEntry {
@@ -42,13 +42,14 @@ pub struct CreateAuditEntry {
     pub details: Option<String>,
 }
 
-pub struct AuditRepository<'a> {
-    pool: &'a SqlitePool,
+#[derive(Clone)]
+pub struct AuditRepository {
+    pool: Pool<Sqlite>,
 }
 
-impl<'a> AuditRepository<'a> {
-    pub fn new(pool: &'a SqlitePool) -> Self {
-        Self { pool }
+impl AuditRepository {
+    pub fn new(pool: &Pool<Sqlite>) -> Self {
+        Self { pool: pool.clone() }
     }
 
     pub async fn create(&self, entry: CreateAuditEntry) -> Result<AuditEntry, sqlx::Error> {
@@ -69,7 +70,7 @@ impl<'a> AuditRepository<'a> {
         
         let hash = new_entry.compute_hash();
         
-        let result = sqlx::query(
+        sqlx::query(
             r#"
             INSERT INTO audit_log (prev_hash, hash, timestamp, action, entity_type, entity_id, details)
             VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -82,13 +83,11 @@ impl<'a> AuditRepository<'a> {
         .bind(&new_entry.entity_type)
         .bind(&new_entry.entity_id)
         .bind(&new_entry.details)
-        .execute(self.pool)
+        .execute(&self.pool)
         .await?;
 
-        let id = result.last_insert_rowid();
-        
         Ok(AuditEntry {
-            id,
+            id: 0,
             prev_hash,
             hash,
             timestamp: now,
@@ -101,7 +100,7 @@ impl<'a> AuditRepository<'a> {
 
     async fn get_last_hash(&self) -> Result<String, sqlx::Error> {
         let row = sqlx::query("SELECT hash FROM audit_log ORDER BY id DESC LIMIT 1")
-            .fetch_optional(self.pool)
+            .fetch_optional(&self.pool)
             .await?;
         
         match row {
@@ -116,15 +115,32 @@ impl<'a> AuditRepository<'a> {
         )
         .bind(entity_type)
         .bind(entity_id)
-        .fetch_all(self.pool)
+        .fetch_all(&self.pool)
         .await
+    }
+
+    pub async fn find_all(&self, limit: i64, offset: i64) -> Result<Vec<AuditEntry>, sqlx::Error> {
+        sqlx::query_as::<_, AuditEntry>(
+            "SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT ? OFFSET ?"
+        )
+        .bind(limit)
+        .bind(offset)
+        .fetch_all(&self.pool)
+        .await
+    }
+
+    pub async fn count(&self) -> Result<i64, sqlx::Error> {
+        let row = sqlx::query("SELECT COUNT(*) FROM audit_log")
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(row.get::<i64, _>(0))
     }
 
     pub async fn verify_chain(&self) -> Result<bool, sqlx::Error> {
         let entries = sqlx::query_as::<_, AuditEntry>(
             "SELECT * FROM audit_log ORDER BY id ASC"
         )
-        .fetch_all(self.pool)
+        .fetch_all(&self.pool)
         .await?;
 
         for entry in entries {

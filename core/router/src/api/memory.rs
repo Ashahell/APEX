@@ -3,6 +3,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use axum::extract::State;
 
@@ -111,11 +112,17 @@ async fn get_memory_stats() -> Result<Json<MemoryStatsResponse>, String> {
                 if let Ok(metadata) = entry.metadata().await {
                     if metadata.is_file() {
                         let importance = (count % 10) as u32 + 1;
+                        let modified = metadata.modified().ok()
+                            .map(|t| {
+                                let datetime: chrono::DateTime<chrono::Utc> = t.into();
+                                datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                            })
+                            .unwrap_or_else(|| "unknown".to_string());
                         recent_reflections.push(ReflectionItem {
                             id: count + 1,
                             content: entry.file_name().to_string_lossy().to_string(),
                             importance,
-                            created_at: format!("2026-03-{:02}T10:00:00Z", (count % 28) + 1),
+                            created_at: modified,
                         });
                         count += 1;
                         if count >= 5 {
@@ -178,11 +185,17 @@ async fn get_reflections() -> Result<Json<Vec<ReflectionItem>>, String> {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 if let Ok(metadata) = entry.metadata().await {
                     if metadata.is_file() {
+                        let modified = metadata.modified().ok()
+                            .map(|t| {
+                                let datetime: chrono::DateTime<chrono::Utc> = t.into();
+                                datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
+                            })
+                            .unwrap_or_else(|| "unknown".to_string());
                         reflections.push(ReflectionItem {
                             id: count + 1,
                             content: entry.file_name().to_string_lossy().to_string(),
                             importance: (count % 10) as u32 + 1,
-                            created_at: format!("2026-03-{:02}T10:00:00Z", (count % 28) + 1),
+                            created_at: modified,
                         });
                         count += 1;
                     }

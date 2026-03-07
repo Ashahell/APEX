@@ -539,7 +539,7 @@ apex/
 │   │   │   ├── skill_worker.rs # Skill execution worker
 │   │   │   └── t3_confirm_worker.rs # T3 confirmation handler
 │   │   ├── tests/
-│   │   │   ├── integration.rs # Integration tests (41)
+│   │   │   ├── integration.rs # Integration tests (51)
 │   │   │   └── e2e.rs      # E2E tests (2, #[ignore])
 │   │   └── Cargo.toml
 │   ├── memory/              # Memory Service (SQLite)
@@ -611,13 +611,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 70 | `core/*/src/*_test.rs` or `mod tests` |
-| **Rust integration tests** | 41 | `core/router/tests/` |
+| **Rust unit tests** | 77 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust integration tests** | 51 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
+| **Python tests** | 20 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 23 | `ui/src/**/*.test.tsx` |
-| **Total** | **150** | |
+| **Total** | **187** | |
 
 ### Running Tests
 
@@ -726,8 +727,15 @@ skill-name/
 - Click to view cost details
 
 ### Navigation Tabs
-- Chat, Skills, Memory, Files, Board (Kanban), Workflows, Audit, **Channels**, **Journal**, Settings
-- Keyboard shortcuts: Ctrl+1-10 for navigation
+- **Top-level**: Chat, Board (Kanban), Workflows, Settings, Theme
+- **Memory submenu**: Memory, Stats, Narrative
+- **Skills submenu**: Registry, Marketplace, Deep Tasks
+- **Work submenu**: Files, Channels, Journal, Audit, Preview
+- **System submenu**: Metrics, Monitor, Health, VMs
+- **Security submenu**: 2FA, Clients
+- **Integrations submenu**: Adapters, Webhooks, Social
+- **Agent submenu**: Identity (Soul), Autonomy, Governance
+- Keyboard shortcuts: Ctrl+1-3 for top-level, Ctrl+, for Settings
 
 ### Channel Management
 - Create, edit, delete conversation channels
@@ -746,9 +754,11 @@ skill-name/
 - Collapsible sidebar
 
 ### Theme Support
-- Dark/Light mode toggle in header
-- OS preference detection on first load
-- Persisted to localStorage
+- Two built-in themes: Modern 2026 (default) and Amiga Workbench
+- Theme selector in sidebar (🎨 tab) or header toggle button
+- Theme preference persisted to localStorage (`apex-theme-id`)
+- CSS variable-based tokens for colors, accents, agent states, badges
+- Amiga theme includes chrome-specific tokens (title bars, buttons, window borders)
 
 ---
 
@@ -760,7 +770,7 @@ skill-name/
 - UI → Router calls require HMAC signature  
 - T3 tasks require TOTP verification
 - All subsystems build and pass linting
-- Test suite: 150 tests (70 Rust unit + 41 Rust integration + 8 Gateway + 8 Skills + 23 UI)
+- Test suite: 170+ tests (77 Rust unit + 51 Rust integration + 26 UI + 8 Gateway + 8 Skills)
 - E2E tests spawn router binary and verify HTTP endpoints
 - Session context: see `docs/SESSION.md`
 - Task limits (max_steps, budget_usd, time_limit_secs) configured in Settings, stored in localStorage

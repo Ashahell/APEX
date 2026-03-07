@@ -243,8 +243,7 @@ export function Chat() {
             details={pendingConfirmation.consequences ? {
               impact: pendingConfirmation.consequences.summary,
             } : undefined}
-            onConfirm={(confirmationText, totpCode) => {
-              console.log('Confirmed:', confirmationText, totpCode);
+            onConfirm={(_confirmationText, _totpCode) => {
               setPendingConfirmation(null);
             }}
             onCancel={() => {
@@ -277,7 +276,7 @@ export function Chat() {
       </form>
       </div>
       
-      <TaskSidebar onTaskClick={(taskId) => console.log('Task clicked:', taskId)} />
+      <TaskSidebar onTaskClick={(_taskId) => {}} />
     </div>
   );
 }

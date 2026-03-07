@@ -4,6 +4,7 @@ Dynamic Tool Generation - AgentZero Core Feature
 This module allows the agent to generate and execute custom tools at runtime.
 """
 
+from __future__ import annotations
 import asyncio
 import uuid
 import tempfile
@@ -13,7 +14,7 @@ from typing import Any, Optional, Callable
 from enum import Enum
 
 import loguru
-import requests
+import httpx
 
 
 class ToolLanguage(str, Enum):
@@ -95,19 +96,19 @@ Output schema: {request.output_schema}
 Generate the tool now:"""
 
         try:
-            response = requests.post(
-                f"{self.llm_url}/v1/chat/completions",
-                json={
-                    "model": "qwen3-4b",
-                    "messages": [
-                        {"role": "system", "content": self.SYSTEM_PROMPT},
-                        {"role": "user", "content": prompt},
-                    ],
-                    "max_tokens": 2048,
-                    "temperature": 0.3,
-                },
-                timeout=30,
-            )
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.llm_url}/v1/chat/completions",
+                    json={
+                        "model": "qwen3-4b",
+                        "messages": [
+                            {"role": "system", "content": self.SYSTEM_PROMPT},
+                            {"role": "user", "content": prompt},
+                        ],
+                        "max_tokens": 2048,
+                        "temperature": 0.3,
+                    },
+                )
             response.raise_for_status()
             data = response.json()
             content = data["choices"][0]["message"]["content"]
@@ -235,6 +236,7 @@ class DynamicToolExecutor:
     """Mixes static and dynamically generated tools."""
 
     def __init__(self, llm_url: str = "http://localhost:8080"):
+        self.llm_url = llm_url
         self.static_tools = self._register_static_tools()
         self.dynamic_tools: dict[str, GeneratedTool] = {}
         self.generator = ToolGenerator(llm_url)
@@ -287,19 +289,109 @@ class DynamicToolExecutor:
         return {"success": False, "error": result.error or "Generation failed"}
 
     async def _tool_code_generate(self, input_data: dict) -> dict:
-        return {"success": True, "output": "Code generation placeholder"}
+        """Generate code using LLM."""
+        language = input_data.get("language", "python")
+        description = input_data.get("description", "")
+
+        if not description:
+            return {"success": False, "error": "No description provided"}
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.llm_url}/v1/chat/completions",
+                    json={
+                        "model": "qwen3-4b",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a code generator. Output only code, no explanations.",
+                            },
+                            {
+                                "role": "user",
+                                "content": f"Generate {language} code for: {description}",
+                            },
+                        ],
+                        "max_tokens": 1024,
+                        "temperature": 0.3,
+                    },
+                )
+            response.raise_for_status()
+            code = response.json()["choices"][0]["message"]["content"]
+            return {"success": True, "output": code}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def _tool_code_review(self, input_data: dict) -> dict:
-        return {"success": True, "output": "Code review placeholder"}
+        """Review code for issues."""
+        code = input_data.get("code", "")
+
+        if not code:
+            return {"success": False, "error": "No code provided"}
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.llm_url}/v1/chat/completions",
+                    json={
+                        "model": "qwen3-4b",
+                        "messages": [
+                            {
+                                "role": "system",
+                                "content": "You are a code reviewer. Provide brief, actionable feedback.",
+                            },
+                            {"role": "user", "content": f"Review this code:\n\n{code[:2000]}"},
+                        ],
+                        "max_tokens": 512,
+                        "temperature": 0.3,
+                    },
+                )
+            response.raise_for_status()
+            review = response.json()["choices"][0]["message"]["content"]
+            return {"success": True, "output": review}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def _tool_shell_execute(self, input_data: dict) -> dict:
-        return {"success": True, "output": "Shell execution requires T3 verification"}
+        return {"success": True, "output": "Shell execution requires T3 verification in APEX"}
 
     async def _tool_file_read(self, input_data: dict) -> dict:
-        return {"success": True, "output": "File read placeholder"}
+        """Read a file."""
+        import os
+
+        path = input_data.get("path", "")
+        if not path:
+            return {"success": False, "error": "No path provided"}
+
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            return {"success": True, "output": content[:5000]}
+        except FileNotFoundError:
+            return {"success": False, "error": f"File not found: {path}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def _tool_file_write(self, input_data: dict) -> dict:
-        return {"success": True, "output": "File write placeholder"}
+        """Write to a file."""
+        import os
+
+        path = input_data.get("path", "")
+        content = input_data.get("content", "")
+
+        if not path:
+            return {"success": False, "error": "No path provided"}
+
+        try:
+            parent_dir = os.path.dirname(path)
+            if parent_dir and not os.path.exists(parent_dir):
+                os.makedirs(parent_dir, exist_ok=True)
+
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(content)
+            return {"success": True, "output": f"Wrote {len(content)} bytes to {path}"}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
 
 if __name__ == "__main__":

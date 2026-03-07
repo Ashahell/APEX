@@ -5,6 +5,7 @@ TIR interleaves reasoning and tool execution in a single LLM call,
 allowing the agent to "think while doing" rather than think-then-do.
 """
 
+from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass, field
@@ -13,7 +14,7 @@ from enum import Enum
 import re
 
 import loguru
-import requests
+import httpx
 
 
 class ThoughtType(str, Enum):
@@ -109,16 +110,16 @@ Now respond with your TIR steps:"""
 
         for step_num in range(self.config.max_steps):
             try:
-                response = requests.post(
-                    f"{self.config.llm_url}/v1/chat/completions",
-                    json={
-                        "model": self.config.llm_model,
-                        "messages": [{"role": "user", "content": prompt}],
-                        "max_tokens": 2048,
-                        "temperature": 0.7,
-                    },
-                    timeout=self.config.timeout_seconds,
-                )
+                async with httpx.AsyncClient(timeout=self.config.timeout_seconds) as client:
+                    response = await client.post(
+                        f"{self.config.llm_url}/v1/chat/completions",
+                        json={
+                            "model": self.config.llm_model,
+                            "messages": [{"role": "user", "content": prompt}],
+                            "max_tokens": 2048,
+                            "temperature": 0.7,
+                        },
+                    )
                 response.raise_for_status()
                 data = response.json()
                 content = data["choices"][0]["message"]["content"]
@@ -270,7 +271,35 @@ Now respond with your TIR steps:"""
             return f"Error: {e}"
 
     async def _tool_search(self, input_data: dict) -> str:
-        return f"Search placeholder for: {input_data.get('query', '')}"
+        query = input_data.get("query", "")
+        if not query:
+            return "Error: No query provided"
+
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    "https://html.duckduckgo.com/html/",
+                    params={"q": query},
+                    headers={"User-Agent": "Mozilla/5.0"},
+                )
+            response.raise_for_status()
+
+            from bs4 import BeautifulSoup
+
+            soup = BeautifulSoup(response.text, "html.parser")
+            results = []
+
+            for result in soup.select(".result__body")[:3]:
+                title = result.select_one(".result__a")
+                snippet = result.select_one(".result__snippet")
+                if title:
+                    results.append(f"- {title.get_text(strip=True)}")
+
+            if results:
+                return f"Search results for '{query}':\n" + "\n".join(results)
+            return f"No results found for: {query}"
+        except Exception as e:
+            return f"Search error: {e}"
 
     async def _tool_think(self, input_data: dict) -> str:
         return input_data.get("content", "")
@@ -291,7 +320,7 @@ class SubagentOrchestrator:
 
     def __init__(self, max_subagents: int = 5):
         self.max_subagents = max_subagents
-        self.subagents: dict[str, SubagentHandle] = {}
+        self.subagents: dict[str, "SubagentOrchestrator.SubagentHandle"] = {}
         self.logger = loguru.logger.bind(component="subagent-orchestrator")
 
     async def spawn_subagent(self, task: str, context: dict) -> SubagentHandle:

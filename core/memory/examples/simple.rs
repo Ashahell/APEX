@@ -1,6 +1,6 @@
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskStatus, TaskTier};
-use sqlx::{Row, SqlitePool};
+use sqlx::SqlitePool;
 use std::path::Path;
 
 #[tokio::main]

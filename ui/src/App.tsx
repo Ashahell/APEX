@@ -28,20 +28,27 @@ import { MonitoringDashboard } from './components/metrics/MonitoringDashboard';
 import { SystemHealthPanel } from './components/metrics/SystemHealthPanel';
 import { TotpSetup } from './components/auth/TotpSetup';
 import { ClientAuthManager } from './components/auth/ClientAuthManager';
-import { Sidebar } from './components/ui/Sidebar';
+import { Sidebar, AppTab } from './components/ui/Sidebar';
 import { NotificationBell } from './components/ui/NotificationBell';
 import { SkillQuickLaunch } from './components/skills/SkillQuickLaunch';
 import { QuickCommandBar } from './components/ui/QuickCommandBar';
 import { wsClient } from './lib/websocket';
 
-type AppTab = 'chat' | 'skills' | 'marketplace' | 'consequences' | 'files' | 'kanban' | 'memory' | 'memoryStats' | 'narrative' | 'workflows' | 'audit' | 'channels' | 'journal' | 'soul' | 'social' | 'autonomy' | 'governance' | 'vm' | 'metrics' | 'monitoring' | 'health' | 'totp' | 'clients' | 'deep' | 'settings' | 'adapters' | 'webhooks';
-
-const TAB_ORDER: AppTab[] = ['chat', 'skills', 'marketplace', 'consequences', 'memory', 'memoryStats', 'narrative', 'files', 'kanban', 'workflows', 'audit', 'channels', 'adapters', 'webhooks', 'journal', 'deep', 'vm', 'metrics', 'monitoring', 'health', 'soul', 'social', 'autonomy', 'governance', 'totp', 'clients', 'settings'];
+const TAB_ORDER: AppTab[] = [
+  'chat', 'board', 'workflows', 'settings', 'theme',
+  'memory', 'memoryStats', 'narrative',
+  'skills', 'marketplace', 'deep',
+  'files', 'channels', 'journal', 'audit', 'consequences',
+  'metrics', 'monitoring', 'health', 'vm',
+  'totp', 'clients',
+  'adapters', 'webhooks', 'social',
+  'soul', 'autonomy', 'governance'
+];
 
 function App() {
   const [activeTab, setActiveTab] = useState<AppTab>('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const { themeId, toggleTheme, setTheme } = useTheme();
   
   const { connectionState, sessionCost, tasks } = useAppStore((s) => ({
     connectionState: s.connectionState,
@@ -96,7 +103,104 @@ function App() {
     }
   };
 
+  const handleThemeToggle = () => {
+    toggleTheme();
+  };
+
+  const isAmigaTheme = themeId === 'amiga';
   const conn = getConnectionDisplay();
+
+  const renderContent = () => {
+    switch (activeTab) {
+      // Top-level
+      case 'chat': return <Chat />;
+      case 'board': return <KanbanBoard />;
+      case 'workflows': return <Workflows />;
+      case 'settings': return <Settings />;
+      case 'theme': 
+        return (
+          <div className="p-6">
+            <h2 className="text-2xl font-bold mb-6">Theme</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <h3 className="font-medium">Modern 2026</h3>
+                  <p className="text-sm text-muted-foreground">Clean, minimal dark theme with cyan accents</p>
+                </div>
+                {themeId === 'modern-2026' && (
+                  <span className="text-primary">✓ Active</span>
+                )}
+                {themeId !== 'modern-2026' && (
+                  <button
+                    onClick={() => setTheme('modern-2026')}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+                  >
+                    Apply
+                  </button>
+                )}
+              </div>
+              <div className="flex items-center justify-between p-4 border rounded-lg">
+                <div>
+                  <h3 className="font-medium">Amiga Workbench</h3>
+                  <p className="text-sm text-muted-foreground">Classic Amiga-inspired aesthetic</p>
+                </div>
+                {themeId === 'amiga' && (
+                  <span className="text-primary">✓ Active</span>
+                )}
+                {themeId !== 'amiga' && (
+                  <button
+                    onClick={() => setTheme('amiga')}
+                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
+                  >
+                    Apply
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      
+      // Memory
+      case 'memory': return <MemoryViewer />;
+      case 'memoryStats': return <MemoryStatsDashboard />;
+      case 'narrative': return <NarrativeMemoryViewer />;
+      
+      // Skills
+      case 'skills': return <Skills />;
+      case 'marketplace': return <SkillMarketplace />;
+      case 'deep': return <DeepTaskPanel />;
+      
+      // Work
+      case 'files': return <Files />;
+      case 'channels': return <ChannelManager />;
+      case 'journal': return <DecisionJournal />;
+      case 'audit': return <AuditLog />;
+      case 'consequences': return <ConsequenceViewer />;
+      
+      // System
+      case 'metrics': return <MetricsPanel />;
+      case 'monitoring': return <MonitoringDashboard />;
+      case 'health': return <SystemHealthPanel />;
+      case 'vm': return <VmPoolDashboard />;
+      
+      // Security
+      case 'totp': return <TotpSetup />;
+      case 'clients': return <ClientAuthManager />;
+      
+      // Integrations
+      case 'adapters': return <AdapterManager />;
+      case 'webhooks': return <WebhookManager />;
+      case 'social': return <SocialDashboard />;
+      
+      // Agent
+      case 'soul': return <SoulEditor />;
+      case 'autonomy': return <AutonomyControls />;
+      case 'governance': return <GovernanceControls />;
+      
+      default:
+        return <div className="p-6">Select an option from the sidebar</div>;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-background">
@@ -128,18 +232,18 @@ function App() {
             <QuickCommandBar onNavigate={(tab) => setActiveTab(tab as AppTab)} onOpenSettings={() => setActiveTab('settings')} />
             <button 
               className="flex items-center gap-2 hover:bg-muted px-2 sm:px-3 py-1.5 rounded-lg transition-colors"
-              onClick={() => setActiveTab('kanban')}
+              onClick={() => setActiveTab('board')}
             >
               <span className="text-sm font-medium hidden sm:inline">Budget:</span>
               <span className="text-sm font-mono">${sessionCost.toFixed(2)}</span>
             </button>
             
             <button
-              onClick={toggleTheme}
+              onClick={handleThemeToggle}
               className="p-2 hover:bg-muted rounded-lg transition-colors"
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+              title={isAmigaTheme ? 'Switch to Modern theme' : 'Switch to Amiga theme'}
             >
-              {theme === 'dark' ? '☀️' : '🌙'}
+              {isAmigaTheme ? '🖥️' : '🎨'}
             </button>
             
             <NotificationBell />
@@ -154,33 +258,7 @@ function App() {
         </header>
 
         <div className="flex-1 overflow-hidden">
-          {activeTab === 'chat' && <Chat />}
-          {activeTab === 'skills' && <Skills />}
-          {activeTab === 'marketplace' && <SkillMarketplace />}
-          {activeTab === 'consequences' && <ConsequenceViewer />}
-          {activeTab === 'files' && <Files />}
-          {activeTab === 'kanban' && <KanbanBoard />}
-          {activeTab === 'memory' && <MemoryViewer />}
-          {activeTab === 'memoryStats' && <MemoryStatsDashboard />}
-          {activeTab === 'narrative' && <NarrativeMemoryViewer />}
-          {activeTab === 'workflows' && <Workflows />}
-          {activeTab === 'audit' && <AuditLog />}
-          {activeTab === 'channels' && <ChannelManager />}
-          {activeTab === 'adapters' && <AdapterManager />}
-          {activeTab === 'webhooks' && <WebhookManager />}
-          {activeTab === 'journal' && <DecisionJournal />}
-          {activeTab === 'deep' && <DeepTaskPanel />}
-          {activeTab === 'vm' && <VmPoolDashboard />}
-          {activeTab === 'metrics' && <MetricsPanel />}
-          {activeTab === 'monitoring' && <MonitoringDashboard />}
-          {activeTab === 'health' && <SystemHealthPanel />}
-          {activeTab === 'soul' && <SoulEditor />}
-          {activeTab === 'social' && <SocialDashboard />}
-          {activeTab === 'autonomy' && <AutonomyControls />}
-          {activeTab === 'governance' && <GovernanceControls />}
-          {activeTab === 'totp' && <TotpSetup />}
-          {activeTab === 'clients' && <ClientAuthManager />}
-          {activeTab === 'settings' && <Settings />}
+          {renderContent()}
         </div>
       </main>
     </div>
