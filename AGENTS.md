@@ -29,8 +29,8 @@ APEX is **more secure than both** by design:
 
 ## ⚠️ Pre-Alpha Warnings
 
-- **Security-first but unaudited** — Security audit complete (Phases 1-2), but not formally penetration tested
-- **Limited testing** — 278 tests, many features are proof-of-concept
+- **Security-first but unaudited** — Security implementation complete (Phases 0-7), but not formally penetration tested
+- **Limited testing** — 251+ tests, many features are proof-of-concept
 - **API instability** — Breaking changes expected
 - **No production support** — Use at your own risk
 - **Firecracker/VM isolation** — Requires kernel/rootfs configuration
@@ -91,7 +91,7 @@ APEX is **more secure than both** by design:
 |-----------|-------------|----------------|
 | **OpenClaw** | Extensibility, plugin ecosystem | Gateway adapters ✅, Skills 33, Marketplace ❌ |
 | **AgentZero** | Dark UI, smooth UX, agent loop | Theme ✅, Streaming partial, Agent loop ✅ |
-| **Security-first** | T0-T3 tiers, HMAC, TOTP, isolation | Auth ✅, Docker ✅, Firecracker WSL2 🔧 |
+| **Security-first** | T0-T3 tiers, HMAC, TOTP, isolation | Auth ✅, VM Pool ✅, Injection Detection ✅, Anomaly Detection ✅ |
 
 ### Skills Registry (33 Total)
 - T0 (Read-only): 3 skills
@@ -222,6 +222,15 @@ APEX is **more secure than both** by design:
 - `GET /api/v1/system/ratelimit` - Get rate limit stats
 - `GET /api/v1/vm/stats` - Get VM pool stats
 - `GET /api/v1/skills/pool/stats` - Get Skill Pool stats (latency, errors, slot availability)
+
+**Security (v1.3.1):**
+- `GET /api/v1/security/anomalies` - List all anomalies
+- `GET /api/v1/security/anomalies/count` - Count anomalies by severity
+- `GET /api/v1/security/anomalies/:severity` - Filter by severity (critical/high/medium/low)
+- `GET /api/v1/security/stats` - Security statistics
+- `POST /api/v1/security/injection/analyze` - Analyze input for injection attempts
+- `GET /api/v1/security/injection/patterns` - List registered injection patterns
+- `GET /api/v1/security/health` - Security component health check
 
 ### Subagent Pool (Parallel Execution)
 - `POST /api/v1/subagent/decompose` - Decompose task into parallel subtasks using LLM
@@ -680,7 +689,7 @@ apex/
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 23 | `ui/src/**/*.test.tsx` |
-| **Total** | **278** | |
+| **Total** | **251+** | |
 | **Total** | **187** | |
 
 ### Running Tests

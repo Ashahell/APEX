@@ -2,6 +2,8 @@
 #![allow(dead_code)]
 
 pub mod capability;
+pub mod encrypted_narrative;
+pub mod secret_store;
 
 pub use thiserror::Error;
 
@@ -18,3 +20,9 @@ pub enum SecurityError {
 }
 
 pub type SecurityResult<T> = Result<T, SecurityError>;
+
+// Re-export main types
+pub use encrypted_narrative::{
+    is_sensitive_field, EncryptedNarrativeEntry, NarrativeEncryptionConfig, NarrativeKeyManager,
+};
+pub use secret_store::{SecretEntry, SecretStorageError, SecretStore};

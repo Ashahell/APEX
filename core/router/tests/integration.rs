@@ -150,6 +150,7 @@ async fn create_test_state() -> AppState {
             apex_router::heartbeat::HeartbeatConfig::default()
         ),
         mcp_manager: std::sync::Arc::new(apex_router::mcp::McpServerManager::new()),
+        anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
     }
 }
 

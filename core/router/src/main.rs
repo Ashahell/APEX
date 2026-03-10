@@ -1,5 +1,6 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
+use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use apex_memory::db::Database;
@@ -74,6 +75,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let message_bus = MessageBus::new(100);
     let circuit_breakers = CircuitBreakerRegistry::new();
+    
+    // Initialize security components
+    let _anomaly_detector = apex_router::skill_worker::init_anomaly_detector();
+    tracing::info!("Anomaly detector initialized");
 
     // C4: Load config first, before creating components
     let config = AppConfig::global();
@@ -95,6 +100,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let vm_pool = VmPool::new(vm_config, 3, 1);
     if let Err(e) = vm_pool.initialize().await {
         tracing::warn!("Failed to initialize VM pool: {}", e);
+    } else {
+        // Start background maintenance to keep VMs pre-warmed
+        vm_pool.start_maintenance_loop();
+        tracing::info!("VM pool maintenance loop started");
     }
 
     let skill_pool = if config.skill_pool.enabled {
@@ -266,13 +275,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         soul_loader,
         heartbeat_scheduler,
         mcp_manager: std::sync::Arc::new(McpServerManager::new()),
+        anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
     };
     
     let state_arc = std::sync::Arc::new(state);
     let state_for_router = state_arc.as_ref().clone();
     let state_for_deep_worker = state_arc.as_ref().clone();
 
-    let worker = SkillWorker::new(pool_for_workers.clone(), skill_pool.clone(), message_bus.clone(), circuit_breakers.clone());
+    let worker = SkillWorker::new(pool_for_workers.clone(), skill_pool.clone(), Some(Arc::new(vm_pool.clone())), message_bus.clone(), circuit_breakers.clone());
     tokio::spawn(worker.run());
 
     let deep_worker =

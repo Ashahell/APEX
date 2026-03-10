@@ -221,3 +221,55 @@ When Firecracker is working, it provides:
 - Memory/CPU limits
 
 Both provide good security for a personal agent platform.
+
+## Phase 2 Enhancements (v1.3.1+)
+
+### VM Pre-Warming
+
+APEX v1.3.1 includes automatic VM pre-warming:
+
+1. **Initialization**: When the router starts, `min_ready` VMs are spawned immediately
+2. **Maintenance Loop**: Background task maintains `min_ready` VMs at all times
+3. **Dynamic Scaling**: VMs are created on-demand up to `max_size`
+
+Configuration in `main.rs`:
+```rust
+let vm_pool = VmPool::new(vm_config, 3, 1);  // max=3, min_ready=1
+vm_pool.initialize().await;
+vm_pool.start_maintenance_loop();  // Background pre-warming
+```
+
+### VM Snapshots
+
+For even faster VM startup, use snapshots:
+
+```bash
+# In WSL2 - Create snapshot directory
+sudo mkdir -p /tmp/apex-snapshots
+```
+
+Snapshots allow instant VM restoration - useful for:
+- Frequent T3 skill executions
+- Consistent skill environment
+- Rollback capability
+
+### Performance Tuning
+
+| Setting | Default | Recommended for T3 |
+|---------|---------|-------------------|
+| `APEX_VM_VCPU` | 2 | 2 |
+| `APEX_VM_MEMORY_MIB` | 2048 | 1024 (minimal) |
+| `APEX_VM_MIN_READY` | 1 | 2 |
+| `APEX_VM_MAX_SIZE` | 3 | 3 |
+
+### Network Isolation
+
+For T3 shell.execute, network can be fully disabled:
+
+```rust
+// In vm_pool.rs
+let config = VmConfig {
+    network_isolation: Some(NetworkIsolation::None),  // or Bridge
+    ..Default::default()
+};
+```

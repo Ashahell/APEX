@@ -20,6 +20,7 @@ pub mod moltbook;
 pub mod llms;
 pub mod subagent;
 pub mod dynamic_tools;
+pub mod security;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -206,6 +207,7 @@ pub struct AppState {
     pub soul_loader: SoulLoader,
     pub heartbeat_scheduler: HeartbeatScheduler,
     pub mcp_manager: std::sync::Arc<McpServerManager>,
+    pub anomaly_detector: Option<std::sync::Arc<crate::security::AnomalyDetector>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -492,6 +494,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(mcp::create_router())
         .merge(subagent::router())
         .merge(dynamic_tools::router())
+        .merge(security::create_router())
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

@@ -172,11 +172,13 @@ impl Default for Constitution {
 
 pub mod loader;
 pub mod constitution;
+pub mod enforcer;
 
 pub use loader::SoulLoader;
 pub use loader::SoulError;
 pub use constitution::ConstitutionManager;
 pub use constitution::ConstitutionError;
+pub use enforcer::ConstitutionEnforcer;
 
 use crate::unified_config::AppConfig;
 

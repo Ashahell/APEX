@@ -66,7 +66,22 @@ impl SkillPool {
         &self.config
     }
 
-    pub async fn new(config: SkillPoolConfig) -> Result<Arc<Self>, SkillPoolError> {
+    pub async fn new(mut config: SkillPoolConfig) -> Result<Arc<Self>, SkillPoolError> {
+        // Convert relative paths to absolute paths for reliability
+        if config.worker_script.is_relative() {
+            if let Ok(cwd) = std::env::current_dir() {
+                config.worker_script = cwd.join(&config.worker_script);
+                info!("Resolved worker_script to absolute path: {:?}", config.worker_script);
+            }
+        }
+        
+        if config.skills_dir.is_relative() {
+            if let Ok(cwd) = std::env::current_dir() {
+                config.skills_dir = cwd.join(&config.skills_dir);
+                info!("Resolved skills_dir to absolute path: {:?}", config.skills_dir);
+            }
+        }
+        
         let (free_tx, free_rx) = mpsc::channel(config.pool_size);
         let mut slots = Vec::with_capacity(config.pool_size);
 
