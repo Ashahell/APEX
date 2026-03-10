@@ -2,15 +2,29 @@
 
 > ⚠️ **Status: PRE-ALPHA** - This is an experimental research project. Not production ready.
 
-APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces with secure code execution. Multi-tenancy is explicitly out of scope.
+APEX combines the **best of OpenClaw and AgentZero** with **significantly stronger security**. A single-user autonomous agent platform with messaging interfaces and secure code execution.
+
+## Vision
+
+| Reference | What We Take |
+|-----------|-------------|
+| **OpenClaw** | Open architecture, extensibility, community-driven plugin ecosystem, messaging adapters |
+| **AgentZero** | Dark navy/cyan aesthetic, polished UI, smooth UX patterns, agent loop logic |
+| **Security-first** | Hardened beyond both — T0-T3 permission tiers, HMAC auth, TOTP verification, input sanitization, connection pooling |
+
+APEX is **more secure than both** by design:
+- Single-user architecture (no multi-tenancy attack surface)
+- Hardened MCP with connection pooling and input validation
+- Firecracker/gVisor isolation for code execution
+- Audit trail with decision journal and reflection tracking
 
 ## 🚨 Pre-Alpha Warnings
 
-- **No security audit** - Do not use with sensitive data
-- **Limited testing** - Many features are proof-of-concept
-- **API instability** - Breaking changes expected
-- **No production support** - Use at your own risk
-- **Execution isolation** - Firecracker/gVisor/Docker/Mock backends available
+- **Security-first but unaudited** — Built with strong security principles, but not formally audited yet
+- **Limited testing** — Many features are proof-of-concept
+- **API instability** — Breaking changes expected
+- **No production support** — Use at your own risk
+- **Execution isolation** — Firecracker/gVisor/Docker/Mock backends available
 
 ## Status
 
@@ -35,11 +49,19 @@ APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces
 - WebSocket real-time updates (basic)
 - Execution streaming with consequence preview (POC)
 
-### Skills System (33 skills) - Experimental
-- T0 (Read-only): code.review, repo.search, deps.check, file.search
-- T1 (Tap confirm): file.delete, git.commit, code.generate, code.format, api.test, etc.
-- T2 (Type confirm): db.drop, deploy.kubectl, docker.build, git.branch, docker.run
-- T3 (TOTP): shell.execute
+### Security Features
+- **Encrypted Secret Storage** - AES-256-GCM encrypted key-value store
+- **Enhanced Rate Limiting** - Per-endpoint with progressive throttling
+- **TOTP Persistence** - Time-based OTP with encrypted storage
+- **Input Validation** - MCP sanitization tests (31 tests)
+- **Audit Chain** - Hash chain verification tests (12 tests)
+- **Permission Tiers** - T0-T3 enforcement tests (14 tests)
+
+### Skills System (34 skills) - Experimental
+- **T0 (Read-only)**: code.review, repo.search, deps.check, file.search, docs.read
+- **T1 (Tap confirm)**: file.delete, git.commit, code.generate, code.format, code.test, code.refactor, code.document, api.test, api.design, db.migrate, db.schema, copy.generate, script.draft, script.outline, seo.optimize, music.extend, music.generate, music.remix, video.edit, video.generate
+- **T2 (Type confirm)**: db.drop, deploy.kubectl, docker.build, docker.run, git.branch, git.force_push, aws.lambda, ci.configure
+- **T3 (TOTP)**: shell.execute
 
 ### Advanced Features (Research/POC)
 - **SOUL.md Identity** - Agent reads identity file on wake (POC)
@@ -48,8 +70,8 @@ APEX is a **pre-alpha** autonomous agent platform combining messaging interfaces
 - **Moltbook Social** - Federated agent network integration (POC)
 - **Governance Engine** - Constitution enforcement (basic)
 - **Execution Streaming** - Real-time thought/action/observation to UI (POC)
-- **Dynamic Tool Generation** - LLM generates custom Python tools (not implemented)
-- **Subagent Pool** - Parallel task splitting (not implemented)
+- **Dynamic Tool Generation** - LLM generates custom Python tools (POC)
+- **Subagent Pool** - Parallel task splitting (POC)
 
 ### UI Features (Basic)
 - Real-time chat with task sidebar
@@ -109,11 +131,16 @@ See `docs/ARCHITECTURE.md` for API documentation (subject to change).
 
 ## Roadmap
 
-- [ ] Security audit
-- [ ] Dynamic tool generation
-- [ ] Subagent pool
-- [ ] Comprehensive testing
-- [ ] Production hardening
+- [x] Formal security audit (Phases 1-2 complete)
+- [x] Dynamic tool generation (POC)
+- [x] Subagent pool (POC)
+- [x] Comprehensive testing (212+ tests)
+- [x] Task classification rules (Instant/Shallow/Deep tiers)
+- [x] Capability enforcement (fail-closed for unknown skills)
+- [x] Gateway optional (auth can be disabled)
+- [x] MCP marketplace UI (templates, install modal, registries)
+- [x] Production hardening (seccomp, AppArmor, SIEM docs)
+- [x] SystemComponent trait (unified lifecycle management)
 
 ## License
 

@@ -2,7 +2,7 @@
 
 > ⚠️ **WARNING: PRE-ALPHA** - This document describes an experimental research system. Not production ready.
 > 
-> **Production Gaps**: No security audit performed, limited test coverage (187 tests), no formal load testing, no disaster recovery procedures, single-node deployment only.
+> **Production Gaps**: Security audit complete (Phases 1-2), comprehensive testing (212+ tests), production hardening docs available, no formal load testing, no disaster recovery procedures, single-node deployment only.
 
 **Date**: 2026-03-06
 **Version**: v1.3.0
@@ -227,6 +227,7 @@ interface GatewayConfig {
 | Component | File | Purpose |
 |-----------|------|---------|
 | API Layer | `src/api/` | Modular HTTP endpoints (43 routes in 8 modules) |
+| LLM API | `src/api/llms.rs` | Multi-provider LLM configuration (26 providers) |
 | MessageBus | `src/message_bus.rs` | Tokio broadcast channels |
 | WebSocket | `src/websocket.rs` | Real-time WebSocket server |
 | NATS | `src/nats_integration.rs` | Distributed messaging |
@@ -422,6 +423,15 @@ interface GatewayConfig {
 |--------|----------|-------------|
 | GET | `/api/v1/files` | List files |
 | GET | `/api/v1/files/content?path=` | Get file content |
+
+**LLM Configuration (v1.3.1)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/llms/providers` | List available LLM providers |
+| GET | `/api/v1/llms/config` | Get current LLM configuration |
+| PUT | `/api/v1/llms/config` | Update LLM configuration |
+| GET | `/api/v1/llms/models?provider=` | List models for a provider |
+| POST | `/api/v1/llms/test` | Test LLM connection |
 
 #### Message Bus Types
 ```rust
@@ -889,9 +899,10 @@ class AgentConfig:
 | Component | File | Purpose |
 |-----------|------|---------|
 | App | `src/App.tsx` | Main app with routing, header |
-| Chat | `src/components/chat/Chat.tsx` | Main chat interface |
+| Chat | `src/components/chat/Chat.tsx` | Main chat interface with message queue |
 | TaskSidebar | `src/components/chat/TaskSidebar.tsx` | Active tasks panel |
 | ProcessGroup | `src/components/chat/ProcessGroup.tsx` | Execution trace display |
+| StepDetailModal | `src/components/chat/StepDetailModal.tsx` | Step debugging modal (double-click) |
 | ConfirmationGate | `src/components/chat/ConfirmationGate.tsx` | T1-T3 confirmation UI |
 | Skills | `src/components/skills/Skills.tsx` | Skill marketplace |
 | MemoryViewer | `src/components/memory/MemoryViewer.tsx` | 3-tab memory viewer |
@@ -902,19 +913,22 @@ class AgentConfig:
 | DecisionJournal | `src/components/journal/DecisionJournal.tsx` | Decision tracking |
 | Settings | `src/components/settings/Settings.tsx` | Full-page settings with tabs |
 | ConfigViewer | `src/components/settings/ConfigViewer.tsx` | Runtime configuration viewer |
+| LlmManager | `src/components/settings/LlmManager.tsx` | Multi-LLM provider configuration |
+| ThemeEditor | `src/components/settings/ThemeEditor.tsx` | Theme customization with preview |
 | Sidebar | `src/components/ui/Sidebar.tsx` | Navigation sidebar with 5 top-level items + 7 collapsible submenus |
-| ThemeSelector | `src/components/ui/Sidebar.tsx` | Theme switching (Modern/Amiga) |
+| ThemeSelector | `src/components/ui/Sidebar.tsx` | Theme switching (Modern/Amiga/AgentZero) |
 | WebSocket | `src/lib/websocket.ts` | Real-time client |
 | API | `src/lib/api.ts` | HMAC-signed fetch |
 
 #### Theme System
 
-APEX implements a CSS-variable-based theme system with two built-in themes:
+APEX implements a CSS-variable-based theme system with three built-in themes:
 
 | Theme | ID | Description |
 |-------|-----|-------------|
 | Modern 2026 | `modern-2026` | Default dark theme with cyan accents |
 | Amiga Workbench | `amiga` | Classic Amiga-inspired aesthetic |
+| AgentZero | `agentzero` | Dark navy with cyan accents, inspired by OpenClaw/AgentZero |
 
 **Theme Architecture:**
 - Themes are defined as TypeScript objects with color tokens
@@ -943,6 +957,7 @@ APEX implements a CSS-variable-based theme system with two built-in themes:
 - `src/themes/types.ts` - Theme type definitions
 - `src/themes/modern-2026.ts` - Modern theme tokens
 - `src/themes/amiga.ts` - Amiga theme tokens
+- `src/themes/agentzero.ts` - AgentZero theme tokens
 - `src/hooks/useTheme.ts` - Theme context and injection
 
 #### State Management
@@ -954,6 +969,8 @@ interface AppState {
   sessionCost: number;
   totalCost: number;
   pendingConfirmation: PendingConfirmation | null;
+  messageQueue: string[];
+  isProcessingQueue: boolean;
 }
 ```
 
@@ -1245,13 +1262,13 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| Router (unit) | 77 | `core/router/src/*_test.rs` |
-| Router (integration) | 51 | `core/router/tests/` |
+| Router (unit) | 158 | `core/router/src/*_test.rs` |
+| Router (integration) | 59 | `core/router/tests/` |
 | Python (execution) | 20 | `execution/tests/` |
 | Gateway | 8 | `gateway/src/*.test.ts` |
 | Skills | 8 | `skills/src/*.test.ts` |
 | UI | 23 | `ui/src/**/*.test.tsx` |
-| **Total** | **187** | |
+| **Total** | **276** | |
 
 > Note: 1 test ignored (requires llama-server running)
 
@@ -1259,9 +1276,10 @@ See `AGENTS.md` for the complete reference. Key variables:
 
 ## Version History
 
-> **Note on versioning**: v1.x marks production-readiness milestones. v0.x were internal development versions. v1.3.0 represents the current pre-alpha state with full feature set.
+> **Note on versioning**: v1.x marks production-readiness milestones. v0.x were internal development versions. v1.3.1 represents the current pre-alpha state with full feature set including SystemComponent trait.
 
-- **v1.3.1** (2026-03-06): Architecture fixes - Migration 013, WAL mode, atomic writes, Bun pool tier enforcement, cache invalidation, C4 config injection
+- **v1.3.1** (2026-03-10): SystemComponent trait, MCP Marketplace UI, TaskClassifier rules, Capability enforcement (fail-closed), Production hardening docs
+- **v1.3.0** (2026-03-06): Architecture fixes - Migration 013, WAL mode, atomic writes, Bun pool tier enforcement, cache invalidation, C4 config injection
 - **v1.3.0** (2026-03-06): Enhanced Memory System - vector similarity search, FTS5, working memory (per-task scratchpad), background indexer, narrative integration
 - **v1.2.0** (2026-03-05): UI overhaul, settings tabs, memory viewer, workflow visualizer
 - **v1.1.0** (2026-03-04): Skill quick-launch, command bar, task board
