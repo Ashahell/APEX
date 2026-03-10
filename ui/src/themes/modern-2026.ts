@@ -25,6 +25,13 @@ export const modern2026Theme: Theme = {
         active: '#00c29a',
         muted: 'rgba(0, 212, 170, 0.15)',
       },
+      button: {
+        bg: '#1a1a24',
+        bgHover: '#2a2a34',
+        bgActive: '#0a0a14',
+        text: '#e8e8ec',
+        border: '#3a3a44',
+      },
       accent: {
         success: '#22c55e',
         warning: '#f59e0b',
@@ -45,6 +52,7 @@ export const modern2026Theme: Theme = {
         sub: '#ec4899',
         mem: '#22c55e',
         aud: '#ef4444',
+        mcp: '#06b6d4',
       },
     },
   },

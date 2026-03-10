@@ -13,19 +13,46 @@ Error Handling & Observability
 Repository Structure
 Phased Delivery Plan
 Risk Register
-1. Executive Summary
-APEX is a single-user autonomous agent platform that combines OpenClaw's messaging presence with Agent Zero's execution capabilities. It is designed for individual power users who want a secure, local-first AI assistant for creative and technical work.
-Core principles:
-Single-tenant by design — one user, one database, one instance. No multi-user complexity.
-Creative focus — optimized for coding, AI media generation, content creation, and marketing workflows.
-Security by isolation — Firecracker micro-VMs for code execution, no shared kernel with host.
-Curated over comprehensive — ~50 high-quality skills instead of thousands of unmaintained adapters.
-What this is not:
-A multi-user SaaS platform
-A general-purpose assistant (no restaurant booking, no flight search)
-A low-code tool for non-technical users
-A solution for enterprise teams
-Deployment model: Self-hosted on user's hardware (desktop, laptop, or personal cloud VM). Single binary + Docker Compose for dependencies.
+
+## 1. Executive Summary
+
+### Vision: OpenClaw + AgentZero + Security-First
+
+APEX combines the **best of OpenClaw and AgentZero** with **significantly stronger security**.
+
+| Reference | What We Take |
+|-----------|-------------|
+| **OpenClaw** | Open architecture, extensibility, community-driven plugin ecosystem, messaging adapters |
+| **AgentZero** | Dark navy/cyan aesthetic, polished UI, smooth UX patterns, agent loop logic |
+| **Security-first** | Hardened beyond both — T0-T3 permission tiers, HMAC auth, TOTP verification, input sanitization, connection pooling |
+
+APEX is **more secure than both** by design:
+- Single-user architecture (no multi-tenancy attack surface)
+- Hardened MCP with connection pooling and input validation
+- Firecracker/gVisor isolation for code execution (Docker fallback on Windows)
+- Audit trail with decision journal and reflection tracking
+
+### Core Principles
+- Single-tenant by design — one user, one database, one instance. No multi-user complexity.
+- Creative focus — optimized for coding, AI media generation, content creation, and marketing workflows.
+- Security by isolation — Firecracker/gVisor micro-VMs for code execution, Docker fallback.
+- Curated over comprehensive — 33 high-quality skills (T0-T3 tiers) instead of thousands of unmaintained adapters.
+
+### What This Is NOT
+- A multi-user SaaS platform
+- A general-purpose assistant (no restaurant booking, no flight search)
+- A low-code tool for non-technical users
+- A solution for enterprise teams
+
+### Implementation Status (2026-03-09)
+- **Version**: v1.3.0 (Pre-Alpha)
+- **Skills**: 33 (T0-T3 tiers)
+- **MCP**: Full implementation with pooling, resources, prompts, security
+- **Memory**: Vector search (sqlite_vec), hybrid search, embedder
+- **Execution**: Docker (default), Firecracker/WSL2 (ready)
+- **Tests**: 158 passing
+
+Deployment model: Self-hosted on user's hardware (desktop, laptop, or personal cloud VM). Single binary + Docker for dependencies.
 2. Parent System Reality Check
 Honest assessment of upstream dependencies as of March 2026:
 OpenClaw — github.com/openclaw/openclaw

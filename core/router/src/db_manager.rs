@@ -146,8 +146,6 @@ CREATE TABLE IF NOT EXISTS tasks (
     author VARCHAR(255),
     skill_name VARCHAR(100),
     error_message TEXT,
-    cost_estimate_usd REAL,
-    actual_cost_usd REAL,
     cost_estimate_cents INTEGER,
     actual_cost_cents INTEGER,
     started_at TIMESTAMP,

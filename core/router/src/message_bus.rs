@@ -7,6 +7,7 @@ pub struct MessageBus {
     skill_sender: broadcast::Sender<SkillExecutionMessage>,
     deep_task_sender: broadcast::Sender<DeepTaskMessage>,
     confirmation_sender: broadcast::Sender<ConfirmationMessage>,
+    mcp_sender: broadcast::Sender<McpMessage>,
 }
 
 #[derive(Clone, Debug)]
@@ -45,17 +46,73 @@ pub struct ConfirmationMessage {
     pub permission_tier: String,
 }
 
+/// MCP event message for real-time updates
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+pub enum McpMessage {
+    /// Server connected
+    #[serde(rename = "server_connected")]
+    ServerConnected {
+        server_id: String,
+        server_name: String,
+    },
+    /// Server disconnected
+    #[serde(rename = "server_disconnected")]
+    ServerDisconnected {
+        server_id: String,
+        reason: Option<String>,
+    },
+    /// Server connection error
+    #[serde(rename = "server_error")]
+    ServerError {
+        server_id: String,
+        error: String,
+    },
+    /// Tool execution started
+    #[serde(rename = "tool_started")]
+    ToolStarted {
+        server_id: String,
+        tool_name: String,
+        task_id: Option<String>,
+    },
+    /// Tool execution completed
+    #[serde(rename = "tool_completed")]
+    ToolCompleted {
+        server_id: String,
+        tool_name: String,
+        success: bool,
+        task_id: Option<String>,
+        duration_ms: u64,
+    },
+    /// Tool execution failed
+    #[serde(rename = "tool_failed")]
+    ToolFailed {
+        server_id: String,
+        tool_name: String,
+        error: String,
+        task_id: Option<String>,
+    },
+    /// Tools list updated
+    #[serde(rename = "tools_updated")]
+    ToolsUpdated {
+        server_id: String,
+        tool_count: usize,
+    },
+}
+
 impl MessageBus {
     pub fn new(capacity: usize) -> Self {
         let (sender, _) = broadcast::channel(capacity);
         let (skill_sender, _) = broadcast::channel(capacity);
         let (deep_task_sender, _) = broadcast::channel(capacity);
         let (confirmation_sender, _) = broadcast::channel(capacity);
+        let (mcp_sender, _) = broadcast::channel(capacity);
         Self {
             sender,
             skill_sender,
             deep_task_sender,
             confirmation_sender,
+            mcp_sender,
         }
     }
 
@@ -89,6 +146,14 @@ impl MessageBus {
 
     pub fn subscribe_confirmations(&self) -> broadcast::Receiver<ConfirmationMessage> {
         self.confirmation_sender.subscribe()
+    }
+
+    pub fn publish_mcp(&self, message: McpMessage) {
+        let _ = self.mcp_sender.send(message);
+    }
+
+    pub fn subscribe_mcp(&self) -> broadcast::Receiver<McpMessage> {
+        self.mcp_sender.subscribe()
     }
 }
 

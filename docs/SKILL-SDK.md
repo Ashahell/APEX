@@ -177,7 +177,69 @@ apex skill test <name>
 
 # Register skill
 apex skill register <name>
+
+# Watch for changes (hot reload)
+apex skill watch <name>
 ```
+
+## Hot Reload
+
+APEX supports hot reloading for skills during development:
+
+```typescript
+// Skills are automatically reloaded when:
+// 1. File changes in skills/ directory
+// 2. Skill package.json or src/index.ts changes
+// 3. Associated .md files change
+
+// The watcher is configured in skill_hot_reload.rs
+// Events trigger skill cache invalidation
+```
+
+## Skill YAML (Optional)
+
+For marketplace discovery, add `skill.yaml` to your skill root:
+
+```yaml
+name: my-skill
+version: 1.0.0
+description: A brief description of what the skill does
+author: Your Name <your@email.com>
+repository: https://github.com/yourorg/apex-skill
+license: MIT
+
+# Tier: T0, T1, T2, T3
+tier: T1
+
+# Categories for marketplace
+categories:
+  - code
+  - developer-tools
+  - productivity
+
+# Keywords for search
+keywords:
+  - code generation
+  - programming
+  - automation
+
+# Runtime dependencies
+dependencies: []
+
+# Permissions required
+permissions:
+  - filesystem:read
+  - filesystem:write
+```
+
+## Skill Tier Reference
+
+| Tier | Name | Confirmation | Example Skills |
+|------|------|--------------|----------------|
+| T0 | Read-only | None | code.review, repo.search, deps.check |
+| T1 | Tap confirm | Click button | file.read, file.write, code.generate |
+| T2 | Type confirm | Type action | git.commit, docker.build, api.call |
+| T3 | TOTP verify | 6-digit code | shell.execute, db.drop |
 
 ## Support
 

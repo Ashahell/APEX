@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { apiGet } from '../../lib/api';
 
 interface FileItem {
@@ -23,6 +23,10 @@ export function Files() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'list' | 'details'>('list');
+  const [contextMenu, setContextMenu] = useState<{file: FileItem; x: number; y: number} | null>(null);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const contextMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadFiles(currentPath);
@@ -121,6 +125,61 @@ export function Files() {
     }
   }
 
+  function handleContextMenu(e: React.MouseEvent, file: FileItem) {
+    e.preventDefault();
+    setContextMenu({ file, x: e.clientX, y: e.clientY });
+  }
+
+  function closeContextMenu() {
+    setContextMenu(null);
+  }
+
+  function copyPath(file: FileItem) {
+    navigator.clipboard.writeText(file.path);
+    closeContextMenu();
+  }
+
+  function startRename(file: FileItem) {
+    setRenaming(file.path);
+    setNewName(file.name);
+    closeContextMenu();
+  }
+
+  function confirmRename(file: FileItem) {
+    if (newName.trim() && newName !== file.name) {
+      // In a real implementation, this would call an API
+      console.log(`Rename ${file.name} to ${newName}`);
+      // Update local state for demo
+      setFiles(files.map(f => 
+        f.path === file.path 
+          ? { ...f, name: newName, path: file.path.replace(file.name, newName) }
+          : f
+      ));
+    }
+    setRenaming(null);
+    setNewName('');
+  }
+
+  function deleteFile(file: FileItem) {
+    if (confirm(`Delete ${file.name}?`)) {
+      // In a real implementation, this would call an API
+      console.log(`Delete ${file.path}`);
+      setFiles(files.filter(f => f.path !== file.path));
+    }
+    closeContextMenu();
+  }
+
+  // Close context menu on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target as Node)) {
+        closeContextMenu();
+      }
+    }
+    document.addEventListener('click', handleClickOutside);
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, []);
+
   return (
     <div className="flex flex-col h-full">
       <div className="border-b p-4">
@@ -196,12 +255,26 @@ export function Files() {
                         selectedFile?.path === file.path ? 'bg-muted' : ''
                       }`}
                       onClick={() => file.is_dir ? navigateToFolder(file.name) : setSelectedFile(file)}
+                      onContextMenu={(e) => handleContextMenu(e, file)}
                     >
                       <td className="p-2">
-                        <span className="flex items-center gap-2">
-                          <span>{getFileIcon(file)}</span>
-                          {file.name}
-                        </span>
+                        {renaming === file.path ? (
+                          <input
+                            type="text"
+                            value={newName}
+                            onChange={(e) => setNewName(e.target.value)}
+                            onBlur={() => confirmRename(file)}
+                            onKeyDown={(e) => e.key === 'Enter' && confirmRename(file)}
+                            onClick={(e) => e.stopPropagation()}
+                            autoFocus
+                            className="px-1 py-0.5 border rounded"
+                          />
+                        ) : (
+                          <span className="flex items-center gap-2">
+                            <span>{getFileIcon(file)}</span>
+                            {file.name}
+                          </span>
+                        )}
                       </td>
                       <td className="p-2 text-muted-foreground">
                         {formatSize(file.size)}
@@ -266,6 +339,34 @@ export function Files() {
             </div>
           )}
         </div>
+
+        {/* Context Menu */}
+        {contextMenu && (
+          <div
+            ref={contextMenuRef}
+            className="fixed bg-background border rounded-lg shadow-xl py-1 min-w-[160px] z-50"
+            style={{ left: contextMenu.x, top: contextMenu.y }}
+          >
+            <button
+              onClick={() => copyPath(contextMenu.file)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+            >
+              📋 Copy Path
+            </button>
+            <button
+              onClick={() => startRename(contextMenu.file)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+            >
+              ✏️ Rename
+            </button>
+            <button
+              onClick={() => deleteFile(contextMenu.file)}
+              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-red-500"
+            >
+              🗑️ Delete
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

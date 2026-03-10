@@ -13,7 +13,18 @@ export function Chat() {
   const [lastStats, setLastStats] = useState<{steps: number, cost: number} | null>(null);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const { messages, addMessage, pendingConfirmation, setPendingConfirmation } = useAppStore();
+  const { 
+    messages, 
+    addMessage, 
+    pendingConfirmation, 
+    setPendingConfirmation,
+    messageQueue,
+    addToMessageQueue,
+    removeFromMessageQueue,
+    clearMessageQueue,
+    isProcessingQueue,
+    setIsProcessingQueue,
+  } = useAppStore();
 
   useEffect(() => {
     const saved = localStorage.getItem('apex-last-stats');
@@ -35,6 +46,70 @@ export function Chat() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  // Process message queue when not busy
+  useEffect(() => {
+    const processQueue = async () => {
+      if (messageQueue.length > 0 && !sending && !isProcessingQueue) {
+        setIsProcessingQueue(true);
+        const nextMessage = messageQueue[0];
+        
+        // Send the queued message
+        setSending(true);
+        addMessage({ role: 'user', content: nextMessage });
+        addMessage({ role: 'assistant', content: '⏳ Processing...' });
+
+        try {
+          let taskConfig: { max_steps: number; budget_usd: number; time_limit_secs?: number } = { max_steps: 3, budget_usd: 1.0 };
+          const saved = localStorage.getItem('apex-task-config');
+          if (saved) {
+            try { taskConfig = { ...taskConfig, ...JSON.parse(saved) }; } catch {}
+          }
+
+          const res = await apiPost('/api/v1/tasks', {
+            content: nextMessage,
+            max_steps: taskConfig.max_steps,
+            budget_usd: taskConfig.budget_usd,
+            ...(taskConfig.time_limit_secs ? { time_limit_secs: taskConfig.time_limit_secs } : {}),
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            const result = await pollTaskResult(data.task_id, taskConfig.max_steps);
+            
+            // Update the assistant message
+            const msgs = useAppStore.getState().messages;
+            const lastMsgId = msgs[msgs.length - 1]?.id;
+            if (lastMsgId) {
+              // Replace the "processing" message with result
+              useAppStore.setState({
+                messages: msgs.map((m, i) => 
+                  i === msgs.length - 1 
+                    ? { ...m, content: result.observation || 'Done' }
+                    : m
+                ),
+              });
+            }
+            
+            if (result.cost !== undefined) {
+              const newStats = { steps: result.steps || 0, cost: result.cost };
+              setLastStats(newStats);
+              const currentCost = useAppStore.getState().sessionCost;
+              useAppStore.setState({ sessionCost: currentCost + result.cost });
+            }
+          }
+        } catch (err) {
+          console.error('Queue processing error:', err);
+        } finally {
+          removeFromMessageQueue(0);
+          setSending(false);
+          setIsProcessingQueue(false);
+        }
+      }
+    };
+
+    processQueue();
+  }, [messageQueue, sending, isProcessingQueue]);
 
   const pollTaskResult = async (taskId: string, maxSteps: number = 10): Promise<{observation: string, cost?: number, steps?: number}> => {
     const timeoutSeconds = Math.max(maxSteps * 15, 60);
@@ -84,12 +159,19 @@ export function Chat() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || sending) return;
+    if (!input.trim()) return;
 
     const userMessage = input.trim();
     setInput('');
-    setSending(true);
     setLastStats(null);
+
+    // If already sending, add to queue instead
+    if (sending || isProcessingQueue) {
+      addToMessageQueue(userMessage);
+      return;
+    }
+
+    setSending(true);
 
     addMessage({ role: 'user', content: userMessage });
     addMessage({ role: 'assistant', content: '⏳ Processing...' });
@@ -255,24 +337,56 @@ export function Chat() {
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Message Queue Indicator */}
+      {messageQueue.length > 0 && (
+        <div className="border-t border-b p-2 bg-amber-500/10 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm">
+            <span className="text-amber-600 dark:text-amber-400">📋</span>
+            <span className="text-amber-700 dark:text-amber-300">
+              {messageQueue.length} message{messageQueue.length > 1 ? 's' : ''} in queue
+            </span>
+          </div>
+          <button
+            onClick={() => clearMessageQueue()}
+            className="text-xs px-2 py-1 text-amber-600 hover:bg-amber-500/20 rounded"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit} className="border-t p-4">
         <div className="flex gap-2">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Type your message..."
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && e.shiftKey) {
+                e.preventDefault();
+                if (input.trim() && (sending || isProcessingQueue)) {
+                  addToMessageQueue(input.trim());
+                  setInput('');
+                }
+              }
+            }}
+            placeholder={sending || isProcessingQueue ? "Press Enter to queue, Shift+Enter to send immediately" : "Type your message..."}
             disabled={sending}
             className="flex-1 px-4 py-2 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary disabled:opacity-50"
           />
           <button
             type="submit"
-            disabled={sending || !input.trim()}
+            disabled={!input.trim()}
             className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
           >
-            {sending ? '...' : 'Send'}
+            {sending || isProcessingQueue ? 'Queue' : 'Send'}
           </button>
         </div>
+        {(sending || isProcessingQueue) && messageQueue.length > 0 && (
+          <div className="text-xs text-muted-foreground mt-1 text-center">
+            Current task running • {messageQueue.length} queued
+          </div>
+        )}
       </form>
       </div>
       

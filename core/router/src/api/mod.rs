@@ -13,9 +13,13 @@ pub mod audit;
 pub mod channels;
 pub mod journal;
 pub mod totp;
+pub mod mcp;
 pub mod soul;
 pub mod heartbeat;
 pub mod moltbook;
+pub mod llms;
+pub mod subagent;
+pub mod dynamic_tools;
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,9 +40,12 @@ use crate::governance::GovernanceEngine;
 use crate::heartbeat::HeartbeatScheduler;
 use crate::message_bus::{DeepTaskMessage, MessageBus};
 use crate::metrics::RouterMetrics;
+use crate::mcp::McpServerManager;
 use crate::moltbook::MoltbookClient;
 use crate::soul::loader::SoulLoader;
+use crate::subagent::SubAgentPool;
 use crate::totp::TotpManager;
+use crate::dynamic_tools::ToolRegistry;
 use crate::vm_pool::VmPool;
 use crate::skill_pool::SkillPool;
 use crate::execution_stream::ExecutionStreamManager;
@@ -177,6 +184,8 @@ pub struct AppState {
     pub circuit_breakers: CircuitBreakerRegistry,
     pub vm_pool: Option<VmPool>,
     pub skill_pool: Option<Arc<SkillPool>>,
+    pub subagent_pool: Arc<tokio::sync::RwLock<SubAgentPool>>,
+    pub dynamic_tools: Arc<tokio::sync::RwLock<ToolRegistry>>,
     pub execution_streams: ExecutionStreamManager,
     pub ws_manager: WebSocketManager,
     pub moltbook: Option<MoltbookClient>,
@@ -186,6 +195,7 @@ pub struct AppState {
     pub rate_limiter: RateLimiter,
     pub workflow_repo: apex_memory::WorkflowRepository,
     pub preferences_repo: apex_memory::PreferencesRepository,
+    pub config_repo: apex_memory::ConfigRepository,
     pub audit_repo: apex_memory::AuditRepository,
     pub webhook_manager: crate::webhook::WebhookManager,
     pub notification_manager: crate::notification::NotificationManager,
@@ -195,6 +205,7 @@ pub struct AppState {
     pub totp_manager: TotpManager,
     pub soul_loader: SoulLoader,
     pub heartbeat_scheduler: HeartbeatScheduler,
+    pub mcp_manager: std::sync::Arc<McpServerManager>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -477,6 +488,10 @@ pub fn create_router(state: AppState) -> Router {
         .merge(soul::create_router())
         .merge(heartbeat::create_router())
         .merge(moltbook::create_router())
+        .merge(llms::create_router())
+        .merge(mcp::create_router())
+        .merge(subagent::router())
+        .merge(dynamic_tools::router())
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

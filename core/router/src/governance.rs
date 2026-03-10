@@ -339,4 +339,195 @@ mod tests {
         let violation = engine.check_immutable_violation("unknown");
         assert!(violation.is_none());
     }
+
+    // =============================================================================
+    // Permission Tier Tests
+    // =============================================================================
+
+    #[test]
+    fn test_t0_read_only_allowed() {
+        let engine = GovernanceEngine::default();
+
+        // Read actions should be allowed with T0
+        let result = engine.check_action_allowed("read", "T0");
+        assert!(result.is_allowed());
+
+        let result = engine.check_action_allowed("query", "T0");
+        assert!(result.is_allowed());
+
+        let result = engine.check_action_allowed("search", "T0");
+        assert!(result.is_allowed());
+    }
+
+    #[test]
+    fn test_unknown_action_allowed() {
+        let engine = GovernanceEngine::default();
+
+        // Unknown actions (not in modification_requirements) are allowed
+        let result = engine.check_action_allowed("file.write", "T0");
+        assert!(result.is_allowed());
+
+        let result = engine.check_action_allowed("http.post", "T0");
+        assert!(result.is_allowed());
+
+        let result = engine.check_action_allowed("shell.execute", "T0");
+        assert!(result.is_allowed());
+    }
+
+    #[test]
+    fn test_values_requires_t2() {
+        let engine = GovernanceEngine::default();
+
+        // "values" action requires T2 per modification_requirements
+        let result = engine.check_action_allowed("values", "T0");
+        assert!(!result.is_allowed());
+
+        let result = engine.check_action_allowed("values", "T1");
+        assert!(!result.is_allowed());
+
+        let result = engine.check_action_allowed("values", "T2");
+        assert!(result.is_allowed());
+    }
+
+    #[test]
+    fn test_constitution_requires_t3_with_delay() {
+        let engine = GovernanceEngine::default();
+
+        // "constitution" requires T3 + hardware token + 24hr delay
+        let result = engine.check_action_allowed("constitution", "T3");
+        // Should require hardware token
+        match result {
+            GovernanceResult::RequiresHardwareToken(_) => {}
+            GovernanceResult::RequiresDelay(_, _) => {}
+            _ => panic!("Expected RequiresHardwareToken or RequiresDelay"),
+        }
+    }
+
+    #[test]
+    fn test_soul_core_requires_hardware_token() {
+        let engine = GovernanceEngine::default();
+
+        let result = engine.check_action_allowed("soul_core", "T3");
+
+        // Should require hardware token
+        match result {
+            GovernanceResult::RequiresHardwareToken(_) => {}
+            _ => panic!("Expected RequiresHardwareToken for soul_core"),
+        }
+    }
+
+    #[test]
+    fn test_join_institution_requires_t2() {
+        let engine = GovernanceEngine::default();
+
+        let result = engine.check_action_allowed("join_institution", "T0");
+        assert!(!result.is_allowed());
+
+        let result = engine.check_action_allowed("join_institution", "T1");
+        assert!(!result.is_allowed());
+
+        let result = engine.check_action_allowed("join_institution", "T2");
+        assert!(result.is_allowed());
+    }
+
+    #[test]
+    fn test_constitution_change_validation() {
+        let engine = GovernanceEngine::default();
+
+        let result = engine.validate_constitution_change("new_hash_123");
+
+        // Should require hardware token for constitution change
+        match result {
+            GovernanceResult::RequiresHardwareToken(msg) => {
+                assert!(msg.contains("hardware token"));
+            }
+            GovernanceResult::RequiresDelay(_, msg) => {
+                assert!(msg.contains("delay"));
+            }
+            _ => panic!("Expected RequiresHardwareToken or RequiresDelay"),
+        }
+    }
+
+    #[test]
+    fn test_constitution_no_change_blocked() {
+        let engine = GovernanceEngine::default();
+
+        // Same hash should be blocked
+        let result = engine.validate_constitution_change(&engine.policy.constitution_hash);
+
+        assert!(!result.is_allowed());
+    }
+
+    #[test]
+    fn test_emergency_protocol_retrieval() {
+        let engine = GovernanceEngine::default();
+
+        let protocol = engine.get_emergency_protocol("soul_corrupted");
+        assert!(protocol.is_some());
+
+        let unknown = engine.get_emergency_protocol("unknown_protocol");
+        assert!(unknown.is_none());
+    }
+
+    #[test]
+    fn test_oracle_mode_blocks_all_writes() {
+        let mut engine = GovernanceEngine::default();
+        engine.trigger_oracle_mode();
+
+        // All writes should be blocked in oracle mode
+        let result = engine.check_action_allowed("values", "T3");
+        assert!(!result.is_allowed());
+
+        let result = engine.check_action_allowed("constitution", "T3");
+        assert!(!result.is_allowed());
+
+        // Read should still work
+        let result = engine.check_action_allowed("read", "T0");
+        assert!(result.is_allowed());
+    }
+
+    #[test]
+    fn test_governance_result_messages() {
+        let allowed = GovernanceResult::Allowed;
+        assert!(allowed.is_allowed());
+        assert_eq!(allowed.message(), "Action allowed");
+
+        let blocked = GovernanceResult::Blocked("test".to_string());
+        assert!(!blocked.is_allowed());
+        assert_eq!(blocked.message(), "test");
+
+        let token = GovernanceResult::RequiresHardwareToken("needs token".to_string());
+        assert!(!token.is_allowed());
+        assert_eq!(token.message(), "needs token");
+
+        let delay = GovernanceResult::RequiresDelay(24, "needs delay".to_string());
+        assert!(!delay.is_allowed());
+        assert_eq!(delay.message(), "needs delay");
+    }
+
+    #[test]
+    fn test_immutable_values_priorities() {
+        let policy = GovernancePolicy::default();
+
+        // Find human_sovereignty and check highest priority
+        let human_sovereignty = policy
+            .immutable_values
+            .iter()
+            .find(|v| v.name == "human_sovereignty")
+            .expect("human_sovereignty should exist");
+
+        assert_eq!(human_sovereignty.priority, 100);
+    }
+
+    #[test]
+    fn test_approval_requirements_for_actions() {
+        let engine = GovernanceEngine::default();
+
+        // Check various action requirements
+        let result = engine.check_action_allowed("values", "T2");
+        assert!(result.is_allowed());
+
+        let result = engine.check_action_allowed("values", "T1");
+        assert!(!result.is_allowed());
+    }
 }

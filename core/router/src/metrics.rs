@@ -8,6 +8,7 @@ pub struct RouterMetrics {
     tasks_by_tier: Arc<RwLock<HashMap<String, u64>>>,
     tasks_by_status: Arc<RwLock<HashMap<String, u64>>>,
     total_cost: Arc<RwLock<f64>>,
+    mcp: Arc<McpMetrics>,
 }
 
 impl RouterMetrics {
@@ -17,7 +18,12 @@ impl RouterMetrics {
             tasks_by_tier: Arc::new(RwLock::new(HashMap::new())),
             tasks_by_status: Arc::new(RwLock::new(HashMap::new())),
             total_cost: Arc::new(RwLock::new(0.0)),
+            mcp: Arc::new(McpMetrics::new()),
         }
+    }
+
+    pub fn mcp(&self) -> &McpMetrics {
+        &self.mcp
     }
 
     pub async fn record_task(&self, tier: &str, status: &str) {
@@ -45,14 +51,111 @@ impl RouterMetrics {
         let tasks_by_tier = self.tasks_by_tier.read().await.clone();
         let tasks_by_status = self.tasks_by_status.read().await.clone();
         let total_cost = *self.total_cost.read().await;
+        let mcp_metrics = self.mcp.get_metrics().await;
 
         MetricsSnapshot {
             tasks_total,
             tasks_by_tier,
             tasks_by_status,
             total_cost,
+            mcp: Some(mcp_metrics),
         }
     }
+}
+
+/// MCP-specific metrics
+#[derive(Debug, Clone, Default)]
+pub struct McpMetrics {
+    servers_connected: Arc<RwLock<u64>>,
+    servers_disconnected: Arc<RwLock<u64>>,
+    tools_executed: Arc<RwLock<u64>>,
+    tools_failed: Arc<RwLock<u64>>,
+    connections_failed: Arc<RwLock<u64>>,
+    reconnections: Arc<RwLock<u64>>,
+    tool_execution_times_ms: Arc<RwLock<Vec<u64>>>,
+}
+
+impl McpMetrics {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub async fn record_server_connected(&self) {
+        let mut count = self.servers_connected.write().await;
+        *count += 1;
+    }
+
+    pub async fn record_server_disconnected(&self) {
+        let mut count = self.servers_disconnected.write().await;
+        *count += 1;
+    }
+
+    pub async fn record_tool_execution(&self, duration_ms: u64, success: bool) {
+        if success {
+            let mut count = self.tools_executed.write().await;
+            *count += 1;
+        } else {
+            let mut count = self.tools_failed.write().await;
+            *count += 1;
+        }
+        
+        let mut times = self.tool_execution_times_ms.write().await;
+        times.push(duration_ms);
+        
+        // Keep only last 1000 entries
+        if times.len() > 1000 {
+            times.remove(0);
+        }
+    }
+
+    pub async fn record_connection_failed(&self) {
+        let mut count = self.connections_failed.write().await;
+        *count += 1;
+    }
+
+    pub async fn record_reconnection(&self) {
+        let mut count = self.reconnections.write().await;
+        *count += 1;
+    }
+
+    pub async fn get_metrics(&self) -> McpMetricsSnapshot {
+        let servers_connected = *self.servers_connected.read().await;
+        let servers_disconnected = *self.servers_disconnected.read().await;
+        let tools_executed = *self.tools_executed.read().await;
+        let tools_failed = *self.tools_failed.read().await;
+        let connections_failed = *self.connections_failed.read().await;
+        let reconnections = *self.reconnections.read().await;
+        let tool_execution_times = self.tool_execution_times_ms.read().await.clone();
+        
+        let avg_execution_time = if tool_execution_times.is_empty() {
+            0.0
+        } else {
+            tool_execution_times.iter().sum::<u64>() as f64 / tool_execution_times.len() as f64
+        };
+
+        McpMetricsSnapshot {
+            servers_connected,
+            servers_disconnected,
+            tools_executed,
+            tools_failed,
+            connections_failed,
+            reconnections,
+            avg_tool_execution_time_ms: avg_execution_time,
+            total_tool_executions: tools_executed + tools_failed,
+        }
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct McpMetricsSnapshot {
+    pub servers_connected: u64,
+    pub servers_disconnected: u64,
+    pub tools_executed: u64,
+    pub tools_failed: u64,
+    pub connections_failed: u64,
+    pub reconnections: u64,
+    pub avg_tool_execution_time_ms: f64,
+    pub total_tool_executions: u64,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -61,6 +164,7 @@ pub struct MetricsSnapshot {
     pub tasks_by_tier: HashMap<String, u64>,
     pub tasks_by_status: HashMap<String, u64>,
     pub total_cost: f64,
+    pub mcp: Option<McpMetricsSnapshot>,
 }
 
 #[cfg(test)]

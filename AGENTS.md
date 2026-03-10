@@ -4,23 +4,37 @@
 
 ## Project Overview
 
-APEX is a **pre-alpha** single-user autonomous agent platform combining messaging interfaces with secure code execution. Multi-tenancy is explicitly out of scope.
+APEX combines the **best of OpenClaw and AgentZero** with **significantly stronger security**. A single-user autonomous agent platform with messaging interfaces and secure code execution.
+
+### Vision
+
+| Reference | What We Take |
+|-----------|-------------|
+| **OpenClaw** | Open architecture, extensibility, community-driven plugin ecosystem, messaging adapters |
+| **AgentZero** | Dark navy/cyan aesthetic, polished UI, smooth UX patterns, agent loop logic |
+| **Security-first** | Hardened beyond both — T0-T3 permission tiers, HMAC auth, TOTP verification, input sanitization, connection pooling |
+
+APEX is **more secure than both** by design:
+- Single-user architecture (no multi-tenancy attack surface)
+- Hardened MCP with connection pooling and input validation
+- Firecracker/gVisor isolation for code execution
+- Audit trail with decision journal and reflection tracking
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.3.0
+- **Version**: v1.3.1
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
 
 ## ⚠️ Pre-Alpha Warnings
 
-- **No security audit** - Do not use with sensitive data
-- **Limited testing** - Many features are proof-of-concept
-- **API instability** - Breaking changes expected
-- **No production support** - Use at your own risk
-- **Firecracker/VM isolation** - Requires kernel/rootfs configuration
-- **Missing features** - Dynamic tool generation, subagent pool not implemented
+- **Security-first but unaudited** — Security audit complete (Phases 1-2), but not formally penetration tested
+- **Limited testing** — 278 tests, many features are proof-of-concept
+- **API instability** — Breaking changes expected
+- **No production support** — Use at your own risk
+- **Firecracker/VM isolation** — Requires kernel/rootfs configuration
+- **Production hardening** — Docs available in `docs/PRODUCTION_HARDENING.md`
 
 ---
 
@@ -32,8 +46,10 @@ APEX is a **pre-alpha** single-user autonomous agent platform combining messagin
 |-------|-----------|--------|----------|
 | L2 | Task Router | ✅ POC | `core/router/` |
 | L3 | Memory Service | ✅ POC | `core/memory/` |
+| L3 | Vector Search | ✅ | sqlite_vec + embedder + hybrid search |
 | L1 | Gateway | ✅ Built | `gateway/` |
 | L4 | Skills Framework | ✅ Built | `skills/` |
+| L4 | MCP Client/Server | ✅ | Connection pooling, resources, prompts |
 | L6 | React UI | ✅ Built | `ui/` |
 | L5 | Execution Engine | ✅ Docker | `execution/` |
 | LLM | Qwen3-4B | ✅ Optional | llama-server |
@@ -57,15 +73,25 @@ APEX is a **pre-alpha** single-user autonomous agent platform combining messagin
 - **Startup Config Validation** ✅ Complete - Added validation at router startup
 - **Worker Supervision** ✅ Complete - Added supervised restart loop to all workers (skill_worker, deep_task_worker, t3_confirm_worker)
 - **Transaction Boundaries** ✅ Complete - Added atomic task update + decision journal writes in deep_task_worker
+- **Security Tests** ✅ Complete - Added 57 security tests (input validation, audit chain, permission tiers)
+- **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
 
 ### v0.3.0 New Features
-- **Real-time Agent Thoughts Streaming** - Execution events stream to UI via WebSocket
-- **Consequence Preview** - Blast radius shown before T2/T3 actions
-- **Runtime Tool Generation** - Agent generates custom Python tools via LLM when needed
-- **TIR (Tool-Integrated Reasoning)** - LLM returns interleaved Thought/Action/Observation
-- **Subagent Pool** - Complex tasks split into parallelizable subtasks
-- **SOUL.md Identity System** - Agent reads identity file on wake
-- **Heartbeat Daemon** - Autonomous wake cycles with configurable intervals
+- **Real-time Agent Thoughts Streaming** - Partial (execution events stream, full thought trace in progress)
+- **Consequence Preview** - ✅ Implemented (blast radius shown before T2/T3 actions)
+- **Runtime Tool Generation** - Not implemented (requires sandbox improvements)
+- **TIR (Tool-Integrated Reasoning)** - Not implemented
+- **Subagent Pool** - Not implemented
+- **SOUL.md Identity System** - ✅ Basic implementation
+- **Heartbeat Daemon** - ✅ Implemented
+
+### Vision: OpenClaw + AgentZero + Security-First
+
+| Reference | What We Take | Current Status |
+|-----------|-------------|----------------|
+| **OpenClaw** | Extensibility, plugin ecosystem | Gateway adapters ✅, Skills 33, Marketplace ❌ |
+| **AgentZero** | Dark UI, smooth UX, agent loop | Theme ✅, Streaming partial, Agent loop ✅ |
+| **Security-first** | T0-T3 tiers, HMAC, TOTP, isolation | Auth ✅, Docker ✅, Firecracker WSL2 🔧 |
 
 ### Skills Registry (33 Total)
 - T0 (Read-only): 3 skills
@@ -147,6 +173,26 @@ APEX is a **pre-alpha** single-user autonomous agent platform combining messagin
 - `GET /api/v1/memory/search?q=query&limit=N` - Search memory (hybrid search)
 - `GET /api/v1/memory/index` - Get index statistics
 
+**LLM Configuration:**
+- `GET /api/v1/llms/providers` - List available LLM providers
+- `GET /api/v1/llms/config` - Get current LLM configuration
+- `PUT /api/v1/llms/config` - Update LLM configuration
+- `GET /api/v1/llms/models?provider=provider` - List models for a provider
+- `POST /api/v1/llms/test` - Test LLM connection
+
+**MCP (Model Context Protocol):**
+- `GET /api/v1/mcp/servers` - List MCP servers
+- `POST /api/v1/mcp/servers` - Add MCP server
+- `POST /api/v1/mcp/servers/:id/connect` - Connect to server
+- `POST /api/v1/mcp/servers/:id/disconnect` - Disconnect from server
+- `GET /api/v1/mcp/servers/:id/tools` - List tools
+- `POST /api/v1/mcp/servers/:id/tools/:tool_name` - Execute tool
+- `GET /api/v1/mcp/tools` - List all MCP tools
+- `GET /api/v1/mcp/registries` - List registries
+- `POST /api/v1/mcp/registries` - Create registry
+- `GET /api/v1/mcp/registries/:rid/tools` - List tools in registry
+- `POST /api/v1/mcp/registries/:rid/tools/discover` - Discover tools
+
 **Moltbook Social:**
 - `GET /api/v1/moltbook/status` - Get Moltbook connection status
 - `GET /api/v1/moltbook/agents` - Get agent directory
@@ -176,6 +222,22 @@ APEX is a **pre-alpha** single-user autonomous agent platform combining messagin
 - `GET /api/v1/system/ratelimit` - Get rate limit stats
 - `GET /api/v1/vm/stats` - Get VM pool stats
 - `GET /api/v1/skills/pool/stats` - Get Skill Pool stats (latency, errors, slot availability)
+
+### Subagent Pool (Parallel Execution)
+- `POST /api/v1/subagent/decompose` - Decompose task into parallel subtasks using LLM
+- `GET /api/v1/subagent/tasks` - List all subtasks
+- `GET /api/v1/subagent/tasks/:id` - Get specific subtask
+- `PUT /api/v1/subagent/tasks/:id/status` - Update subtask status
+- `GET /api/v1/subagent/ready` - Get ready-to-execute subtasks
+- `GET /api/v1/subagent/complete` - Check if all subtasks complete
+
+### Dynamic Tool Generation
+- `GET /api/v1/dynamic-tools` - List all dynamic tools
+- `POST /api/v1/dynamic-tools` - Generate new tool using LLM
+- `GET /api/v1/dynamic-tools/:name` - Get specific tool
+- `DELETE /api/v1/dynamic-tools/:name` - Delete a tool
+- `POST /api/v1/dynamic-tools/:name/execute` - Execute a dynamic tool
+
 - `GET /health` - Health check
 - `GET /` - Root info
 
@@ -611,13 +673,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 77 | `core/*/src/*_test.rs` or `mod tests` |
-| **Rust integration tests** | 51 | `core/router/tests/` |
+| **Rust unit tests** | 158 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust integration tests** | 59 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
 | **Python tests** | 20 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 23 | `ui/src/**/*.test.tsx` |
+| **Total** | **278** | |
 | **Total** | **187** | |
 
 ### Running Tests
@@ -754,11 +817,12 @@ skill-name/
 - Collapsible sidebar
 
 ### Theme Support
-- Two built-in themes: Modern 2026 (default) and Amiga Workbench
+- Three built-in themes: Modern 2026 (default), Amiga Workbench, and AgentZero
 - Theme selector in sidebar (🎨 tab) or header toggle button
 - Theme preference persisted to localStorage (`apex-theme-id`)
 - CSS variable-based tokens for colors, accents, agent states, badges
 - Amiga theme includes chrome-specific tokens (title bars, buttons, window borders)
+- AgentZero theme: dark navy (#0f0f1a) with cyan accents (#00d4ff)
 
 ---
 

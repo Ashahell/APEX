@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from './stores/appStore';
-import { useTheme } from './hooks/useTheme';
+import { ThemeProvider, useTheme } from './hooks/useTheme';
 import { Chat } from './components/chat/Chat';
 import { Skills } from './components/skills/Skills';
 import { SkillMarketplace } from './components/skills/SkillMarketplace';
@@ -32,6 +32,7 @@ import { Sidebar, AppTab } from './components/ui/Sidebar';
 import { NotificationBell } from './components/ui/NotificationBell';
 import { SkillQuickLaunch } from './components/skills/SkillQuickLaunch';
 import { QuickCommandBar } from './components/ui/QuickCommandBar';
+import { ThemeEditor } from './components/settings/ThemeEditor';
 import { wsClient } from './lib/websocket';
 
 const TAB_ORDER: AppTab[] = [
@@ -45,10 +46,10 @@ const TAB_ORDER: AppTab[] = [
   'soul', 'autonomy', 'governance'
 ];
 
-function App() {
+function AppContent() {
   const [activeTab, setActiveTab] = useState<AppTab>('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const { themeId, toggleTheme, setTheme } = useTheme();
+  const { themeId, toggleTheme } = useTheme();
   
   const { connectionState, sessionCost, tasks } = useAppStore((s) => ({
     connectionState: s.connectionState,
@@ -103,100 +104,39 @@ function App() {
     }
   };
 
-  const handleThemeToggle = () => {
-    toggleTheme();
-  };
-
   const isAmigaTheme = themeId === 'amiga';
   const conn = getConnectionDisplay();
 
   const renderContent = () => {
     switch (activeTab) {
-      // Top-level
       case 'chat': return <Chat />;
       case 'board': return <KanbanBoard />;
       case 'workflows': return <Workflows />;
       case 'settings': return <Settings />;
-      case 'theme': 
-        return (
-          <div className="p-6">
-            <h2 className="text-2xl font-bold mb-6">Theme</h2>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h3 className="font-medium">Modern 2026</h3>
-                  <p className="text-sm text-muted-foreground">Clean, minimal dark theme with cyan accents</p>
-                </div>
-                {themeId === 'modern-2026' && (
-                  <span className="text-primary">✓ Active</span>
-                )}
-                {themeId !== 'modern-2026' && (
-                  <button
-                    onClick={() => setTheme('modern-2026')}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-                  >
-                    Apply
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center justify-between p-4 border rounded-lg">
-                <div>
-                  <h3 className="font-medium">Amiga Workbench</h3>
-                  <p className="text-sm text-muted-foreground">Classic Amiga-inspired aesthetic</p>
-                </div>
-                {themeId === 'amiga' && (
-                  <span className="text-primary">✓ Active</span>
-                )}
-                {themeId !== 'amiga' && (
-                  <button
-                    onClick={() => setTheme('amiga')}
-                    className="px-4 py-2 bg-primary text-primary-foreground rounded-lg"
-                  >
-                    Apply
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      
-      // Memory
+      case 'theme': return <ThemeEditor />;
       case 'memory': return <MemoryViewer />;
       case 'memoryStats': return <MemoryStatsDashboard />;
       case 'narrative': return <NarrativeMemoryViewer />;
-      
-      // Skills
       case 'skills': return <Skills />;
       case 'marketplace': return <SkillMarketplace />;
       case 'deep': return <DeepTaskPanel />;
-      
-      // Work
       case 'files': return <Files />;
       case 'channels': return <ChannelManager />;
       case 'journal': return <DecisionJournal />;
       case 'audit': return <AuditLog />;
       case 'consequences': return <ConsequenceViewer />;
-      
-      // System
       case 'metrics': return <MetricsPanel />;
       case 'monitoring': return <MonitoringDashboard />;
       case 'health': return <SystemHealthPanel />;
       case 'vm': return <VmPoolDashboard />;
-      
-      // Security
       case 'totp': return <TotpSetup />;
       case 'clients': return <ClientAuthManager />;
-      
-      // Integrations
       case 'adapters': return <AdapterManager />;
       case 'webhooks': return <WebhookManager />;
       case 'social': return <SocialDashboard />;
-      
-      // Agent
       case 'soul': return <SoulEditor />;
       case 'autonomy': return <AutonomyControls />;
       case 'governance': return <GovernanceControls />;
-      
       default:
         return <div className="p-6">Select an option from the sidebar</div>;
     }
@@ -239,7 +179,7 @@ function App() {
             </button>
             
             <button
-              onClick={handleThemeToggle}
+              onClick={toggleTheme}
               className="p-2 hover:bg-muted rounded-lg transition-colors"
               title={isAmigaTheme ? 'Switch to Modern theme' : 'Switch to Amiga theme'}
             >
@@ -262,6 +202,14 @@ function App() {
         </div>
       </main>
     </div>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }
 

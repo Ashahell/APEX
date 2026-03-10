@@ -33,6 +33,9 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/memory/reflections", get(get_reflections))
         .route("/api/v1/memory/search", get(search_memory))
         .route("/api/v1/memory/index", get(get_index_stats))
+        // NEW: Memory consolidation endpoints
+        .route("/api/v1/memory/consolidate", post(consolidate_memory))
+        .route("/api/v1/memory/consolidation/stats", get(get_consolidation_stats))
 }
 
 async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<FileItem>>, String> {
@@ -328,5 +331,78 @@ async fn get_index_stats(
         "total_chunks": stats.total_chunks,
         "indexed_files": stats.indexed_files,
         "queue_depth": stats.queue_depth,
+    })))
+}
+
+// =============================================================================
+// Memory Consolidation Endpoints
+// =============================================================================
+
+use apex_memory::SoulMemoryConfig;
+use std::sync::Arc;
+use tokio::sync::RwLock;
+
+/// Request to update consolidation config
+#[derive(Debug, Deserialize)]
+pub struct UpdateConsolidationConfigRequest {
+    pub retention_days: Option<u32>,
+    pub forgetting_threshold_days: Option<u32>,
+    pub emphasis_patterns: Option<Vec<String>>,
+    pub auto_consolidate: Option<bool>,
+    pub consolidate_interval_hours: Option<u32>,
+}
+
+/// Get consolidation stats
+async fn get_consolidation_stats(
+    State(_state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    // Get narrative memory config
+    let base_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".apex")
+        .join("memory");
+    
+    // Return current config (could be enhanced with actual state tracking)
+    Ok(Json(serde_json::json!({
+        "base_path": base_path.to_string_lossy(),
+        "retention_days": 90,
+        "forgetting_threshold_days": 30,
+        "emphasis_patterns": ["error", "correction", "success"],
+        "auto_consolidate": true,
+        "consolidate_interval_hours": 24,
+        "status": "ready"
+    })))
+}
+
+/// Trigger memory consolidation
+async fn consolidate_memory(
+    State(_state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    // Get base path
+    let base_path = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".apex")
+        .join("memory");
+    
+    // Create consolidator with proper config
+    let narrative_config = apex_memory::NarrativeConfig {
+        base_path: base_path.clone(),
+        retention_days: 90,
+        forgetting_threshold_days: 30,
+    };
+    let memory_config = SoulMemoryConfig::default();
+    let consolidator = apex_memory::MemoryConsolidator::new(narrative_config, memory_config);
+    
+    // Run consolidation
+    let result = consolidator.consolidate().await;
+    
+    Ok(Json(serde_json::json!({
+        "success": result.errors.is_empty(),
+        "journal_entries_kept": result.journal_entries_kept,
+        "journal_entries_removed": result.journal_entries_removed,
+        "reflections_kept": result.reflections_kept,
+        "reflections_removed": result.reflections_removed,
+        "total_space_freed_bytes": result.total_space_freed_bytes,
+        "errors": result.errors,
     })))
 }

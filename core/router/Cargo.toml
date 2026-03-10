@@ -38,6 +38,7 @@ totp-rs = { version = "5", features = ["otpauth"] }
 base32 = "0.5"
 base64 = "0.22"
 rand = "0.8"
+aes-gcm = "0.10"
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
 serde_yaml = "0.9"

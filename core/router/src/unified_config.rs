@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
-static GLOBAL_CONFIG: Lazy<RwLock<Option<AppConfig>>> = Lazy::new(|| RwLock::new(None));
+pub static GLOBAL_CONFIG: Lazy<RwLock<Option<AppConfig>>> = Lazy::new(|| RwLock::new(None));
 
 // C4 Step 1: Thread-local config override for test isolation
 thread_local! {
@@ -95,21 +95,92 @@ pub struct AgentConfig {
     pub max_budget_cents: i64,
     pub context_window_tokens: usize,
     pub model: String,
+    pub llms: Vec<LlmConfig>,
+    pub default_llm_id: Option<String>,
 }
 
 impl Default for AgentConfig {
     fn default() -> Self {
+        let default_llm = LlmConfig {
+            id: "default".to_string(),
+            name: "Local Qwen3-4B".to_string(),
+            provider: LlmProvider::Local,
+            url: std::env::var("LLAMA_SERVER_URL")
+                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+            model: std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "qwen3-4b".to_string()),
+            api_key: None,
+        };
         Self {
             use_llm: std::env::var("APEX_USE_LLM").is_ok(),
-            llama_url: std::env::var("LLAMA_SERVER_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
-            llama_model: std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "qwen3-4b".to_string()),
+            llama_url: default_llm.url.clone(),
+            llama_model: default_llm.model.clone(),
             max_iterations: 50,
             max_budget_cents: 500,
-            context_window_tokens: 32768, // 32k tokens (qwen3-4b supports up to 32k-128k)
-            model: "qwen3-4b".to_string(),
+            context_window_tokens: 32768,
+            model: default_llm.model.clone(),
+            llms: vec![default_llm],
+            default_llm_id: Some("default".to_string()),
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum LlmProvider {
+    // Local/Private
+    Local,
+    Ollama,
+    Vllm,
+    LmStudio,
+    
+    // Major Cloud Providers
+    OpenAI,
+    Anthropic,
+    Google,
+    Azure,
+    
+    // Aggregators & Gateways
+    OpenRouter,
+    Cloudflare,
+    Vercel,
+    Together,
+    LiteLlama,
+    
+    // AI Providers
+    Mistral,
+    Cohere,
+    Groq,
+    Fireworks,
+    HuggingFace,
+    
+    // Chinese Providers
+    ZhipuGlm,
+    Qianfan,
+    Moonshot,
+    MiniMax,
+    
+    // Enterprise
+    Bedrock,
+    Vertex,
+    
+    // xAI
+    Xai,
+    
+    // Venice
+    Venice,
+    
+    // Custom (any OpenAI-compatible endpoint)
+    Custom,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    pub id: String,
+    pub name: String,
+    pub provider: LlmProvider,
+    pub url: String,
+    pub model: String,
+    pub api_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -558,6 +629,69 @@ impl AppConfig {
 
     pub fn get_global() -> Option<AppConfig> {
         GLOBAL_CONFIG.read().unwrap().clone()
+    }
+
+    /// Load config from database using ConfigRepository
+    pub async fn load_from_db(repo: &apex_memory::ConfigRepository) -> Result<Self, ConfigError> {
+        let entry = repo.get("app_config").await
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        
+        match entry {
+            Some(e) => {
+                serde_json::from_str(&e.value)
+                    .map_err(|e| ConfigError::ParseError(e.to_string()))
+            }
+            None => Ok(Self::default()),
+        }
+    }
+
+    /// Save config to database using ConfigRepository
+    pub async fn save_to_db(&self, repo: &apex_memory::ConfigRepository) -> Result<(), ConfigError> {
+        let json = serde_json::to_string(self)
+            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        
+        repo.set("app_config", &json).await
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        
+        // Also update global in-memory config
+        Self::set_global(self.clone());
+        
+        Ok(())
+    }
+
+    /// Load a specific section (e.g., "llms") from database
+    pub async fn load_section_from_db<T: serde::de::DeserializeOwned>(
+        repo: &apex_memory::ConfigRepository,
+        key: &str
+    ) -> Result<Option<T>, ConfigError> {
+        let full_key = format!("app_config_{}", key);
+        let entry = repo.get(&full_key).await
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        
+        match entry {
+            Some(e) => {
+                let value: T = serde_json::from_str(&e.value)
+                    .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+                Ok(Some(value))
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Save a specific section (e.g., "llms") to database
+    pub async fn save_section_to_db<T: serde::Serialize>(
+        repo: &apex_memory::ConfigRepository,
+        key: &str,
+        value: &T
+    ) -> Result<(), ConfigError> {
+        let full_key = format!("app_config_{}", key);
+        let json = serde_json::to_string(value)
+            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
+        
+        repo.set(&full_key, &json).await
+            .map_err(|e| ConfigError::IoError(e.to_string()))?;
+        
+        Ok(())
     }
 
     pub fn global() -> AppConfig {

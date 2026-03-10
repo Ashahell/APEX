@@ -114,6 +114,11 @@ Only respond with valid JSON array, no explanation."#,
         tasks.iter().find(|t| t.id == id).cloned()
     }
 
+    pub async fn get_all_tasks(&self) -> Vec<SubTask> {
+        let tasks = self.tasks.read().await;
+        tasks.clone()
+    }
+
     pub async fn update_status(&self, id: &str, status: SubTaskStatus, result: Option<String>) -> bool {
         let mut tasks = self.tasks.write().await;
         if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
@@ -150,7 +155,7 @@ Only respond with valid JSON array, no explanation."#,
         !tasks.is_empty() && tasks.iter().all(|t| t.status == SubTaskStatus::Completed)
     }
 
-    pub async fn has_failures(&self) -> bool {
+    pub async fn has_failed(&self) -> bool {
         let tasks = self.tasks.read().await;
         tasks.iter().any(|t| t.status == SubTaskStatus::Failed)
     }

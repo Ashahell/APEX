@@ -314,6 +314,46 @@ impl Database {
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_memory_chunks_accessed ON memory_chunks(accessed_at DESC)")
             .execute(&self.pool).await.ok();
 
+        // Migration 014: Config storage (database-backed configuration)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS config_store (
+                key TEXT PRIMARY KEY NOT NULL,
+                value TEXT NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        // Migration 015: MCP servers (Model Context Protocol)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS mcp_servers (
+                id TEXT PRIMARY KEY NOT NULL,
+                name TEXT NOT NULL,
+                command TEXT NOT NULL,
+                args TEXT,
+                env TEXT,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL DEFAULT 'disconnected',
+                last_error TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS mcp_tools (
+                id TEXT PRIMARY KEY NOT NULL,
+                server_id TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT,
+                input_schema TEXT,
+                FOREIGN KEY (server_id) REFERENCES mcp_servers(id) ON DELETE CASCADE
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_mcp_tools_server ON mcp_tools(server_id)")
+            .execute(&self.pool).await.ok();
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }

@@ -64,6 +64,26 @@ impl ToolRegistry {
         let tools = self.tools.read().await;
         tools.len()
     }
+
+    pub async fn execute(
+        &self,
+        name: &str,
+        parameters: serde_json::Value,
+    ) -> Result<serde_json::Value, String> {
+        let tool = self.get(name).await.ok_or("Tool not found")?;
+        let result = execute_dynamic_tool(&tool, &parameters, &ToolExecutionContext {
+            tool_name: name.to_string(),
+            parameters: parameters.clone(),
+            task_id: "dynamic".to_string(),
+        }).await
+        .map_err(|e| e.to_string())?;
+        
+        Ok(serde_json::json!({
+            "success": true,
+            "output": result,
+            "error": serde_json::Value::Null
+        }))
+    }
 }
 
 impl Default for ToolRegistry {

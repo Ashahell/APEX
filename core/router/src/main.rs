@@ -17,6 +17,8 @@ use apex_router::metrics::RouterMetrics;
 use apex_router::moltbook::MoltbookClient;
 use apex_router::skill_worker::SkillWorker;
 use apex_router::skill_pool::SkillPool;
+use apex_router::subagent::SubAgentPool;
+use apex_router::dynamic_tools::ToolRegistry;
 use apex_router::soul::loader::SoulLoader;
 use apex_router::soul::SoulConfig;
 use apex_router::totp::TotpManager;
@@ -28,6 +30,7 @@ use apex_router::webhook::WebhookManager;
 use apex_router::notification::NotificationManager;
 use apex_router::system_health::SystemMonitor;
 use apex_router::websocket::WebSocketManager;
+use apex_router::mcp::McpServerManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -241,6 +244,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         circuit_breakers: circuit_breakers.clone(),
         vm_pool: Some(vm_pool.clone()),
         skill_pool: skill_pool.clone(),
+        subagent_pool: std::sync::Arc::new(tokio::sync::RwLock::new(SubAgentPool::new(4))),
+        dynamic_tools: std::sync::Arc::new(tokio::sync::RwLock::new(ToolRegistry::new())),
         execution_streams: ExecutionStreamManager::new(),
         ws_manager: WebSocketManager::new(),
         moltbook,
@@ -250,6 +255,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         rate_limiter: RateLimiter::new(60),
         workflow_repo: apex_memory::WorkflowRepository::new(&pool_for_workers),
         preferences_repo: apex_memory::PreferencesRepository::new(&pool_for_workers),
+        config_repo: apex_memory::ConfigRepository::new(&pool_for_workers),
         audit_repo: apex_memory::AuditRepository::new(&pool_for_workers),
         webhook_manager: WebhookManager::new(),
         notification_manager: NotificationManager::new(100),
@@ -259,6 +265,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         totp_manager,
         soul_loader,
         heartbeat_scheduler,
+        mcp_manager: std::sync::Arc::new(McpServerManager::new()),
     };
     
     let state_arc = std::sync::Arc::new(state);

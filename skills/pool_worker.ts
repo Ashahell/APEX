@@ -124,8 +124,9 @@ async function handleRequest(req: PoolRequest): Promise<PoolResponse> {
   }
 
   // B1: Validate tier permissions before executing
+  // Default to lowest trust (T0) if not provided, fail closed for unknown skills (T3)
   const permittedTier = req.permitted_tier || "T0";
-  const declaredTier = SKILL_TIERS[req.skill] || "T0";
+  const declaredTier = SKILL_TIERS[req.skill] || "T3";
   
   if (!tierPermits(permittedTier, declaredTier)) {
     return {

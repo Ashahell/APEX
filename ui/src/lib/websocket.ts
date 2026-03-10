@@ -10,6 +10,21 @@ export interface TaskUpdate {
   cost?: number;
 }
 
+// Execution event types from backend
+export interface ExecutionEvent {
+  type: 'Thought' | 'ToolCall' | 'ToolProgress' | 'ToolResult' | 'ApprovalNeeded' | 'Error' | 'Complete';
+  step: number;
+  content?: string;
+  tool?: string;
+  input?: Record<string, unknown>;
+  output?: string;
+  success?: boolean;
+  tier?: string;
+  action?: string;
+  message?: string;
+  tools_used?: string[];
+}
+
 class WebSocketClient {
   private ws: WebSocket | null = null;
   private reconnectAttempts = 0;
@@ -83,6 +98,68 @@ class WebSocketClient {
             status,
             output: data.output as string | undefined,
             error: data.error as string | undefined,
+          });
+        }
+        break;
+      }
+      // Handle execution stream events (Thought, ToolCall, ToolResult, etc.)
+      case 'Thought': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId || event.step?.toString()) as string;
+        if (taskId) {
+          store.addExecutionStep(taskId, {
+            type: 'Thought',
+            step: event.step || 0,
+            content: event.content || '',
+          });
+        }
+        break;
+      }
+      case 'ToolCall': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId || event.step?.toString()) as string;
+        if (taskId) {
+          store.addExecutionStep(taskId, {
+            type: 'ToolCall',
+            step: event.step || 0,
+            tool: event.tool || '',
+            input: event.input || {},
+          });
+        }
+        break;
+      }
+      case 'ToolResult': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId || event.step?.toString()) as string;
+        if (taskId) {
+          store.addExecutionStep(taskId, {
+            type: 'ToolResult',
+            step: event.step || 0,
+            tool: event.tool || '',
+            success: event.success ?? true,
+            output: event.output || '',
+          });
+        }
+        break;
+      }
+      case 'Complete': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId) as string;
+        if (taskId) {
+          store.updateTask(taskId, {
+            status: 'completed',
+            output: event.output,
+          });
+        }
+        break;
+      }
+      case 'Error': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId) as string;
+        if (taskId) {
+          store.updateTask(taskId, {
+            status: 'failed',
+            error: event.message,
           });
         }
         break;

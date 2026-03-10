@@ -1,13 +1,15 @@
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
 use std::time::Duration;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tokio::sync::{mpsc, Mutex};
+use async_trait::async_trait;
 use tracing::{error, info, warn};
 
 use crate::skill_pool_ipc::{IpcChannel, IpcResponse, SkillPoolError};
+use crate::system_component::{ComponentError, ComponentInfo, ComponentState, HealthStatus, SystemComponent};
 
 #[derive(Debug, Clone)]
 pub struct SkillPoolConfig {
@@ -46,6 +48,7 @@ pub struct SkillPool {
     total_errors: AtomicU64,
     total_latency_ms: AtomicU64,
     pool_size: usize,
+    state: AtomicU8,
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
@@ -90,6 +93,7 @@ impl SkillPool {
             total_errors: AtomicU64::new(0),
             total_latency_ms: AtomicU64::new(0),
             pool_size: config.pool_size,
+            state: AtomicU8::new(ComponentState::Initialized as u8),
         });
 
         let pool_clone = Arc::clone(&pool);
@@ -101,7 +105,7 @@ impl SkillPool {
     }
 
     async fn spawn_slot(config: &SkillPoolConfig) -> Result<PoolSlot, SkillPoolError> {
-        let mut child = Command::new("bun")
+        let mut child = Command::new("bun.exe")
             .arg("run")
             .arg(&config.worker_script)
             .env("APEX_SKILLS_DIR", &config.skills_dir)
@@ -192,6 +196,33 @@ impl SkillPool {
         result
     }
 
+    /// Invalidate skill cache - forces reload of specified skill or all skills
+    pub async fn invalidate_cache(&self, skill_name: Option<&str>) -> Result<(), SkillPoolError> {
+        let acquire_timeout = Duration::from_millis(self.config.acquire_timeout_ms);
+
+        let slot_index = tokio::time::timeout(
+            acquire_timeout,
+            async { self.free_rx.lock().await.recv().await }
+        )
+        .await
+        .map_err(|_| SkillPoolError::NoSlots)?
+        .ok_or(SkillPoolError::ChannelClosed)?;
+
+        let input = match skill_name {
+            Some(name) => serde_json::json!({ "skill": name }),
+            None => serde_json::json!({}),
+        };
+
+        {
+            let slot = self.slots[slot_index].lock().await;
+            let _ = slot.channel.send("__cache_bust__", input, self.config.request_timeout_ms, None).await;
+        }
+
+        let _ = self.free_tx.send(slot_index).await;
+
+        Ok(())
+    }
+
     pub async fn stats(&self) -> SkillPoolStats {
         let available = self.free_rx.lock().await.len();
         let total = self.total_requests.load(Ordering::Relaxed);
@@ -240,6 +271,92 @@ impl SkillPool {
                     }
                 }
             }
+        }
+    }
+}
+
+// SystemComponent trait implementation
+#[async_trait]
+impl SystemComponent for SkillPool {
+    fn info(&self) -> ComponentInfo {
+        ComponentInfo::new(
+            "skill_pool",
+            "1.0.0",
+            "Skill execution pool for parallel skill execution",
+        )
+    }
+
+    async fn initialize(&self) -> Result<(), ComponentError> {
+        // Already initialized in new()
+        if self.is_initialized() {
+            return Ok(());
+        }
+        self.state.store(ComponentState::Initialized as u8, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn start(&self) -> Result<(), ComponentError> {
+        self.state.store(ComponentState::Running as u8, Ordering::SeqCst);
+        info!("SkillPool started");
+        Ok(())
+    }
+
+    async fn stop(&self) -> Result<(), ComponentError> {
+        self.state.store(ComponentState::Stopping as u8, Ordering::SeqCst);
+        
+        // Drop the sender to signal workers to stop
+        // This will cause the receiver to return None
+        std::mem::drop(&self.free_tx);
+        
+        self.state.store(ComponentState::Stopped as u8, Ordering::SeqCst);
+        info!("SkillPool stopped");
+        Ok(())
+    }
+
+    async fn health(&self) -> HealthStatus {
+        let total_errors = self.total_errors.load(Ordering::Relaxed);
+        let total_requests = self.total_requests.load(Ordering::Relaxed);
+        
+        if total_requests > 0 {
+            let error_rate = total_errors as f64 / total_requests as f64;
+            if error_rate > 0.1 {
+                return HealthStatus::Unhealthy {
+                    reason: format!("High error rate: {:.1}%", error_rate * 100.0),
+                };
+            } else if error_rate > 0.05 {
+                return HealthStatus::Degraded {
+                    reason: format!("Elevated error rate: {:.1}%", error_rate * 100.0),
+                };
+            }
+        }
+        
+        HealthStatus::Healthy
+    }
+
+    fn is_initialized(&self) -> bool {
+        let state = ComponentState::from_u8(self.state.load(Ordering::SeqCst));
+        state >= ComponentState::Initialized
+    }
+
+    fn is_running(&self) -> bool {
+        self.state.load(Ordering::SeqCst) == ComponentState::Running as u8
+    }
+
+    fn state(&self) -> ComponentState {
+        ComponentState::from_u8(self.state.load(Ordering::SeqCst))
+    }
+}
+
+impl ComponentState {
+    pub fn from_u8(value: u8) -> ComponentState {
+        match value {
+            0 => ComponentState::Created,
+            1 => ComponentState::Initialized,
+            2 => ComponentState::Running,
+            3 => ComponentState::Stopping,
+            4 => ComponentState::Stopped,
+            5 => ComponentState::Failed,
+            _ => ComponentState::Created,
         }
     }
 }

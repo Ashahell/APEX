@@ -1,3 +1,7 @@
+//! TOTP Manager with Persistence Support
+//!
+//! Provides TOTP verification with optional persistence using SecretStore.
+
 use serde::{Deserialize, Serialize};
 use totp_rs::{TOTP, Algorithm};
 use std::sync::Arc;
@@ -5,34 +9,73 @@ use tokio::sync::RwLock;
 use std::collections::HashMap;
 use base32::Alphabet;
 
+use crate::secret_store::SecretStore;
+
+/// TOTP Manager - supports both in-memory and persistent storage
 #[derive(Clone)]
 pub struct TotpManager {
+    /// In-memory secrets (fallback when persistence unavailable)
     secrets: Arc<RwLock<HashMap<String, String>>>,
+    /// Optional persistent storage
+    persistent_store: Option<SecretStore>,
 }
 
 impl TotpManager {
+    /// Create a new in-memory TOTP manager
     pub fn new() -> Self {
         Self {
             secrets: Arc::new(RwLock::new(HashMap::new())),
+            persistent_store: None,
+        }
+    }
+    
+    /// Create a TOTP manager with persistent storage
+    pub fn with_persistence(store: SecretStore) -> Self {
+        Self {
+            secrets: Arc::new(RwLock::new(HashMap::new())),
+            persistent_store: Some(store),
         }
     }
 
+    /// Generate a new TOTP secret for a user
     pub async fn generate_secret(&self, user_id: &str) -> Result<String, String> {
+        // Generate random 20-byte secret
         let secret_bytes: Vec<u8> = (0..20).map(|_| rand::random::<u8>()).collect();
         let secret_encoded = base32::encode(Alphabet::Rfc4648 { padding: false }, &secret_bytes);
         
+        // Store in memory
         let mut secrets = self.secrets.write().await;
         secrets.insert(user_id.to_string(), secret_encoded.clone());
+        
+        // Also persist if available
+        if let Some(ref store) = self.persistent_store {
+            let _ = store.set_totp_secret(user_id, &secret_encoded);
+        }
         
         Ok(secret_encoded)
     }
 
+    /// Verify a TOTP token
     pub async fn verify(&self, user_id: &str, token: &str) -> Result<bool, String> {
-        let secrets = self.secrets.read().await;
-        let secret_str = secrets.get(user_id)
-            .ok_or_else(|| "No TOTP secret found for user".to_string())?;
+        // Try in-memory first
+        let secret_str = {
+            let secrets = self.secrets.read().await;
+            secrets.get(user_id).cloned()
+        };
         
-        let secret_bytes = base32::decode(Alphabet::Rfc4648 { padding: false }, secret_str.as_str())
+        // Fall back to persistent storage
+        let secret = if let Some(s) = secret_str {
+            s
+        } else if let Some(ref store) = self.persistent_store {
+            match store.get_totp_secret(user_id) {
+                Ok(s) => s,
+                Err(_) => return Err("No TOTP secret found for user".to_string()),
+            }
+        } else {
+            return Err("No TOTP secret found for user".to_string());
+        };
+        
+        let secret_bytes = base32::decode(Alphabet::Rfc4648 { padding: false }, &secret)
             .ok_or_else(|| "Invalid base32 secret".to_string())?;
         
         let totp = TOTP::new(
@@ -53,16 +96,48 @@ impl TotpManager {
         Ok(is_valid)
     }
 
+    /// Remove TOTP secret for a user
     pub async fn remove_secret(&self, user_id: &str) {
+        // Remove from memory
         let mut secrets = self.secrets.write().await;
         secrets.remove(user_id);
+        
+        // Remove from persistent storage
+        if let Some(ref store) = self.persistent_store {
+            let _ = store.delete_totp_secret(user_id);
+        }
     }
 
+    /// Check if user has TOTP configured
     pub async fn has_secret(&self, user_id: &str) -> bool {
-        let secrets = self.secrets.read().await;
-        secrets.contains_key(user_id)
+        // Check memory first
+        {
+            let secrets = self.secrets.read().await;
+            if secrets.contains_key(user_id) {
+                return true;
+            }
+        }
+        
+        // Check persistent storage
+        if let Some(ref store) = self.persistent_store {
+            return store.has_totp(user_id);
+        }
+        
+        false
     }
 
+    /// Load secrets from persistent storage
+    pub async fn load_from_persistence(&self) -> Result<(), String> {
+        if let Some(ref _store) = self.persistent_store {
+            // We can't list all TOTP secrets easily, so this is a no-op
+            // The secrets are loaded on-demand via get_totp_secret
+            Ok(())
+        } else {
+            Ok(())
+        }
+    }
+
+    /// Generate otpauth URI for QR code
     pub fn generate_otpauth_uri(secret: &str, account_name: &str, issuer: &str) -> String {
         format!(
             "otpauth://totp/{}?secret={}&issuer={}",

@@ -48,20 +48,42 @@ export interface Notification {
   data?: Record<string, unknown>;
 }
 
+export interface ExecutionStep {
+  id: string;
+  taskId: string;
+  type: 'Thought' | 'ToolCall' | 'ToolProgress' | 'ToolResult' | 'ApprovalNeeded' | 'Error' | 'Complete';
+  step: number;
+  content?: string;
+  tool?: string;
+  input?: Record<string, unknown>;
+  output?: string;
+  success?: boolean;
+  timestamp: Date;
+}
+
 interface AppState {
   messages: Message[];
   tasks: Task[];
   notifications: Notification[];
+  executionSteps: ExecutionStep[];
   isConnected: boolean;
   connectionState: ConnectionState;
   sessionCost: number;
   totalCost: number;
   pendingConfirmation: PendingConfirmation | null;
+  messageQueue: string[];
+  isProcessingQueue: boolean;
   
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
+  addToMessageQueue: (message: string) => void;
+  removeFromMessageQueue: (index: number) => void;
+  clearMessageQueue: () => void;
+  setIsProcessingQueue: (processing: boolean) => void;
   addTask: (task: Omit<Task, 'id' | 'createdAt'>) => void;
   updateTask: (id: string, updates: Partial<Task>) => void;
   addNotification: (notification: Notification) => void;
+  addExecutionStep: (taskId: string, step: Omit<ExecutionStep, 'id' | 'taskId' | 'timestamp'>) => void;
+  clearExecutionSteps: (taskId: string) => void;
   setConnected: (connected: boolean) => void;
   setConnectionState: (state: ConnectionState) => void;
   setSessionCost: (cost: number) => void;
@@ -74,11 +96,14 @@ export const useAppStore = create<AppState>((set) => ({
   messages: [],
   tasks: [],
   notifications: [],
+  executionSteps: [],
   isConnected: false,
   connectionState: 'disconnected',
   sessionCost: 0,
   totalCost: 0,
   pendingConfirmation: null,
+  messageQueue: [],
+  isProcessingQueue: false,
 
   addMessage: (message) =>
     set((state) => ({
@@ -91,6 +116,20 @@ export const useAppStore = create<AppState>((set) => ({
         },
       ],
     })),
+
+  addToMessageQueue: (message) =>
+    set((state) => ({
+      messageQueue: [...state.messageQueue, message],
+    })),
+
+  removeFromMessageQueue: (index) =>
+    set((state) => ({
+      messageQueue: state.messageQueue.filter((_, i) => i !== index),
+    })),
+
+  clearMessageQueue: () => set({ messageQueue: [] }),
+
+  setIsProcessingQueue: (isProcessingQueue) => set({ isProcessingQueue }),
 
   addTask: (task) =>
     set((state) => ({
@@ -115,6 +154,24 @@ export const useAppStore = create<AppState>((set) => ({
   addNotification: (notification) =>
     set((state) => ({
       notifications: [notification, ...state.notifications].slice(0, 50),
+    })),
+
+  addExecutionStep: (taskId, step) =>
+    set((state) => ({
+      executionSteps: [
+        ...state.executionSteps,
+        {
+          ...step,
+          id: crypto.randomUUID(),
+          taskId,
+          timestamp: new Date(),
+        },
+      ],
+    })),
+
+  clearExecutionSteps: (taskId) =>
+    set((state) => ({
+      executionSteps: state.executionSteps.filter((s) => s.taskId !== taskId),
     })),
 
   setConnected: (connected) => set({ isConnected: connected }),

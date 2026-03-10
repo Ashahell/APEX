@@ -1,7 +1,19 @@
 # APEX Design Gap Analysis
 
-**Date**: 2026-03-02  
+**Date**: 2026-03-09  
 **Document**: Comparison of `docs/APEX-Design.md` (v4.0) vs Actual Implementation
+
+---
+
+## Vision
+
+APEX combines the **best of OpenClaw and AgentZero** with **significantly stronger security**.
+
+| Reference | What We Take |
+|-----------|-------------|
+| **OpenClaw** | Open architecture, extensibility, community-driven plugin ecosystem, messaging adapters |
+| **AgentZero** | Dark navy/cyan aesthetic, polished UI, smooth UX patterns, agent loop logic |
+| **Security-first** | Hardened beyond both — T0-T3 permission tiers, HMAC auth, TOTP verification, input sanitization, connection pooling |
 
 ---
 
@@ -9,10 +21,10 @@
 
 This document identifies gaps between the architectural specification (v4.0) and the current implementation. The implementation covers core functionality but lacks several advanced features specified in the design.
 
-**Overall Assessment**: ~60% implementation of design spec  
-**Critical Gaps**: 5  
-**Medium Gaps**: 8  
-**Minor Gaps**: 6
+**Overall Assessment**: ~65% implementation of design spec  
+**Critical Gaps**: 4  
+**Medium Gaps**: 6  
+**Minor Gaps**: 5
 
 ---
 
@@ -80,25 +92,60 @@ workflows            -- ❌ MISSING
 - Script Writing: 8 skills
 - Marketing: 9 skills
 
-### Implementation: 5 skills
+### Implementation: 33 skills (Updated 2026-03-09)
 ```
-skills/skills/code.generate/
-skills/skills/code.review/
-skills/skills/shell.execute/
-skills/skills/docs.read/
-skills/skills/git.commit/
+T0 (Read-only): code.review, repo.search, deps.check, file.search
+T1 (Tap confirm): file.delete, git.commit, code.generate, code.format, api.test, api.call, file.read, file.write, http.request, search.web, search.code
+T2 (Type confirm): db.drop, deploy.kubectl, docker.build, git.branch, docker.run, docker.push, docker.pull
+T3 (TOTP): shell.execute
 ```
 
 | Gap | Severity | Impact |
 |-----|----------|--------|
-| 45 skills missing (90%) | **Critical** | Core use case not fulfilled |
-| No AI Music skills | **Critical** | Major design feature missing |
-| No AI Video skills | **Critical** | Major design feature missing |
-| No Script Writing skills | **Critical** | Major design feature missing |
-| No Marketing skills | **Critical** | Major design feature missing |
-| No skill tier confirmation UI | Medium | T1-T3 not enforced |
+| AI Music skills missing | Medium | Nice-to-have |
+| AI Video skills missing | Medium | Nice-to-have |
+| Marketing skills missing | Medium | Nice-to-have |
+| Dynamic tool generation | High | Not implemented |
 
 ---
+
+## 4. MCP Implementation (Added 2026-03-09)
+
+### Implemented Features ✅
+- MCP Client with async stdio communication
+- MCP Server Manager with connection pooling
+- MCP Resources Protocol (list/read/subscribe)
+- MCP Prompts Protocol (list/get_prompt)
+- Input sanitization and security validation
+- MCP Metrics and monitoring
+- MCP Registry for dynamic tool discovery
+- UI components (McpManager, McpMarketplace)
+
+### Test Results
+```
+running 91 tests (lib)
+running 2 tests (e2e)
+running 59 tests (integration)
+running 1 test (registry_db)
+running 5 tests (validation)
+Total: 158 tests passing
+```
+
+---
+
+## 5. Memory System (Enhanced 2026-03-09)
+
+### Implemented ✅
+- sqlite_vec for vector search
+- Embedder (local via llama-server or OpenAI)
+- Hybrid search (keyword + vector)
+- Background indexer
+- Narrative memory, journal, reflections
+- Working memory
+
+### Gaps
+- Memory consolidation (decay old, reinforce important)
+- SOUL.md integration incomplete
 
 ## 4. Messaging Gateway Gaps
 

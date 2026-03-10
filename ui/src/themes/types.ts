@@ -15,19 +15,26 @@ export interface ColorTokens {
     base: string;
     elevated: string;
     overlay: string;
-    surface?: string;
+    surface: string;
   };
   text: {
     primary: string;
     secondary: string;
     muted: string;
-    inverse?: string;
+    inverse: string;
   };
   primary: {
     DEFAULT: string;
     hover: string;
     active: string;
     muted?: string;
+  };
+  button: {
+    bg: string;
+    bgHover: string;
+    bgActive: string;
+    text: string;
+    border: string;
   };
   accent: {
     success: string;
@@ -49,6 +56,7 @@ export interface ColorTokens {
     sub: string;
     mem: string;
     aud: string;
+    mcp: string;
   };
   chrome?: {
     titleBarActive?: string;

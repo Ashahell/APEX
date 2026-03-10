@@ -4,13 +4,15 @@ APEX supports multiple execution backends for running deep tasks in isolation. T
 
 ## Available Backends
 
-| Backend | Security | Performance | Setup Complexity |
+| Backend | Security | Performance | Platform Support |
 |---------|----------|-------------|------------------|
-| Docker | High | Excellent | Low (default) |
-| gVisor | Very High | Good | Medium |
-| Firecracker | Very High | Excellent | High (requires KVM) |
+| Docker | High | Excellent | Windows/Linux (default) |
+| gVisor | Very High | Good | Linux/WSL2 |
+| Firecracker | Very High | Excellent | Linux/WSL2 |
 
-## Docker (Default)
+> **Windows 11**: See [`VM_BACKEND_WINDOWS.md`](VM_BACKEND_WINDOWS.md) for detailed Windows-specific setup including WSL2 Firecracker configuration.
+
+## Docker (Default - Recommended on Windows)
 
 **Status**: Implemented and default
 

@@ -379,7 +379,7 @@ mod tests {
         
         let memory = NarrativeMemory::new(config);
         memory.initialize().await.unwrap();
-        
+
         let entry = memory.narrativize_task(
             "task-123",
             "Test task input",
@@ -392,4 +392,131 @@ mod tests {
         assert!(entry.path.exists());
         assert_eq!(entry.task_id, "task-123");
     }
+}
+
+/// Memory Export/Import functionality
+impl NarrativeMemory {
+    /// Export all memory to a JSON file
+    pub async fn export_memory(&self) -> Result<MemoryExport, std::io::Error> {
+        let mut export = MemoryExport {
+            version: "1.0".to_string(),
+            exported_at: Utc::now(),
+            journal_entries: vec![],
+            entities: vec![],
+            knowledge: vec![],
+            reflections: vec![],
+        };
+
+        // Export journal entries
+        let journal_dir = self.config.base_path.join("journal");
+        if journal_dir.exists() {
+            export.journal_entries = self.export_directory(&journal_dir).await?;
+        }
+
+        // Export entities
+        let entities_dir = self.config.base_path.join("entities");
+        if entities_dir.exists() {
+            export.entities = self.export_directory(&entities_dir).await?;
+        }
+
+        // Export knowledge
+        let knowledge_dir = self.config.base_path.join("knowledge");
+        if knowledge_dir.exists() {
+            export.knowledge = self.export_directory(&knowledge_dir).await?;
+        }
+
+        // Export reflections
+        let reflections_dir = self.config.base_path.join("reflections");
+        if reflections_dir.exists() {
+            export.reflections = self.export_directory(&reflections_dir).await?;
+        }
+
+        Ok(export)
+    }
+
+    async fn export_directory(&self, dir: &Path) -> Result<Vec<ExportEntry>, std::io::Error> {
+        let mut entries = Vec::new();
+        
+        let mut stack = vec![dir.to_path_buf()];
+        while let Some(current) = stack.pop() {
+            let mut read_dir = fs::read_dir(&current).await?;
+            while let Some(entry) = read_dir.next_entry().await? {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path.clone());
+                } else {
+                    let content = fs::read_to_string(&path).await?;
+                    let relative = path.strip_prefix(dir)
+                        .unwrap_or(&path)
+                        .to_string_lossy()
+                        .to_string();
+                    
+                    entries.push(ExportEntry {
+                        path: relative,
+                        content,
+                    });
+                }
+            }
+        }
+        
+        Ok(entries)
+    }
+
+    /// Import memory from a JSON file
+    pub async fn import_memory(&self, export: MemoryExport) -> Result<(), std::io::Error> {
+        // Import journal entries
+        for entry in export.journal_entries {
+            let path = self.config.base_path.join("journal").join(&entry.path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
+            fs::write(&path, &entry.content).await?;
+        }
+
+        // Import entities
+        for entry in export.entities {
+            let path = self.config.base_path.join("entities").join(&entry.path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
+            fs::write(&path, &entry.content).await?;
+        }
+
+        // Import knowledge
+        for entry in export.knowledge {
+            let path = self.config.base_path.join("knowledge").join(&entry.path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
+            fs::write(&path, &entry.content).await?;
+        }
+
+        // Import reflections
+        for entry in export.reflections {
+            let path = self.config.base_path.join("reflections").join(&entry.path);
+            if let Some(parent) = path.parent() {
+                fs::create_dir_all(parent).await?;
+            }
+            fs::write(&path, &entry.content).await?;
+        }
+
+        Ok(())
+    }
+}
+
+/// Memory export structure
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryExport {
+    pub version: String,
+    pub exported_at: DateTime<Utc>,
+    pub journal_entries: Vec<ExportEntry>,
+    pub entities: Vec<ExportEntry>,
+    pub knowledge: Vec<ExportEntry>,
+    pub reflections: Vec<ExportEntry>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportEntry {
+    pub path: String,
+    pub content: String,
 }

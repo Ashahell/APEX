@@ -50,7 +50,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'memory',
     label: 'Memory',
-    icon: '🧠',
+    icon: '░',
     items: [
       { id: 'memory', label: 'Memory' },
       { id: 'memoryStats', label: 'Stats' },
@@ -70,7 +70,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'work',
     label: 'Work',
-    icon: '📁',
+    icon: '▤',
     items: [
       { id: 'files', label: 'Files' },
       { id: 'channels', label: 'Channels' },
@@ -82,7 +82,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'system',
     label: 'System',
-    icon: '🖥️',
+    icon: '▣',
     items: [
       { id: 'metrics', label: 'Metrics' },
       { id: 'monitoring', label: 'Monitor' },
@@ -93,7 +93,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'security',
     label: 'Security',
-    icon: '🔒',
+    icon: '§',
     items: [
       { id: 'totp', label: '2FA' },
       { id: 'clients', label: 'Clients' },
@@ -102,7 +102,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'integrations',
     label: 'Integrations',
-    icon: '🔌',
+    icon: '◈',
     items: [
       { id: 'adapters', label: 'Adapters' },
       { id: 'webhooks', label: 'Webhooks' },
@@ -112,7 +112,7 @@ const GROUPS: SidebarGroup[] = [
   {
     id: 'agent',
     label: 'Agent',
-    icon: '🤖',
+    icon: '◆',
     items: [
       { id: 'soul', label: 'Identity' },
       { id: 'autonomy', label: 'Autonomy' },
@@ -122,11 +122,11 @@ const GROUPS: SidebarGroup[] = [
 ];
 
 const TOP_LEVEL_ICONS: Record<string, string> = {
-  chat: '💬',
-  board: '📋',
-  workflows: '🔄',
-  settings: '⚙️',
-  theme: '🎨',
+  chat: '💬',  // Speech bubble
+  board: '📋',  // Clipboard
+  workflows: '⚙', // Gear
+  settings: '⌘',  // Command/Settings
+  theme: '◉',   // Circle (prefs)
 };
 
 interface SidebarProps {

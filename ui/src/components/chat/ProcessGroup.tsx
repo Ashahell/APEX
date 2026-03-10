@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { StepDetailModal } from './StepDetailModal';
 
-export type StepType = 'GEN' | 'USE' | 'EXE' | 'WWW' | 'SUB' | 'MEM' | 'AUD';
+export type StepType = 'GEN' | 'USE' | 'EXE' | 'WWW' | 'SUB' | 'MEM' | 'AUD' | 'MCP';
 
 export interface ProcessStep {
   id: string;
@@ -32,6 +33,7 @@ const STEP_COLORS: Record<StepType, { bg: string; text: string; border: string }
   SUB: { bg: 'bg-indigo-500/20', text: 'text-indigo-400', border: 'border-l-indigo-500' },
   MEM: { bg: 'bg-green-500/20', text: 'text-green-400', border: 'border-l-green-500' },
   AUD: { bg: 'bg-red-500/20', text: 'text-red-400', border: 'border-l-red-500' },
+  MCP: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-l-cyan-500' },
 };
 
 const STATUS_COLORS: Record<string, { border: string; bg: string; icon: string }> = {
@@ -55,6 +57,7 @@ export function ProcessGroup({
 }: ProcessGroupProps) {
   const [expanded, setExpanded] = useState(false);
   const [expandedSteps, setExpandedSteps] = useState<Set<string>>(new Set());
+  const [selectedStep, setSelectedStep] = useState<ProcessStep | null>(null);
 
   const statusStyle = STATUS_COLORS[status] || STATUS_COLORS.running;
   const isRunning = status === 'running';
@@ -69,6 +72,11 @@ export function ProcessGroup({
       }
       return next;
     });
+  };
+
+  const handleStepClick = (step: ProcessStep, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setSelectedStep(step);
   };
 
   const stepCount = steps.length;
@@ -124,7 +132,9 @@ export function ProcessGroup({
                   >
                     <button
                       onClick={() => toggleStep(step.id)}
-                      className="w-full flex items-center gap-3"
+                      onDoubleClick={(e) => handleStepClick(step, e)}
+                      className="w-full flex items-center gap-3 hover:bg-muted/30 rounded transition-colors"
+                      title="Double-click for full details"
                     >
                       <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${stepStyle.bg} ${stepStyle.text}`}>
                         {step.type}
@@ -185,6 +195,8 @@ export function ProcessGroup({
           </motion.div>
         )}
       </AnimatePresence>
+
+      <StepDetailModal step={selectedStep} onClose={() => setSelectedStep(null)} />
     </motion.div>
   );
 }

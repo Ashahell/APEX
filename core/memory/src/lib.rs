@@ -5,6 +5,8 @@ pub mod audit;
 pub mod background_indexer;
 pub mod channel_repo;
 pub mod chunker;
+pub mod config_repo;
+pub mod consolidated;
 pub mod db;
 pub mod decision_journal;
 pub mod embedder;
@@ -38,7 +40,11 @@ pub use task_repo::TaskRepository;
 pub use tasks::{CreateTask, Task, TaskPriority, TaskStatus, TaskTier};
 pub use ttl_cleanup::{CleanupReport, TtlCleanup};
 pub use preferences::PreferencesRepository;
+pub use config_repo::{ConfigEntry, ConfigRepository, McpServer, McpTool};
 pub use working_memory::{CausalLink, Entity, WorkingMemory};
+pub use consolidated::{
+    ConsolidationResult, MemoryConsolidator, SoulMemoryConfig, UnifiedMemoryStats,
+};
 pub use workflow_repo::{CreateWorkflow, UpdateWorkflow, Workflow, WorkflowExecution, WorkflowRepository};
 
 pub use thiserror::Error;

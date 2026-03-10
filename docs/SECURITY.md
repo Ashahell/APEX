@@ -67,6 +67,60 @@ Algorithm: SHA1
 
 ---
 
+## Rate Limiting
+
+APEX implements token bucket rate limiting to prevent DoS:
+
+### Current Limits
+
+| Endpoint | Limit | Window |
+|----------|-------|--------|
+| General API | 60 requests | 1 minute |
+| Task Creation | 10 requests | 1 minute |
+| Skill Execution | 30 requests | 1 minute |
+| Deep Tasks | 5 requests | 1 minute |
+
+---
+
+## Execution Isolation
+
+### Docker Security (Current Implementation)
+
+APEX uses Docker with hardened security settings:
+
+```bash
+# Resource limits
+--memory 2048m              # 2GB memory limit
+--cpus 2                    # 2 CPU cores
+--pids-limit 256            # Max 256 processes
+
+# Isolation
+--network none              # Network isolation (no internet access)
+--read-only                 # Read-only filesystem
+--tmpfs /tmp:rw,exec       # Writable tmpfs for temp files
+--cap-drop ALL              # Drop all capabilities
+--privileged=false          # Not privileged
+--restart no                # No auto-restart
+--rm                        # Auto-remove on exit
+--stop-timeout 10           # Graceful shutdown
+```
+
+### Firecracker (When Available)
+
+Firecracker provides stronger isolation via microVMs:
+- No shared kernel with host
+- Near-native performance
+- Minimal attack surface
+
+### Security Comparison
+
+| Isolation | Network | Filesystem | Capabilities |
+|-----------|---------|------------|-------------|
+| Docker (hardened) | None | Read-only + tmpfs | Dropped ALL |
+| Firecracker | Isolated | Separate | Minimal |
+
+---
+
 ## Input Validation
 
 ### SQL Injection Prevention
@@ -149,10 +203,35 @@ struct AuditEntry {
 
 ---
 
+## MCP Security (Added 2026-03-09)
+
+### Connection Pooling
+MCP servers are managed via `McpServerManager` with connection pooling:
+- Configurable min/max connections per server
+- Connection timeout and idle timeout
+- Health check on all pooled connections
+
+### Input Sanitization
+All MCP tool arguments are validated:
+
+| Check | Limit |
+|-------|-------|
+| Nesting depth | 10 levels |
+| String length | 100KB |
+| Object keys | 1000 |
+| Array length | 10000 |
+
+### Blocked Patterns
+- Shell injection (`;`, `|`, `&&`, etc.)
+- Path traversal (`../`, absolute paths)
+- Code execution (`eval`, `exec`, `__import__`)
+
+---
+
 ## Recommendations for Production
 
 1. Enable TOTP for all destructive operations
-2. Use Firecracker/gVisor isolation
+2. Use Firecracker/gVisor isolation (or Docker with hardened settings)
 3. Configure network allowlists
 4. Enable audit log retention
 5. Rotate shared secret regularly

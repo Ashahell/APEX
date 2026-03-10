@@ -152,3 +152,343 @@ impl AuditRepository {
         Ok(true)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // =============================================================================
+    // Audit Entry Hash Tests
+    // =============================================================================
+
+    #[test]
+    fn test_compute_hash() {
+        let entry = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp: "2026-01-01T00:00:00Z".parse().unwrap(),
+            action: "test_action".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "123".to_string(),
+            details: Some("test details".to_string()),
+        };
+        
+        let hash = entry.compute_hash();
+        
+        // SHA-256 produces 64 hex characters
+        assert_eq!(hash.len(), 64);
+    }
+
+    #[test]
+    fn test_compute_hash_deterministic() {
+        let entry = AuditEntry {
+            id: 1,
+            prev_hash: "abc123".to_string(),
+            hash: String::new(),
+            timestamp: "2026-03-09T12:00:00Z".parse().unwrap(),
+            action: "create_task".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "456".to_string(),
+            details: None,
+        };
+        
+        let hash1 = entry.compute_hash();
+        let hash2 = entry.compute_hash();
+        
+        // Same input should produce same hash
+        assert_eq!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_compute_hash_different_prev_hash() {
+        let timestamp: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        
+        let entry1 = AuditEntry {
+            id: 1,
+            prev_hash: "hash1".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "action".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id".to_string(),
+            details: None,
+        };
+        
+        let entry2 = AuditEntry {
+            id: 1,
+            prev_hash: "hash2".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "action".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id".to_string(),
+            details: None,
+        };
+        
+        let hash1 = entry1.compute_hash();
+        let hash2 = entry2.compute_hash();
+        
+        // Different prev_hash should produce different hash
+        assert_ne!(hash1, hash2);
+    }
+
+    #[test]
+    fn test_compute_hash_includes_details() {
+        let timestamp: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        
+        let entry1 = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "action".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id".to_string(),
+            details: Some("details1".to_string()),
+        };
+        
+        let entry2 = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "action".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id".to_string(),
+            details: Some("details2".to_string()),
+        };
+        
+        let hash1 = entry1.compute_hash();
+        let hash2 = entry2.compute_hash();
+        
+        // Different details should produce different hash
+        assert_ne!(hash1, hash2);
+    }
+
+    // =============================================================================
+    // Audit Entry Verify Tests
+    // =============================================================================
+
+    #[test]
+    fn test_verify_valid_entry() {
+        let timestamp: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        let entry = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "test".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "1".to_string(),
+            details: None,
+        };
+        
+        let hash = entry.compute_hash();
+        let entry_with_hash = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash,
+            timestamp,
+            action: "test".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "1".to_string(),
+            details: None,
+        };
+        
+        assert!(entry_with_hash.verify());
+    }
+
+    #[test]
+    fn test_verify_tampered_entry() {
+        let timestamp: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        let entry = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: "real_hash_value_123456789".to_string(), // Tampered hash
+            timestamp,
+            action: "test".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "1".to_string(),
+            details: None,
+        };
+        
+        // Verify should fail because hash doesn't match computed hash
+        assert!(!entry.verify());
+    }
+
+    #[test]
+    fn test_verify_tampered_action() {
+        let timestamp: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        
+        // Create valid entry
+        let valid_entry = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp,
+            action: "create".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "1".to_string(),
+            details: None,
+        };
+        let hash = valid_entry.compute_hash();
+        
+        // Tamper with action
+        let tampered_entry = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash,
+            timestamp,
+            action: "delete".to_string(), // Tampered!
+            entity_type: "task".to_string(),
+            entity_id: "1".to_string(),
+            details: None,
+        };
+        
+        assert!(!tampered_entry.verify());
+    }
+
+    // =============================================================================
+    // Hash Chain Tests
+    // =============================================================================
+
+    #[test]
+    fn test_hash_chain_links() {
+        let time1: DateTime<Utc> = "2026-03-09T10:00:00Z".parse().unwrap();
+        let time2: DateTime<Utc> = "2026-03-09T11:00:00Z".parse().unwrap();
+        let time3: DateTime<Utc> = "2026-03-09T12:00:00Z".parse().unwrap();
+        
+        // Entry 1 (genesis)
+        let mut entry1 = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp: time1,
+            action: "action1".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id1".to_string(),
+            details: None,
+        };
+        entry1.hash = entry1.compute_hash();
+        
+        // Entry 2 (links to entry1)
+        let mut entry2 = AuditEntry {
+            id: 2,
+            prev_hash: entry1.hash.clone(),
+            hash: String::new(),
+            timestamp: time2,
+            action: "action2".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id2".to_string(),
+            details: None,
+        };
+        entry2.hash = entry2.compute_hash();
+        
+        // Entry 3 (links to entry2)
+        let mut entry3 = AuditEntry {
+            id: 3,
+            prev_hash: entry2.hash.clone(),
+            hash: String::new(),
+            timestamp: time3,
+            action: "action3".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id3".to_string(),
+            details: None,
+        };
+        entry3.hash = entry3.compute_hash();
+        
+        // Verify all entries
+        assert!(entry1.verify());
+        assert!(entry2.verify());
+        assert!(entry3.verify());
+        
+        // Verify chain links
+        assert_eq!(entry2.prev_hash, entry1.hash);
+        assert_eq!(entry3.prev_hash, entry2.hash);
+    }
+
+    #[test]
+    fn test_chain_broken_if_entry_removed() {
+        let time1: DateTime<Utc> = "2026-03-09T10:00:00Z".parse().unwrap();
+        let time2: DateTime<Utc> = "2026-03-09T11:00:00Z".parse().unwrap();
+        
+        let mut entry1 = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: String::new(),
+            timestamp: time1,
+            action: "action1".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id1".to_string(),
+            details: None,
+        };
+        entry1.hash = entry1.compute_hash();
+        
+        // Entry 2 has prev_hash pointing to entry1
+        let mut entry2 = AuditEntry {
+            id: 2,
+            prev_hash: entry1.hash.clone(),
+            hash: String::new(),
+            timestamp: time2,
+            action: "action2".to_string(),
+            entity_type: "type".to_string(),
+            entity_id: "id2".to_string(),
+            details: None,
+        };
+        entry2.hash = entry2.compute_hash();
+        
+        // Both valid
+        assert!(entry1.verify());
+        assert!(entry2.verify());
+        
+        // If we modify entry1, entry2's chain is broken
+        let mut tampered_entry1 = AuditEntry {
+            id: 1,
+            prev_hash: "0".to_string(),
+            hash: entry1.hash.clone(),
+            timestamp: time1,
+            action: "MODIFIED_ACTION".to_string(), // Tampered!
+            entity_type: "type".to_string(),
+            entity_id: "id1".to_string(),
+            details: None,
+        };
+        
+        // Entry 1 now fails verification
+        assert!(!tampered_entry1.verify());
+        
+        // Chain is broken - entry2.prev_hash no longer matches tampered entry1's hash
+        assert_ne!(tampered_entry1.compute_hash(), entry1.hash);
+    }
+
+    // =============================================================================
+    // CreateAuditEntry Tests
+    // =============================================================================
+
+    #[test]
+    fn test_create_audit_entry_fields() {
+        let entry = CreateAuditEntry {
+            action: "create".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "123".to_string(),
+            details: Some("Task created successfully".to_string()),
+        };
+        
+        assert_eq!(entry.action, "create");
+        assert_eq!(entry.entity_type, "task");
+        assert_eq!(entry.entity_id, "123");
+        assert!(entry.details.is_some());
+    }
+
+    #[test]
+    fn test_create_audit_entry_no_details() {
+        let entry = CreateAuditEntry {
+            action: "delete".to_string(),
+            entity_type: "task".to_string(),
+            entity_id: "456".to_string(),
+            details: None,
+        };
+        
+        assert!(entry.details.is_none());
+    }
+}
