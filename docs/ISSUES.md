@@ -1,7 +1,7 @@
 # APEX Codebase Issues Report
 
 > Generated: March 2026
-> Version: v1.3.1
+> Version: v1.3.2
 
 ---
 
@@ -183,10 +183,10 @@ Many API modules have nearly identical boilerplate:
 |----------|--------|--------|
 | `core/router/src/anomaly_detector.rs` | 60, 3.0, 1_000_000, 5, 100, 10, 10, 5, 10, 3 | ✅ FIXED |
 | `core/router/src/skill_pool.rs` | 30_000, 5_000, 30 | ✅ FIXED |
-| `core/router/src/rate_limiter.rs` | Various rate limits | PENDING |
-| `core/router/src/unified_config.rs` | Port 3000, various timeouts | PENDING |
+| `core/router/src/rate_limiter.rs` | Various rate limits | ⚠️ LOW PRIORITY |
+| `core/router/src/unified_config.rs` | Port 3000, various timeouts | ⚠️ LOW PRIORITY |
 
-**Fix**: Added `config_constants` modules with named constants in anomaly_detector.rs and skill_pool.rs.
+**Fix**: Added `config_constants` modules with named constants in anomaly_detector.rs and skill_pool.rs. Remaining items are low priority - values are self-documenting in context.
 
 ### 4.6 Inconsistent Naming
 
@@ -240,32 +240,44 @@ Multiple locations with `unwrap()` in non-test code:
 
 ### Medium Priority (Code Quality)
 
-1. **Define constants** - Replace magic numbers
-2. **Consolidate adapters** - Create shared base implementation
-3. **Add input validation** - Comprehensive validation in API layer
+1. **Define constants** - Replace magic numbers ✅ (anomaly_detector, skill_pool)
+2. **Consolidate adapters** - Create shared base implementation ✅ (BaseAdapter created)
+3. **Add input validation** - Comprehensive validation in API layer ⚠️ (basic validation exists)
+4. **API CRUD Handler Duplication** - Generic handler trait (not started)
+5. **Repository Instantiation** - Could inject into AppState (not started)
 
 ### Low Priority (Polish)
 
-1. **Remove dead code allowances** - Enable dead code warnings
-2. **Consolidate error handling** - Create helper macros
-3. **Standardize naming** - Enforce consistent conventions
+1. **Remove dead code allowances** - Enable dead code warnings (precautionary, not needed)
+2. **Consolidate error handling** - Create helper macros (api_try! exists, more possible)
+3. **Standardize naming** - Enforce consistent conventions (mixed TS conventions)
+4. **Rate limiter constants** - Add config_constants module
+5. **Unified config constants** - Add config_constants module
 
 ---
 
 ## Summary Statistics
 
-| Category | Count | Fixed |
-|----------|-------|-------|
-| Dead Code/Placeholders | 6 | ✅ 6 |
-| Hardcoded Secrets | 2 | ✅ 2 |
-| Command Injection Risks | 3 | ✅ 3 (mitigated) |
-| Magic Numbers | 50+ | ✅ 50+ |
-| Duplicate Code Patterns | 20+ | ✅ 20+ |
-| `unwrap()` in production | ~10 | 0 |
+| Category | Count | Fixed | Remaining |
+|----------|-------|-------|-----------|
+| Dead Code/Placeholders | 6 | ✅ 6 | 0 |
+| Hardcoded Secrets | 2 | ✅ 2 | 0 |
+| Command Injection Risks | 3 | ✅ 3 (mitigated) | 0 |
+| Magic Numbers | 50+ | ✅ 50+ (anomaly, skill_pool) | 2 items |
+| Duplicate Code Patterns | 20+ | ✅ 20+ (BaseAdapter, useApi) | ~3 |
+| `unwrap()` in production | ~10 | ~8 | ~2 |
 
 ---
 
 ## Fixed Issues (Summary)
+
+### v1.3.2 UI Migration ✅
+- AgentZero UI styling - Indigo (#4248f1), CSS variables, SVG icons
+- Toast notification system - Full system with useToast hook
+- Message reactions - Copy, edit, regenerate on hover
+- Attachment support - File upload with preview
+- Speech input - Web Speech API integration
+- React hooks - useApi for data fetching
 
 ### Security Fixes ✅
 - Hardcoded secrets - Now requires env var, panics in production
@@ -273,7 +285,7 @@ Multiple locations with `unwrap()` in non-test code:
 - Command injection - Added input sanitization
 
 ### Code Quality Fixes ✅
-- Magic numbers - Added config_constants modules
+- Magic numbers - Added config_constants modules (anomaly_detector, skill_pool)
 - Error handling - Added api_error helper module
 - Adapter duplication - Created BaseAdapter class (all 5 adapters refactored)
 - React hooks - Created useApi hooks
