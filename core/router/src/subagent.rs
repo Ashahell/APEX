@@ -34,6 +34,11 @@ impl SubAgentPool {
         }
     }
 
+    /// Get the max parallel setting
+    pub fn max_parallel(&self) -> usize {
+        self.max_parallel
+    }
+
     pub async fn split_task(&self, goal: &str, context: &str, llm_url: &str, model: &str) -> Result<Vec<SubTask>, String> {
         use reqwest::Client;
 
