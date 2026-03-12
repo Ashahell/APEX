@@ -102,7 +102,9 @@ APEX is **more secure than both** by design:
 ### v0.3.0 New Features
 - **Real-time Agent Thoughts Streaming** - Partial (execution events stream, full thought trace in progress)
 - **Consequence Preview** - ✅ Implemented (blast radius shown before T2/T3 actions)
-- **Runtime Tool Generation** - Not implemented (requires sandbox improvements)
+- **Runtime Tool Generation** - ⏳ Planned (see `docs/RUNTIME_TOOL_GENERATION_PLAN.md`)
+  - Tool generation: ✅ Implemented (LLM generates Python code)
+  - Tool execution: ❌ Placeholder (needs sandbox implementation)
 - **TIR (Tool-Integrated Reasoning)** - Not implemented
 - **Subagent Pool** - Not implemented
 - **SOUL.md Identity System** - ✅ Basic implementation
