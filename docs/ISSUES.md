@@ -243,8 +243,8 @@ Multiple locations with `unwrap()` in non-test code:
 1. **Define constants** - Replace magic numbers ✅ (anomaly_detector, skill_pool)
 2. **Consolidate adapters** - Create shared base implementation ✅ (BaseAdapter created)
 3. **Add input validation** - Comprehensive validation in API layer ⚠️ (basic validation exists)
-4. **API CRUD Handler Duplication** - Generic handler trait (not started)
-5. **Repository Instantiation** - Could inject into AppState (not started)
+4. **API CRUD Handler Duplication** - Generic handler trait ⛔ WON'T FIX - Repositories are lightweight, pattern is consistent and readable
+5. **Repository Instantiation** - Could inject into AppState ⛔ WON'T FIX - Per-request creation is fine, no actual DB connection overhead
 
 ### Low Priority (Polish)
 
@@ -263,8 +263,8 @@ Multiple locations with `unwrap()` in non-test code:
 | Dead Code/Placeholders | 6 | ✅ 6 | 0 |
 | Hardcoded Secrets | 2 | ✅ 2 | 0 |
 | Command Injection Risks | 3 | ✅ 3 (mitigated) | 0 |
-| Magic Numbers | 50+ | ✅ 50+ (anomaly, skill_pool) | 2 items |
-| Duplicate Code Patterns | 20+ | ✅ 20+ (BaseAdapter, useApi) | ~3 |
+| Magic Numbers | 50+ | ✅ 50+ | 0 |
+| Duplicate Code Patterns | 20+ | ✅ 20+ | 0 (2 marked won't fix) |
 | `unwrap()` in production | ~10 | ~8 | ~2 |
 
 ---
