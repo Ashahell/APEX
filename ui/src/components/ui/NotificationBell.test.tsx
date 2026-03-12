@@ -163,8 +163,8 @@ describe('NotificationBell', () => {
     });
     
     await waitFor(() => {
-      const checkmarks = screen.getAllByText('✓');
-      expect(checkmarks.length).toBeGreaterThan(0);
+      const markAsReadButtons = screen.getAllByTitle('Mark as read');
+      expect(markAsReadButtons.length).toBeGreaterThan(0);
     });
   });
 });
