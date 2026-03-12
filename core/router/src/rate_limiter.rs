@@ -3,6 +3,21 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::RwLock;
 
+/// Rate limiter configuration constants
+pub mod config_constants {
+    /// Default number of requests allowed per minute
+    pub const DEFAULT_REQUESTS_PER_MINUTE: u32 = 60;
+    
+    /// Default burst size (max concurrent requests)
+    pub const DEFAULT_BURST_SIZE: u32 = 10;
+    
+    /// Burst size divisor (burst = requests_per_minute / divisor)
+    pub const BURST_SIZE_DIVISOR: u32 = 6;
+    
+    /// Rate limit window duration in seconds
+    pub const WINDOW_DURATION_SECS: u64 = 60;
+}
+
 #[derive(Clone)]
 pub struct RateLimiter {
     requests: Arc<RwLock<HashMap<String, RateLimitEntry>>>,
@@ -24,8 +39,8 @@ pub struct RateLimitConfig {
 impl Default for RateLimitConfig {
     fn default() -> Self {
         Self {
-            requests_per_minute: 60,
-            burst_size: 10,
+            requests_per_minute: config_constants::DEFAULT_REQUESTS_PER_MINUTE,
+            burst_size: config_constants::DEFAULT_BURST_SIZE,
         }
     }
 }
@@ -36,14 +51,14 @@ impl RateLimiter {
             requests: Arc::new(RwLock::new(HashMap::new())),
             config: Arc::new(RwLock::new(RateLimitConfig {
                 requests_per_minute,
-                burst_size: requests_per_minute / 6,
+                burst_size: requests_per_minute / config_constants::BURST_SIZE_DIVISOR,
             })),
         }
     }
 
     pub async fn check_limit(&self, key: &str) -> RateLimitResult {
         let config = self.config.read().await;
-        let window = Duration::from_secs(60);
+        let window = Duration::from_secs(config_constants::WINDOW_DURATION_SECS);
         
         let mut requests = self.requests.write().await;
         let entry = requests.entry(key.to_string()).or_insert_with(|| RateLimitEntry {
@@ -56,7 +71,7 @@ impl RateLimiter {
             entry.window_start = Instant::now();
             return RateLimitResult::Allowed {
                 remaining: config.requests_per_minute - 1,
-                reset_in_secs: 60,
+                reset_in_secs: config_constants::WINDOW_DURATION_SECS as u32,
             };
         }
 
@@ -81,7 +96,7 @@ impl RateLimiter {
     pub async fn set_config(&self, requests_per_minute: u32) {
         let mut config = self.config.write().await;
         config.requests_per_minute = requests_per_minute;
-        config.burst_size = requests_per_minute / 6;
+        config.burst_size = requests_per_minute / config_constants::BURST_SIZE_DIVISOR;
     }
 
     pub async fn get_config(&self) -> RateLimitConfig {
@@ -153,7 +168,7 @@ pub struct RateLimitStats {
 
 impl Default for RateLimiter {
     fn default() -> Self {
-        Self::new(60)
+        Self::new(config_constants::DEFAULT_REQUESTS_PER_MINUTE)
     }
 }
 
