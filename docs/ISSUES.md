@@ -183,7 +183,7 @@ Many API modules have nearly identical boilerplate:
 |----------|--------|--------|
 | `core/router/src/anomaly_detector.rs` | 60, 3.0, 1_000_000, 5, 100, 10, 10, 5, 10, 3 | ✅ FIXED |
 | `core/router/src/skill_pool.rs` | 30_000, 5_000, 30 | ✅ FIXED |
-| `core/router/src/rate_limiter.rs` | Various rate limits | ⚠️ LOW PRIORITY |
+| `core/router/src/rate_limiter.rs` | Various rate limits | ✅ FIXED |
 | `core/router/src/unified_config.rs` | Port 3000, various timeouts | ⚠️ LOW PRIORITY |
 
 **Fix**: Added `config_constants` modules with named constants in anomaly_detector.rs and skill_pool.rs. Remaining items are low priority - values are self-documenting in context.
@@ -251,7 +251,7 @@ Multiple locations with `unwrap()` in non-test code:
 1. **Remove dead code allowances** - Enable dead code warnings (precautionary, not needed)
 2. **Consolidate error handling** - Create helper macros (api_try! exists, more possible)
 3. **Standardize naming** - Enforce consistent conventions (mixed TS conventions)
-4. **Rate limiter constants** - Add config_constants module
+4. **Rate limiter constants** - Add config_constants module ✅ FIXED
 5. **Unified config constants** - Add config_constants module
 
 ---
