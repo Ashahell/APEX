@@ -37,7 +37,7 @@ function formatUptime(seconds: number): string {
 }
 
 export function MonitoringDashboard() {
-  const [health, setHealth] = useState<SystemHealth | null>(null);
+  const [health, setHealth] = useState< SystemHealth | null>(null);
   const [cache, setCache] = useState<CacheStats | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +70,19 @@ export function MonitoringDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading monitoring data...</div>
+        <div className="text-[var(--color-text-muted)] flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+            <line x1="12" y1="2" x2="12" y2="6"></line>
+            <line x1="12" y1="18" x2="12" y2="22"></line>
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+            <line x1="2" y1="12" x2="6" y2="12"></line>
+            <line x1="18" y1="12" x2="22" y2="12"></line>
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+          </svg>
+          Loading monitoring data...
+        </div>
       </div>
     );
   }
@@ -81,22 +93,30 @@ export function MonitoringDashboard() {
   const successRate = totalTasks > 0 ? ((completedTasks / totalTasks) * 100).toFixed(1) : '0';
 
   return (
-    <div className="h-full overflow-auto p-4">
+    <div className="h-full overflow-auto p-6">
       <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Monitoring Dashboard</h2>
-            <p className="text-sm text-muted-foreground">System health, cache, and task metrics</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#4248f1]/10 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4248f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 12h-4l-3 9L9 3l-3 9H2"></path>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">Monitoring Dashboard</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">System health, cache, and task metrics</p>
+            </div>
           </div>
-          <div className="flex gap-1 border rounded-lg p-1">
+          <div className="flex gap-1 border border-[var(--color-border)] rounded-lg p-1 bg-[var(--color-panel)]">
             {(['overview', 'health', 'cache', 'tasks'] as const).map((panel) => (
               <button
                 key={panel}
                 onClick={() => setActivePanel(panel)}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
+                className={`px-3 py-1.5 rounded text-sm transition-colors ${
                   activePanel === panel
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
+                    ? 'bg-[#4248f1] text-white'
+                    : 'hover:bg-[var(--color-muted)] text-[var(--color-text-muted)]'
                 }`}
               >
                 {panel.charAt(0).toUpperCase() + panel.slice(1)}
@@ -105,28 +125,29 @@ export function MonitoringDashboard() {
           </div>
         </div>
 
+        {/* Health Stats */}
         {(activePanel === 'overview' || activePanel === 'health') && (
           <div className="grid grid-cols-4 gap-4">
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Uptime</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Uptime</div>
               <div className="text-2xl font-bold mt-1">
                 {formatUptime(health?.uptime_secs || 0)}
               </div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Total Requests</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Total Requests</div>
               <div className="text-2xl font-bold mt-1">
                 {(health?.requests_total || 0).toLocaleString()}
               </div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Error Rate</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Error Rate</div>
               <div className={`text-2xl font-bold mt-1 ${(health?.error_rate || 0) > 5 ? 'text-red-500' : (health?.error_rate || 0) > 1 ? 'text-yellow-500' : 'text-green-500'}`}>
                 {(health?.error_rate || 0).toFixed(2)}%
               </div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Avg Response</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Avg Response</div>
               <div className="text-2xl font-bold mt-1">
                 {(health?.avg_response_time_ms || 0).toFixed(1)}ms
               </div>
@@ -134,22 +155,23 @@ export function MonitoringDashboard() {
           </div>
         )}
 
+        {/* Cache & Cost Stats */}
         {(activePanel === 'overview' || activePanel === 'cache') && (
           <div className="grid grid-cols-3 gap-4">
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Cache Entries</div>
-              <div className="text-2xl font-bold mt-1">
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Cache Entries</div>
+              <div className="text-2xl font-bold mt-1 text-[#4248f1]">
                 {cache?.active_entries || 0}
               </div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Expired</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Expired</div>
               <div className="text-2xl font-bold mt-1 text-yellow-500">
                 {cache?.expired_entries || 0}
               </div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Total Cost</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Total Cost</div>
               <div className="text-2xl font-bold mt-1 text-green-500">
                 ${(metrics?.total_cost_usd || 0).toFixed(2)}
               </div>
@@ -157,59 +179,64 @@ export function MonitoringDashboard() {
           </div>
         )}
 
+        {/* Task Stats */}
         {(activePanel === 'overview' || activePanel === 'tasks') && (
           <div className="grid grid-cols-4 gap-4">
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Total Tasks</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Total Tasks</div>
               <div className="text-2xl font-bold mt-1">{totalTasks}</div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Completed</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Completed</div>
               <div className="text-2xl font-bold mt-1 text-green-500">{completedTasks}</div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Failed</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Failed</div>
               <div className="text-2xl font-bold mt-1 text-red-500">{failedTasks}</div>
             </div>
-            <div className="border rounded-lg p-4">
-              <div className="text-sm text-muted-foreground">Success Rate</div>
+            <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Success Rate</div>
               <div className="text-2xl font-bold mt-1 text-green-500">{successRate}%</div>
             </div>
           </div>
         )}
 
+        {/* Overview Panels */}
         {activePanel === 'overview' && (
           <>
-            <div className="border rounded-lg">
-              <div className="border-b p-3">
+            {/* Tasks by Tier */}
+            <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)]">
+              <div className="border-b border-[var(--color-border)] p-3">
                 <h3 className="font-semibold">Tasks by Tier</h3>
               </div>
               <div className="p-4 grid grid-cols-3 gap-4">
                 {Object.entries(metrics?.by_tier || {}).map(([tier, count]) => (
-                  <div key={tier} className="bg-muted/50 rounded-lg p-3">
-                    <div className="text-sm text-muted-foreground capitalize">{tier}</div>
+                  <div key={tier} className="bg-[var(--color-muted)]/30 rounded-lg p-3">
+                    <div className="text-sm text-[var(--color-text-muted)] capitalize">{tier}</div>
                     <div className="text-xl font-bold">{count}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border rounded-lg">
-              <div className="border-b p-3">
+            {/* Tasks by Status */}
+            <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)]">
+              <div className="border-b border-[var(--color-border)] p-3">
                 <h3 className="font-semibold">Tasks by Status</h3>
               </div>
               <div className="p-4 grid grid-cols-5 gap-4">
                 {Object.entries(metrics?.by_status || {}).map(([status, count]) => (
-                  <div key={status} className="bg-muted/50 rounded-lg p-3">
-                    <div className="text-sm text-muted-foreground capitalize">{status}</div>
+                  <div key={status} className="bg-[var(--color-muted)]/30 rounded-lg p-3">
+                    <div className="text-sm text-[var(--color-text-muted)] capitalize">{status}</div>
                     <div className="text-xl font-bold">{count}</div>
                   </div>
                 ))}
               </div>
             </div>
 
-            <div className="border rounded-lg">
-              <div className="border-b p-3">
+            {/* Top Endpoints */}
+            <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)]">
+              <div className="border-b border-[var(--color-border)] p-3">
                 <h3 className="font-semibold">Top Endpoints</h3>
               </div>
               <div className="p-4 space-y-2">
@@ -217,7 +244,7 @@ export function MonitoringDashboard() {
                   .sort(([, a], [, b]) => b - a)
                   .slice(0, 10)
                   .map(([endpoint, count]) => (
-                    <div key={endpoint} className="flex items-center justify-between">
+                    <div key={endpoint} className="flex items-center justify-between p-2 hover:bg-[var(--color-muted)]/30 rounded-lg transition-colors">
                       <span className="font-mono text-sm">{endpoint}</span>
                       <span className="font-medium">{count.toLocaleString()}</span>
                     </div>
@@ -227,14 +254,23 @@ export function MonitoringDashboard() {
           </>
         )}
 
+        {/* Health Error */}
         {activePanel === 'health' && health?.last_error && (
-          <div className="border border-red-500/50 rounded-lg p-4 bg-red-500/10">
-            <h3 className="font-semibold text-red-400 mb-2">Last Error</h3>
-            <p className="text-sm text-red-300/80">{health.last_error}</p>
+          <div className="border border-red-500/30 rounded-xl p-4 bg-red-500/5">
+            <h3 className="font-semibold text-red-500 mb-2 flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              Last Error
+            </h3>
+            <p className="text-sm text-[var(--color-text-muted)]">{health.last_error}</p>
           </div>
         )}
 
-        <div className="text-xs text-muted-foreground text-center">
+        {/* Last Updated */}
+        <div className="text-xs text-[var(--color-text-muted)] text-center">
           Last updated: {new Date().toLocaleTimeString()}
         </div>
       </div>

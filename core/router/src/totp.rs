@@ -8,6 +8,8 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use std::collections::HashMap;
 use base32::Alphabet;
+use rand::{RngCore, SeedableRng};
+use rand::rngs::StdRng;
 
 use crate::secret_store::SecretStore;
 
@@ -39,8 +41,9 @@ impl TotpManager {
 
     /// Generate a new TOTP secret for a user
     pub async fn generate_secret(&self, user_id: &str) -> Result<String, String> {
-        // Generate random 20-byte secret
-        let secret_bytes: Vec<u8> = (0..20).map(|_| rand::random::<u8>()).collect();
+        // Generate random 20-byte secret using cryptographically secure RNG
+        let mut secret_bytes = [0u8; 20];
+        StdRng::from_entropy().fill_bytes(&mut secret_bytes);
         let secret_encoded = base32::encode(Alphabet::Rfc4648 { padding: false }, &secret_bytes);
         
         // Store in memory

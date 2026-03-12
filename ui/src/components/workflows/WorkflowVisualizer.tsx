@@ -94,23 +94,23 @@ function parseWorkflowDefinition(definition: string): { nodes: Node[]; connectio
 
 function getNodeColor(type: Node['type']): string {
   switch (type) {
-    case 'trigger': return 'bg-green-500';
-    case 'action': return 'bg-blue-500';
-    case 'condition': return 'bg-yellow-500';
-    case 'delay': return 'bg-purple-500';
-    case 'end': return 'bg-red-500';
-    default: return 'bg-gray-500';
+    case 'trigger': return '#4248f1';
+    case 'action': return '#3b82f6';
+    case 'condition': return '#f59e0b';
+    case 'delay': return '#8b5cf6';
+    case 'end': return '#ef4444';
+    default: return '#6b7280';
   }
 }
 
-function getStatusColor(status: string): { bg: string; text: string; icon: string } {
+function getStatusColor(status: string): { bg: string; text: string; icon: React.ReactNode } {
   switch (status) {
-    case 'completed': return { bg: 'bg-green-100', text: 'text-green-800', icon: '✓' };
-    case 'running': return { bg: 'bg-blue-100', text: 'text-blue-800', icon: '⟳' };
-    case 'failed': return { bg: 'bg-red-100', text: 'text-red-800', icon: '✕' };
-    case 'pending': return { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: '◷' };
-    case 'cancelled': return { bg: 'bg-gray-100', text: 'text-gray-800', icon: '⊘' };
-    default: return { bg: 'bg-gray-100', text: 'text-gray-800', icon: '•' };
+    case 'completed': return { bg: 'bg-green-500/20', text: 'text-green-500', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> };
+    case 'running': return { bg: 'bg-[#4248f1]/20', text: 'text-[#4248f1]', icon: <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> };
+    case 'failed': return { bg: 'bg-red-500/20', text: 'text-red-500', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> };
+    case 'pending': return { bg: 'bg-yellow-500/20', text: 'text-yellow-500', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> };
+    case 'cancelled': return { bg: 'bg-gray-500/20', text: 'text-gray-500', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" /></svg> };
+    default: return { bg: 'bg-gray-500/20', text: 'text-gray-500', icon: <span className="w-4 h-4">•</span> };
   }
 }
 
@@ -121,24 +121,28 @@ export function WorkflowVisualizer({ workflow, executions }: WorkflowVisualizerP
   const maxDuration = Math.max(...executions.map(e => e.duration_secs || 0), 1);
   
   return (
-    <div className="border rounded-xl overflow-hidden">
-      <div className="bg-muted/30 p-3 border-b flex items-center justify-between">
+    <div className="border border-border rounded-xl overflow-hidden bg-[var(--color-panel)]">
+      <div className="p-3 border-b border-border flex items-center justify-between">
         <div>
           <h3 className="font-semibold">{workflow.name}</h3>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-xs text-[var(--color-text-muted)]">
             {workflow.execution_count} executions • avg {workflow.avg_duration_secs?.toFixed(1) || '-'}s • {workflow.success_rate?.toFixed(0) || '-'}% success
           </p>
         </div>
         <div className="flex gap-1">
           <button
             onClick={() => setView('flowchart')}
-            className={`px-3 py-1.5 text-sm rounded ${view === 'flowchart' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              view === 'flowchart' ? 'bg-[#4248f1] text-white' : 'hover:bg-[#4248f1]/20'
+            }`}
           >
             Flow
           </button>
           <button
             onClick={() => setView('timeline')}
-            className={`px-3 py-1.5 text-sm rounded ${view === 'timeline' ? 'bg-primary text-primary-foreground' : 'hover:bg-muted'}`}
+            className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
+              view === 'timeline' ? 'bg-[#4248f1] text-white' : 'hover:bg-[#4248f1]/20'
+            }`}
           >
             Timeline
           </button>
@@ -218,8 +222,11 @@ export function WorkflowVisualizer({ workflow, executions }: WorkflowVisualizerP
                 { type: 'end', label: 'End' },
               ].map(({ type, label }) => (
                 <div key={type} className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded ${getNodeColor(type as Node['type'])}`} />
-                  <span className="text-xs text-muted-foreground">{label}</span>
+                  <div 
+                    className="w-3 h-3 rounded" 
+                    style={{ backgroundColor: getNodeColor(type as Node['type']) }}
+                  />
+                  <span className="text-xs text-[var(--color-text-muted)]">{label}</span>
                 </div>
               ))}
             </div>
@@ -227,15 +234,17 @@ export function WorkflowVisualizer({ workflow, executions }: WorkflowVisualizerP
         ) : (
           <div className="space-y-3">
             {executions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                <div className="text-2xl mb-2">📋</div>
+              <div className="text-center py-8 text-[var(--color-text-muted)]">
+                <svg className="w-12 h-12 mx-auto mb-4 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                </svg>
                 <p>No executions yet</p>
               </div>
             ) : (
               executions.slice(0, 10).map((exec) => {
                 const status = getStatusColor(exec.status);
                 return (
-                  <div key={exec.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                  <div key={exec.id} className="flex items-center gap-3 p-3 border border-border rounded-xl hover:bg-[#4248f1]/5 transition-colors">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm ${status.bg} ${status.text}`}>
                       {status.icon}
                     </div>
@@ -244,20 +253,20 @@ export function WorkflowVisualizer({ workflow, executions }: WorkflowVisualizerP
                         <span className={`font-medium ${status.text}`}>
                           {exec.status.charAt(0).toUpperCase() + exec.status.slice(1)}
                         </span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-xs text-[var(--color-text-muted)]">
                           {exec.duration_secs ? `${exec.duration_secs}s` : '-'}
                         </span>
                       </div>
-                      <div className="text-xs text-muted-foreground">
+                      <div className="text-xs text-[var(--color-text-muted)]">
                         {new Date(exec.started_at_ms).toLocaleString()}
                         {exec.triggered_by && ` • by ${exec.triggered_by}`}
                       </div>
                     </div>
                     {exec.duration_secs && (
                       <div className="w-24">
-                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-1.5 bg-[var(--color-background)] rounded-full overflow-hidden">
                           <div
-                            className="h-full bg-blue-500 rounded-full"
+                            className="h-full bg-[#4248f1] rounded-full"
                             style={{ width: `${(exec.duration_secs / maxDuration) * 100}%` }}
                           />
                         </div>
@@ -272,8 +281,8 @@ export function WorkflowVisualizer({ workflow, executions }: WorkflowVisualizerP
       </div>
       
       {executions.length > 0 && (
-        <div className="p-3 border-t bg-muted/30">
-          <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className="p-3 border-t border-border">
+          <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
             <span>
               {executions.filter(e => e.status === 'completed').length} completed
               {' • '}

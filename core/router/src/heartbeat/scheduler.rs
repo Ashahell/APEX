@@ -8,7 +8,6 @@ use super::{AutonomyAction, HeartbeatConfig, WakeCycle};
 pub type WakeCallback = Box<dyn Fn() -> Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static> + Send + Sync>;
 
 #[derive(Clone)]
-#[allow(dead_code)]
 pub struct HeartbeatScheduler {
     config: HeartbeatConfig,
     is_running: Arc<RwLock<bool>>,

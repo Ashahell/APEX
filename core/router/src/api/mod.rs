@@ -22,6 +22,62 @@ pub mod subagent;
 pub mod dynamic_tools;
 pub mod security;
 
+/// Helper module for API error handling
+pub mod api_error {
+    use axum::http::StatusCode;
+    use std::fmt;
+    
+    /// API Error type for consistent error responses
+    pub struct ApiError {
+        pub status: StatusCode,
+        pub message: String,
+    }
+    
+    impl ApiError {
+        /// Create a new API error with INTERNAL_SERVER_ERROR
+        pub fn internal(message: impl fmt::Display) -> (StatusCode, String) {
+            (StatusCode::INTERNAL_SERVER_ERROR, message.to_string())
+        }
+        
+        /// Create a new API error with NOT_FOUND
+        pub fn not_found(message: impl fmt::Display) -> (StatusCode, String) {
+            (StatusCode::NOT_FOUND, message.to_string())
+        }
+        
+        /// Create a new API error with BAD_REQUEST
+        pub fn bad_request(message: impl fmt::Display) -> (StatusCode, String) {
+            (StatusCode::BAD_REQUEST, message.to_string())
+        }
+        
+        /// Create a new API error with UNAUTHORIZED
+        pub fn unauthorized(message: impl fmt::Display) -> (StatusCode, String) {
+            (StatusCode::UNAUTHORIZED, message.to_string())
+        }
+        
+        /// Create a new API error with FORBIDDEN
+        pub fn forbidden(message: impl fmt::Display) -> (StatusCode, String) {
+            (StatusCode::FORBIDDEN, message.to_string())
+        }
+        
+        /// Convert a Result to ApiError
+        pub fn from_result<T, E: fmt::Display>(result: Result<T, E>, context: &str) -> Result<T, (StatusCode, String)> {
+            result.map_err(|e| Self::internal(format!("{}: {}", context, e)))
+        }
+    }
+    
+    /// Macro to simplify error handling in API handlers
+    /// Usage: `api_try!(repo.operation(), "description of operation")`
+    #[macro_export]
+    macro_rules! api_try {
+        ($expr:expr, $context:literal) => {
+            $expr.map_err(|e| {
+                use $crate::api::api_error::ApiError;
+                ApiError::internal(format!("{}: {}", $context, e))
+            })
+        };
+    }
+}
+
 use std::collections::HashMap;
 use std::sync::Arc;
 

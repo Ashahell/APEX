@@ -32,6 +32,7 @@ echo   test           Run tests
 echo   router         Start router only
 echo   router-llm     Start router with LLM enabled
 echo   router-llm-no-llama Start router with LLM (llama already running)
+echo   router-docker  Start router with Docker isolation
 echo   router-mock    Start router with Mock isolation (no Docker)
 echo   llama          Start llama-server (LLM)
 echo   embed          Start embedding server (nomic-embed-text)
@@ -69,6 +70,7 @@ if "%CMD%"=="router2-llm" goto cmd_router2_llm
 if "%CMD%"=="router-gvisor" goto cmd_router_gvisor
 if "%CMD%"=="router-firecracker" goto cmd_router_firecracker
 if "%CMD%"=="router-mock" goto cmd_router_mock
+if "%CMD%"=="router-docker" goto cmd_router_docker
 if "%CMD%"=="llama" goto cmd_llama
 if "%CMD%"=="llama-test" goto cmd_llama_test
 if "%CMD%"=="embed" goto cmd_embed

@@ -5,7 +5,7 @@ import { Theme, ColorTokens } from '../../themes';
 const defaultColors: ColorTokens = {
   bg: { base: '#0a0a0f', elevated: '#12121a', overlay: '#1a1a24', surface: '#0e0e14' },
   text: { primary: '#e8e8ec', secondary: '#9090a0', muted: '#606070', inverse: '#0a0a0f' },
-  primary: { DEFAULT: '#00d4aa', hover: '#00e6bb', active: '#00c29a', muted: 'rgba(0, 212, 170, 0.15)' },
+  primary: { DEFAULT: '#4248f1', hover: '#5359f2', active: '#3138d1', muted: 'rgba(66, 72, 241, 0.15)' },
   button: { bg: '#1a1a24', bgHover: '#2a2a34', bgActive: '#0a0a14', text: '#e8e8ec', border: '#3a3a44' },
   accent: { success: '#22c55e', warning: '#f59e0b', error: '#ef4444', info: '#3b82f6' },
   agent: { idle: '#606070', active: '#00d4aa', thinking: '#f59e0b', alert: '#ef4444' },
@@ -78,7 +78,7 @@ function ColorInput({ label, description, value, onChange }: ColorInputProps) {
         type="color"
         value={safeColor}
         onChange={(e) => handleColorChange(e.target.value)}
-        className="w-8 h-8 rounded cursor-pointer border-0 shrink-0"
+        className="w-8 h-8 rounded-lg cursor-pointer border-0 shrink-0 ring-2 ring-[#4248f1]/30 focus:ring-[#4248f1]"
         aria-label={`Select color for ${label}`}
       />
       <div className="flex-1 min-w-0">
@@ -91,14 +91,14 @@ function ColorInput({ label, description, value, onChange }: ColorInputProps) {
           }}
           onBlur={validateAndSubmit}
           onKeyDown={handleKeyDown}
-          className={`w-full px-2 py-1 text-sm rounded border bg-background text-foreground font-mono ${
-            isInvalid ? 'border-red-500 focus:border-red-500' : ''
+          className={`w-full px-2 py-1 text-sm rounded-lg border bg-[var(--color-background)] text-[var(--color-foreground)] font-mono focus:ring-2 focus:ring-[#4248f1]/50 focus:border-[#4248f1] outline-none transition-colors ${
+            isInvalid ? 'border-red-500 focus:border-red-500' : 'border-border'
           }`}
           aria-invalid={isInvalid}
           aria-describedby={description ? `desc-${label}` : undefined}
         />
         {description && (
-          <div id={`desc-${label}`} className="text-xs text-muted-foreground truncate">
+          <div id={`desc-${label}`} className="text-xs text-[var(--color-text-muted)] truncate">
             {description}
           </div>
         )}
@@ -106,7 +106,7 @@ function ColorInput({ label, description, value, onChange }: ColorInputProps) {
           <div className="text-xs text-red-500">Invalid hex color</div>
         )}
       </div>
-      <span className="text-xs text-muted-foreground shrink-0 w-20">{label}</span>
+      <span className="text-xs text-[var(--color-text-muted)] shrink-0 w-20">{label}</span>
     </div>
   );
 }
@@ -118,8 +118,8 @@ interface SectionProps {
 
 function Section({ title, children }: SectionProps) {
   return (
-    <div className="border rounded-lg p-4 bg-card">
-      <h3 className="font-semibold mb-3 text-foreground">{title}</h3>
+    <div className="border border-border rounded-xl p-4 bg-[var(--color-panel)]">
+      <h3 className="font-semibold mb-3 text-[var(--color-text)]" style={{ color: '#4248f1' }}>{title}</h3>
       <div className="space-y-2">{children}</div>
     </div>
   );
@@ -218,46 +218,56 @@ export function ThemeEditor() {
 
   // Ensure theme is loaded before rendering editor
   if (!theme) {
-    return <div className="p-4 text-muted-foreground">Loading theme editor...</div>;
+    return <div className="p-4 text-[var(--color-text-muted)]">Loading theme editor...</div>;
   }
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex gap-2 border-b pb-2 items-center flex-wrap">
+      <div className="flex gap-2 border-b border-border pb-2 items-center flex-wrap">
         <button
           onClick={() => setActiveTab('presets')}
-          className={`px-4 py-2 rounded-t transition-colors ${
-            activeTab === 'presets' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
+          className={`px-4 py-2 rounded-xl transition-colors font-medium text-sm ${
+            activeTab === 'presets' ? 'bg-[#4248f1] text-white' : 'bg-[var(--color-panel)] hover:bg-[#4248f1]/20'
           }`}
         >
-          Presets
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />
+            </svg>
+            Presets
+          </span>
         </button>
         <button
           onClick={() => setActiveTab('editor')}
-          className={`px-4 py-2 rounded-t transition-colors ${
-            activeTab === 'editor' ? 'bg-primary text-primary-foreground' : 'bg-muted hover:bg-muted/80'
+          className={`px-4 py-2 rounded-xl transition-colors font-medium text-sm ${
+            activeTab === 'editor' ? 'bg-[#4248f1] text-white' : 'bg-[var(--color-panel)] hover:bg-[#4248f1]/20'
           }`}
         >
-          Editor
+          <span className="flex items-center gap-2">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+            Editor
+          </span>
         </button>
         {hasChanges && (
           <div className="ml-auto flex gap-2">
             <button
               onClick={handleCancel}
-              className="px-3 py-1 text-sm bg-muted rounded hover:bg-muted/80 transition-colors"
+              className="px-3 py-1.5 text-sm bg-[var(--color-panel)] border border-border rounded-xl hover:bg-[#4248f1]/10 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleApply}
-              className="px-3 py-1 text-sm bg-primary text-primary-foreground rounded hover:opacity-90 transition-opacity"
+              className="px-3 py-1.5 text-sm bg-[#4248f1] text-white rounded-xl hover:bg-[#4248f1]/90 transition-colors"
             >
               Apply
             </button>
           </div>
         )}
         {!hasChanges && activeTab === 'editor' && (
-          <span className="ml-auto text-sm text-muted-foreground">
+          <span className="ml-auto text-sm text-[var(--color-text-muted)]">
             Make changes and click Apply to preview
           </span>
         )}
@@ -270,12 +280,12 @@ export function ThemeEditor() {
               <button
                 key={preset.id}
                 onClick={() => handlePresetSelect(preset.id)}
-                className={`p-4 rounded-lg border-2 text-left transition-all hover:shadow-md ${
-                  themeId === preset.id ? 'border-primary ring-1 ring-primary' : 'border-transparent hover:border-muted'
+                className={`p-4 rounded-xl border-2 text-left transition-all hover:shadow-lg ${
+                  themeId === preset.id ? 'border-[#4248f1] ring-2 ring-[#4248f1]/30' : 'border-border hover:border-[#4248f1]/50'
                 }`}
               >
                 <div
-                  className="h-16 rounded mb-2 flex items-center justify-center text-xs font-medium"
+                  className="h-16 rounded-lg mb-2 flex items-center justify-center text-xs font-medium"
                   style={{
                     background: preset.id === 'amiga' ? '#b8b8b8' : preset.tokens?.colors?.bg?.base ?? '#0a0a0f',
                     color: preset.id === 'amiga' ? '#000' : preset.tokens?.colors?.text?.primary ?? '#e8e8ec',
@@ -286,16 +296,16 @@ export function ThemeEditor() {
                 </div>
                 <div className="font-medium">{preset.name}</div>
                 {preset.description && (
-                  <div className="text-sm text-muted-foreground">{preset.description}</div>
+                  <div className="text-sm text-[var(--color-text-muted)]">{preset.description}</div>
                 )}
               </button>
             ))}
           </div>
 
           {isCustom && (
-            <div className="mt-4 p-4 bg-muted rounded-lg">
-              <h3 className="font-semibold mb-2">Custom Theme</h3>
-              <p className="text-sm text-muted-foreground mb-3">
+            <div className="mt-4 p-4 bg-[var(--color-panel)] border border-border rounded-xl">
+              <h3 className="font-semibold mb-2" style={{ color: '#4248f1' }}>Custom Theme</h3>
+              <p className="text-sm text-[var(--color-text-muted)] mb-3">
                 You have unsaved changes to a custom theme.
               </p>
               <div className="flex gap-2 flex-wrap">
@@ -304,18 +314,18 @@ export function ThemeEditor() {
                   value={newThemeName}
                   onChange={(e) => setNewThemeName(e.target.value)}
                   placeholder="Theme name..."
-                  className="flex-1 min-w-[200px] px-3 py-2 rounded border bg-background text-foreground"
+                  className="flex-1 min-w-[200px] px-3 py-2 rounded-xl border border-border bg-[var(--color-background)] text-[var(--color-foreground)] focus:ring-2 focus:ring-[#4248f1]/50 focus:border-[#4248f1] outline-none transition-colors"
                 />
                 <button
                   onClick={handleSaveAs}
                   disabled={!newThemeName.trim()}
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                  className="px-4 py-2 bg-[#4248f1] text-white rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[#4248f1]/90 transition-colors"
                 >
                   Save As
                 </button>
                 <button
                   onClick={resetTheme}
-                  className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:opacity-90 transition-opacity"
+                  className="px-4 py-2 bg-red-500/20 text-red-500 border border-red-500/30 rounded-xl hover:bg-red-500/30 transition-colors"
                 >
                   Reset
                 </button>
@@ -505,7 +515,7 @@ export function ThemeEditor() {
           <div className="flex gap-2 pt-4">
             <button
               onClick={handleResetToDefault}
-              className="px-4 py-2 bg-destructive text-destructive-foreground rounded hover:opacity-90 transition-opacity"
+              className="px-4 py-2 bg-red-500/20 text-red-500 border border-red-500/30 rounded-xl hover:bg-red-500/30 transition-colors"
             >
               Reset to Default
             </button>

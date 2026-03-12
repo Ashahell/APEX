@@ -3,6 +3,15 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use chrono::Utc;
 
+/// External notification configuration (webhooks)
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ExternalNotificationConfig {
+    pub discord_webhook_url: Option<String>,
+    pub telegram_bot_token: Option<String>,
+    pub telegram_chat_id: Option<String>,
+    pub enabled: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Notification {
     pub id: String,
@@ -28,6 +37,7 @@ pub struct CreateNotification {
 pub struct NotificationManager {
     notifications: Arc<RwLock<Vec<Notification>>>,
     max_notifications: usize,
+    external_config: Arc<RwLock<ExternalNotificationConfig>>,
 }
 
 impl Default for NotificationManager {
@@ -41,7 +51,66 @@ impl NotificationManager {
         Self {
             notifications: Arc::new(RwLock::new(Vec::new())),
             max_notifications,
+            external_config: Arc::new(RwLock::new(ExternalNotificationConfig::default())),
         }
+    }
+
+    /// Get external notification configuration
+    pub async fn get_external_config(&self) -> ExternalNotificationConfig {
+        self.external_config.read().await.clone()
+    }
+
+    /// Update external notification configuration
+    pub async fn set_external_config(&self, config: ExternalNotificationConfig) {
+        *self.external_config.write().await = config;
+    }
+
+    /// Send external notification (Discord/Telegram webhook)
+    pub async fn send_external_notification(&self, title: &str, message: &str) -> Result<(), String> {
+        let config = self.external_config.read().await.clone();
+        
+        if !config.enabled {
+            return Ok(());
+        }
+
+        // Send to Discord webhook if configured
+        if let Some(discord_url) = &config.discord_webhook_url {
+            let payload = serde_json::json!({
+                "content": format!("**{}**\n{}", title, message)
+            });
+            
+            let client = reqwest::Client::new();
+            if let Err(e) = client.post(discord_url)
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await
+            {
+                tracing::warn!("Failed to send Discord notification: {}", e);
+            }
+        }
+
+        // Send to Telegram if configured
+        if let (Some(token), Some(chat_id)) = (&config.telegram_bot_token, &config.telegram_chat_id) {
+            let telegram_url = format!("https://api.telegram.org/bot{}/sendMessage", token);
+            let payload = serde_json::json!({
+                "chat_id": chat_id,
+                "text": format!("*{}*\n{}", title, message),
+                "parse_mode": "Markdown"
+            });
+            
+            let client = reqwest::Client::new();
+            if let Err(e) = client.post(&telegram_url)
+                .header("Content-Type", "application/json")
+                .json(&payload)
+                .send()
+                .await
+            {
+                tracing::warn!("Failed to send Telegram notification: {}", e);
+            }
+        }
+
+        Ok(())
     }
 
     pub async fn list(&self, include_read: bool) -> Vec<Notification> {
@@ -111,6 +180,7 @@ impl NotificationManager {
     }
 
     pub async fn notify_task_complete(&self, task_id: &str, message: &str) {
+        // Create in-app notification
         self.create(CreateNotification {
             notification_type: "task".to_string(),
             title: "Task Completed".to_string(),
@@ -118,9 +188,16 @@ impl NotificationManager {
             severity: "info".to_string(),
             data: Some(serde_json::json!({ "task_id": task_id })),
         }).await;
+
+        // Send external notification
+        let _ = self.send_external_notification(
+            &format!("Task Completed: {}", task_id),
+            message,
+        ).await;
     }
 
     pub async fn notify_task_failed(&self, task_id: &str, message: &str) {
+        // Create in-app notification
         self.create(CreateNotification {
             notification_type: "task".to_string(),
             title: "Task Failed".to_string(),
@@ -128,6 +205,12 @@ impl NotificationManager {
             severity: "error".to_string(),
             data: Some(serde_json::json!({ "task_id": task_id })),
         }).await;
+
+        // Send external notification (always send failures)
+        let _ = self.send_external_notification(
+            &format!("Task Failed: {}", task_id),
+            message,
+        ).await;
     }
 
     pub async fn notify_confirmation(&self, task_id: &str, action: &str) {

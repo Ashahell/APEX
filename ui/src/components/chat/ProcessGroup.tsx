@@ -26,7 +26,7 @@ export interface ProcessGroupProps {
 }
 
 const STEP_COLORS: Record<StepType, { bg: string; text: string; border: string }> = {
-  GEN: { bg: 'bg-blue-500/20', text: 'text-blue-400', border: 'border-l-blue-500' },
+  GEN: { bg: 'bg-[#4248f1]/20', text: 'text-[#4248f1]', border: 'border-l-[#4248f1]' },
   USE: { bg: 'bg-teal-500/20', text: 'text-teal-400', border: 'border-l-teal-500' },
   EXE: { bg: 'bg-amber-500/20', text: 'text-amber-400', border: 'border-l-amber-500' },
   WWW: { bg: 'bg-purple-500/20', text: 'text-purple-400', border: 'border-l-purple-500' },
@@ -36,12 +36,12 @@ const STEP_COLORS: Record<StepType, { bg: string; text: string; border: string }
   MCP: { bg: 'bg-cyan-500/20', text: 'text-cyan-400', border: 'border-l-cyan-500' },
 };
 
-const STATUS_COLORS: Record<string, { border: string; bg: string; icon: string }> = {
-  running: { border: 'border-l-primary', bg: 'bg-primary/5', icon: '🔄' },
-  awaiting_confirmation: { border: 'border-l-amber-500', bg: 'bg-amber-500/5', icon: '⚠️' },
-  completed: { border: 'border-l-green-500', bg: 'bg-green-500/5', icon: '✅' },
-  failed: { border: 'border-l-red-500', bg: 'bg-red-500/5', icon: '❌' },
-  timed_out: { border: 'border-l-gray-500', bg: 'bg-gray-500/5', icon: '⏱️' },
+const STATUS_COLORS: Record<string, { border: string; bg: string; icon: React.ReactNode }> = {
+  running: { border: 'border-l-[#4248f1]', bg: 'bg-[#4248f1]/5', icon: <svg className="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" /></svg> },
+  awaiting_confirmation: { border: 'border-l-amber-500', bg: 'bg-amber-500/5', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg> },
+  completed: { border: 'border-l-green-500', bg: 'bg-green-500/5', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg> },
+  failed: { border: 'border-l-red-500', bg: 'bg-red-500/5', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg> },
+  timed_out: { border: 'border-l-gray-500', bg: 'bg-gray-500/5', icon: <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" /></svg> },
 };
 
 export function ProcessGroup({

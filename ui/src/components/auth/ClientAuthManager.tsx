@@ -86,7 +86,7 @@ export function ClientAuthManager() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading...</div>
+        <div className="text-[var(--color-text-muted)]">Loading...</div>
       </div>
     );
   }
@@ -96,34 +96,34 @@ export function ClientAuthManager() {
       <div className="max-w-4xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold">Client Authentication</h2>
-            <p className="text-sm text-muted-foreground">
+            <h2 className="text-2xl font-bold" style={{ color: '#4248f1' }}>Client Authentication</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">
               Manage API clients with per-client secrets and rate limiting
             </p>
           </div>
           <button
             onClick={() => setShowCreate(!showCreate)}
-            className="px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90"
+            className="px-4 py-2 rounded-xl bg-[#4248f1] text-white hover:bg-[#4248f1]/90 transition-colors"
           >
             {showCreate ? 'Cancel' : 'New Client'}
           </button>
         </div>
 
         {error && (
-          <div className="p-3 bg-red-500/20 text-red-500 rounded-lg">
+          <div className="p-3 bg-red-500/20 text-red-500 rounded-xl border border-red-500/30">
             {error}
           </div>
         )}
 
         {success && (
-          <div className="p-3 bg-green-500/20 text-green-500 rounded-lg">
+          <div className="p-3 bg-green-500/20 text-green-500 rounded-xl border border-green-500/30">
             {success}
           </div>
         )}
 
         {showCreate && (
-          <div className="border rounded-lg p-4 space-y-4">
-            <h3 className="font-semibold">Create New Client</h3>
+          <div className="border border-border rounded-xl p-4 space-y-4 bg-[var(--color-panel)]">
+            <h3 className="font-semibold" style={{ color: '#4248f1' }}>Create New Client</h3>
             <div>
               <label className="block text-sm font-medium mb-1">Client Name</label>
               <input
@@ -131,7 +131,7 @@ export function ClientAuthManager() {
                 value={newClientName}
                 onChange={(e) => setNewClientName(e.target.value)}
                 placeholder="My API Client"
-                className="w-full px-3 py-2 rounded-lg border bg-background"
+                className="w-full px-3 py-2 rounded-xl border border-border bg-[var(--color-background)] focus:ring-2 focus:ring-[#4248f1]/50 focus:border-[#4248f1] outline-none transition-colors"
               />
             </div>
             <div>
@@ -142,37 +142,37 @@ export function ClientAuthManager() {
                 onChange={(e) => setNewClientRateLimit(parseInt(e.target.value) || 60)}
                 min={1}
                 max={10000}
-                className="w-full px-3 py-2 rounded-lg border bg-background"
+                className="w-full px-3 py-2 rounded-xl border border-border bg-[var(--color-background)] focus:ring-2 focus:ring-[#4248f1]/50 focus:border-[#4248f1] outline-none transition-colors"
               />
             </div>
             <button
               onClick={createClient}
               disabled={creating}
-              className="w-full px-4 py-2 rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50"
+              className="w-full px-4 py-2 rounded-xl bg-[#4248f1] text-white hover:bg-[#4248f1]/90 disabled:opacity-50 transition-colors"
             >
               {creating ? 'Creating...' : 'Create Client'}
             </button>
           </div>
         )}
 
-        <div className="border rounded-lg">
-          <div className="border-b p-3">
-            <h3 className="font-semibold">Registered Clients ({clients.length})</h3>
+        <div className="border border-border rounded-xl overflow-hidden">
+          <div className="border-b border-border p-3 bg-[var(--color-panel)]">
+            <h3 className="font-semibold" style={{ color: '#4248f1' }}>Registered Clients ({clients.length})</h3>
           </div>
-          <div className="divide-y">
+          <div className="divide-y divide-border">
             {clients.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
+              <div className="p-8 text-center text-[var(--color-text-muted)]">
                 No clients registered
               </div>
             ) : (
               clients.map((client) => (
-                <div key={client.client_id} className="p-4 flex items-center justify-between">
+                <div key={client.client_id} className="p-4 flex items-center justify-between hover:bg-[#4248f1]/5 transition-colors">
                   <div>
                     <div className="font-medium">{client.client_name}</div>
-                    <div className="text-sm text-muted-foreground font-mono">
+                    <div className="text-sm text-[var(--color-text-muted)] font-mono">
                       {client.client_id.slice(0, 8)}...
                     </div>
-                    <div className="text-xs text-muted-foreground mt-1">
+                    <div className="text-xs text-[var(--color-text-muted)] mt-1">
                       Created: {formatDate(client.created_at)} • 
                       Last used: {formatDate(client.last_used)} •
                       Rate: {client.rate_limit}/min
@@ -180,7 +180,7 @@ export function ClientAuthManager() {
                   </div>
                   <button
                     onClick={() => deleteClient(client.client_id)}
-                    className="px-3 py-1 rounded border text-red-500 hover:bg-red-500/10"
+                    className="px-3 py-1 rounded-xl border border-red-500/30 text-red-500 hover:bg-red-500/20 transition-colors"
                   >
                     Delete
                   </button>
@@ -190,9 +190,9 @@ export function ClientAuthManager() {
           </div>
         </div>
 
-        <div className="border rounded-lg p-4">
-          <h3 className="font-semibold mb-2">About Client Authentication</h3>
-          <p className="text-sm text-muted-foreground">
+        <div className="border border-border rounded-xl p-4 bg-[var(--color-panel)]">
+          <h3 className="font-semibold mb-2" style={{ color: '#4248f1' }}>About Client Authentication</h3>
+          <p className="text-sm text-[var(--color-text-muted)]">
             Each client has its own API key for authentication. Rate limiting helps prevent
             abuse. Client secrets are rotated by creating new clients and deleting old ones.
           </p>

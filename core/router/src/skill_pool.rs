@@ -11,6 +11,22 @@ use tracing::{error, info, warn};
 use crate::skill_pool_ipc::{IpcChannel, IpcResponse, SkillPoolError};
 use crate::system_component::{ComponentError, ComponentInfo, ComponentState, HealthStatus, SystemComponent};
 
+/// Configuration constants for skill pool
+mod config_constants {
+    /// Default number of worker processes in the pool
+    pub const DEFAULT_POOL_SIZE: usize = 4;
+    /// Default worker script path
+    pub const DEFAULT_WORKER_SCRIPT: &str = "./skills/pool_worker.ts";
+    /// Default skills directory
+    pub const DEFAULT_SKILLS_DIR: &str = "./skills";
+    /// Default request timeout in milliseconds (30 seconds)
+    pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+    /// Default slot acquire timeout in milliseconds (5 seconds)
+    pub const DEFAULT_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
+    /// Default health check interval in seconds
+    pub const DEFAULT_HEALTH_CHECK_INTERVAL_SECS: u64 = 30;
+}
+
 #[derive(Debug, Clone)]
 pub struct SkillPoolConfig {
     pub pool_size: usize,
@@ -23,13 +39,14 @@ pub struct SkillPoolConfig {
 
 impl Default for SkillPoolConfig {
     fn default() -> Self {
+        use config_constants::*;
         Self {
-            pool_size: 4,
-            worker_script: PathBuf::from("./skills/pool_worker.ts"),
-            skills_dir: PathBuf::from("./skills"),
-            request_timeout_ms: 30_000,
-            acquire_timeout_ms: 5_000,
-            health_check_interval: Duration::from_secs(30),
+            pool_size: DEFAULT_POOL_SIZE,
+            worker_script: PathBuf::from(DEFAULT_WORKER_SCRIPT),
+            skills_dir: PathBuf::from(DEFAULT_SKILLS_DIR),
+            request_timeout_ms: DEFAULT_REQUEST_TIMEOUT_MS,
+            acquire_timeout_ms: DEFAULT_ACQUIRE_TIMEOUT_MS,
+            health_check_interval: Duration::from_secs(DEFAULT_HEALTH_CHECK_INTERVAL_SECS),
         }
     }
 }

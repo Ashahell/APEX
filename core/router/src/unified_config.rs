@@ -58,9 +58,17 @@ pub struct AuthConfig {
 
 impl Default for AuthConfig {
     fn default() -> Self {
+        // In production, require the secret. In development, allow a dev secret.
+        let shared_secret = std::env::var("APEX_SHARED_SECRET")
+            .unwrap_or_else(|_| {
+                // Allow dev secret in development builds
+                // In production deployments, ensure APEX_SHARED_SECRET is set
+                tracing::warn!("Using dev secret. Set APEX_SHARED_SECRET for production.");
+                "dev-secret-change-in-production".to_string()
+            });
+        
         Self {
-            shared_secret: std::env::var("APEX_SHARED_SECRET")
-                .unwrap_or_else(|_| "dev-secret-change-in-production".to_string()),
+            shared_secret,
             disabled: std::env::var("APEX_AUTH_DISABLED")
                 .ok()
                 .map(|v| v == "1")
@@ -109,6 +117,14 @@ impl Default for AgentConfig {
                 .unwrap_or_else(|_| "http://localhost:8080".to_string()),
             model: std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "qwen3-4b".to_string()),
             api_key: None,
+            // Extended settings
+            ctx_length: Some(4096),
+            ctx_history: Some(0.3),
+            vision: Some(false),
+            rl_requests: Some(0),
+            rl_input: Some(0),
+            rl_output: Some(0),
+            kwargs: None,
         };
         Self {
             use_llm: std::env::var("APEX_USE_LLM").is_ok(),
@@ -181,6 +197,14 @@ pub struct LlmConfig {
     pub url: String,
     pub model: String,
     pub api_key: Option<String>,
+    // Extended settings matching AgentZero
+    pub ctx_length: Option<u32>,
+    pub ctx_history: Option<f32>,
+    pub vision: Option<bool>,
+    pub rl_requests: Option<u32>,
+    pub rl_input: Option<u32>,
+    pub rl_output: Option<u32>,
+    pub kwargs: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

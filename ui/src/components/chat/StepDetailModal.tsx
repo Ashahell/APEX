@@ -36,14 +36,14 @@ export function StepDetailModal({ step, onClose }: StepDetailModalProps) {
           initial={{ scale: 0.95, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.95, opacity: 0 }}
-          className="bg-background border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+          className="bg-[var(--color-panel)] border border-border rounded-xl shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-muted/30">
+          <div className="flex items-center justify-between p-4 border-b border-border bg-[var(--color-muted)]/30">
             <div className="flex items-center gap-3">
-              <span className={`text-xs font-bold px-2 py-1 rounded ${
-                step.type === 'GEN' ? 'bg-blue-500/20 text-blue-400' :
+              <span className={`text-xs font-bold px-2 py-1 rounded-lg ${
+                step.type === 'GEN' ? 'bg-[#4248f1]/20 text-[#4248f1]' :
                 step.type === 'USE' ? 'bg-teal-500/20 text-teal-400' :
                 step.type === 'EXE' ? 'bg-amber-500/20 text-amber-400' :
                 step.type === 'WWW' ? 'bg-purple-500/20 text-purple-400' :
@@ -57,7 +57,7 @@ export function StepDetailModal({ step, onClose }: StepDetailModalProps) {
             </div>
             <button
               onClick={onClose}
-              className="p-2 hover:bg-muted rounded-lg transition-colors"
+              className="p-2 hover:bg-[#4248f1]/20 rounded-lg transition-colors"
             >
               ✕
             </button>

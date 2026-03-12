@@ -1,34 +1,32 @@
-import { App, SlackEvent, SayFn } from '@slack/bolt';
-import { ChannelAdapter, TaskRequest, TaskResponse } from '../types.js';
+import { App, SlackEvent } from '@slack/bolt';
+import { TaskRequest, TaskResponse } from '../types.js';
+import { BaseAdapter } from '../base.js';
 
-export class SlackAdapter implements ChannelAdapter {
-  readonly channel = 'slack' as const;
+export class SlackAdapter extends BaseAdapter {
   private app: App;
-  private onTask: (task: TaskRequest) => Promise<void>;
 
   constructor(
     token: string,
     signingSecret: string,
     onTask: (task: TaskRequest) => Promise<void>
   ) {
+    super('slack', onTask);
     this.app = new App({
       token,
       signingSecret,
     });
-    this.onTask = onTask;
   }
 
   async start(): Promise<void> {
-    this.app.message(async ({ message, say }) => {
+    this.app.message(async ({ message }) => {
       if (this.isUserMessage(message)) {
-        const task: TaskRequest = {
-          messageId: message.ts,
-          channel: 'slack',
-          threadId: message.thread_ts,
-          author: message.user,
-          content: message.text || '',
-          timestamp: new Date(Number(message.ts) * 1000),
-        };
+        const task = this.createTaskRequest(
+          message.ts,
+          message.user,
+          message.text || '',
+          new Date(Number(message.ts) * 1000),
+          message.thread_ts
+        );
         
         await this.onTask(task);
       }
@@ -39,9 +37,6 @@ export class SlackAdapter implements ChannelAdapter {
 
   async stop(): Promise<void> {
     await this.app.stop();
-  }
-
-  async send(response: TaskResponse): Promise<void> {
   }
 
   private isUserMessage(message: SlackEvent): message is SlackEvent & { text: string; user: string; ts: string } {

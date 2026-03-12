@@ -1,4 +1,5 @@
-import { ChannelAdapter, TaskRequest, TaskResponse } from '../../types.js';
+import { TaskRequest, TaskResponse } from '../../types.js';
+import { BaseAdapter } from '../base.js';
 
 export interface EmailMessage {
   from: string;
@@ -13,13 +14,11 @@ export interface EmailMessage {
   }>;
 }
 
-export class EmailAdapter implements ChannelAdapter {
-  readonly channel = 'email' as const;
+export class EmailAdapter extends BaseAdapter {
   private smtpHost: string;
   private smtpPort: number;
   private smtpUser: string;
   private smtpPass: string;
-  private onTask: (task: TaskRequest) => Promise<void>;
 
   constructor(
     smtpHost: string,
@@ -28,31 +27,30 @@ export class EmailAdapter implements ChannelAdapter {
     smtpPass: string,
     onTask: (task: TaskRequest) => Promise<void>
   ) {
+    super('email', onTask);
     this.smtpHost = smtpHost;
     this.smtpPort = smtpPort;
     this.smtpUser = smtpUser;
     this.smtpPass = smtpPass;
-    this.onTask = onTask;
   }
 
   async start(): Promise<void> {
+    // Email adapter doesn't need to start a connection
+    // Use handleIncomingEmail() to process received emails
   }
 
   async stop(): Promise<void> {
+    // Cleanup if needed
   }
 
   async handleIncomingEmail(message: EmailMessage): Promise<void> {
-    const task: TaskRequest = {
-      messageId: `${message.from}-${Date.now()}`,
-      channel: 'email',
-      author: message.from,
-      content: message.text,
-      timestamp: new Date(),
-    };
+    const task = this.createTaskRequest(
+      `${message.from}-${Date.now()}`,
+      message.from,
+      message.text,
+      new Date()
+    );
 
     await this.onTask(task);
-  }
-
-  async send(response: TaskResponse): Promise<void> {
   }
 }

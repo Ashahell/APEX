@@ -21,18 +21,18 @@ interface FilterOptions {
 }
 
 const STATUS_COLUMNS = [
-  { id: 'pending', label: 'Pending', color: 'bg-yellow-100 border-yellow-300' },
-  { id: 'running', label: 'Running', color: 'bg-blue-100 border-blue-300' },
-  { id: 'completed', label: 'Completed', color: 'bg-green-100 border-green-300' },
-  { id: 'failed', label: 'Failed', color: 'bg-red-100 border-red-300' },
-  { id: 'cancelled', label: 'Cancelled', color: 'bg-gray-100 border-gray-300' },
+  { id: 'pending', label: 'Pending', color: 'bg-yellow-500/20 border-yellow-500/30 text-yellow-500' },
+  { id: 'running', label: 'Running', color: 'bg-[#4248f1]/20 border-[#4248f1]/30 text-[#4248f1]' },
+  { id: 'completed', label: 'Completed', color: 'bg-green-500/20 border-green-500/30 text-green-500' },
+  { id: 'failed', label: 'Failed', color: 'bg-red-500/20 border-red-500/30 text-red-500' },
+  { id: 'cancelled', label: 'Cancelled', color: 'bg-gray-500/20 border-gray-500/30 text-gray-500' },
 ];
 
 const PRIORITY_COLORS: Record<string, string> = {
-  low: 'bg-gray-200 text-gray-700',
-  medium: 'bg-blue-100 text-blue-700',
-  high: 'bg-orange-100 text-orange-700',
-  urgent: 'bg-red-100 text-red-700',
+  low: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
+  medium: 'bg-[#4248f1]/20 text-[#4248f1] border-[#4248f1]/30',
+  high: 'bg-orange-500/20 text-orange-500 border-orange-500/30',
+  urgent: 'bg-red-500/20 text-red-500 border-red-500/30',
 };
 
 export function KanbanBoard() {
@@ -128,10 +128,6 @@ export function KanbanBoard() {
     }
   };
 
-  const handleTaskClick = (task: Task) => {
-    setSelectedTask(task);
-  };
-
   const handleStatusChange = (taskId: string, newStatus: string) => {
     updateTask(taskId, { status: newStatus });
   };
@@ -150,7 +146,7 @@ export function KanbanBoard() {
   const getPriorityBadge = (priority: string | null) => {
     if (!priority) return null;
     return (
-      <span className={`text-xs px-1.5 py-0.5 rounded ${PRIORITY_COLORS[priority] || 'bg-gray-100'}`}>
+                <span className={`text-xs px-1.5 py-0.5 rounded-lg ${PRIORITY_COLORS[priority] || 'bg-gray-500/20 text-gray-400'}`}>
         {priority}
       </span>
     );
@@ -176,19 +172,19 @@ export function KanbanBoard() {
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b p-4 flex items-center justify-between bg-background">
-        <h2 className="text-xl font-semibold">Task Board</h2>
+      <div className="border-b border-border p-4 flex items-center justify-between bg-[var(--color-background)]">
+        <h2 className="text-xl font-semibold" style={{ color: '#4248f1' }}>Task Board</h2>
         <div className="flex items-center gap-4">
           <button
             onClick={() => setNewTaskModal(true)}
-            className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-sm hover:bg-primary/90"
+            className="px-3 py-1.5 rounded-xl bg-[#4248f1] text-white text-sm hover:bg-[#4248f1]/90 transition-colors"
           >
             + New Task
           </button>
           <select
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
-            className="px-3 py-1.5 rounded border bg-background text-sm"
+            className="px-3 py-1.5 rounded-xl border border-border bg-[var(--color-background)] text-sm focus:ring-2 focus:ring-[#4248f1]/50 focus:border-[#4248f1] outline-none transition-colors"
           >
             <option value="">All Projects</option>
             {filterOptions?.projects.map(p => (
@@ -197,7 +193,7 @@ export function KanbanBoard() {
           </select>
           <button
             onClick={fetchTasks}
-            className="px-3 py-1.5 rounded border bg-background text-sm hover:bg-muted"
+            className="px-3 py-1.5 rounded-xl border border-border bg-[var(--color-background)] text-sm hover:bg-[#4248f1]/10 transition-colors"
           >
             Refresh
           </button>
@@ -210,7 +206,7 @@ export function KanbanBoard() {
             const columnTasks = getColumnTasks(column.id);
             return (
               <div key={column.id} className="w-72 flex-shrink-0 flex flex-col">
-                <div className={`px-3 py-2 rounded-t-lg border-t border-l border-r ${column.color}`}>
+                <div className={`px-3 py-2 rounded-t-xl border border-b-0 ${column.color}`}>
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-sm">{column.label}</span>
                     <span className="text-xs bg-white/50 px-2 py-0.5 rounded-full">
@@ -218,13 +214,12 @@ export function KanbanBoard() {
                     </span>
                   </div>
                 </div>
-                <div className="flex-1 border-l border-r border-b rounded-b-lg bg-gray-50 overflow-y-auto p-2 space-y-2">
+                <div className="flex-1 border-x border-b rounded-b-xl bg-[var(--color-panel)] overflow-y-auto p-2 space-y-2">
                   {columnTasks.map(task => (
-                    <div
-                      key={task.task_id}
-                      className="bg-white rounded-lg border p-3 shadow-sm cursor-pointer hover:shadow-md transition-shadow"
-                      onClick={() => handleTaskClick(task)}
-                    >
+                <div 
+                  className="bg-[var(--color-background)] rounded-xl border p-3 shadow-sm cursor-pointer hover:shadow-md transition-all hover:border-[#4248f1]/30"
+                  onClick={() => setSelectedTask(task)}
+                >
                       <div className="flex items-start justify-between mb-2">
                         <span className="font-mono text-xs text-muted-foreground">
                           {task.task_id.slice(0, 8)}...
@@ -234,10 +229,10 @@ export function KanbanBoard() {
                       <p className="text-sm line-clamp-2 mb-2">
                         {task.output ? JSON.parse(task.output).input_content || task.output.slice(0, 100) : task.task_id}
                       </p>
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
+                      <div className="flex items-center justify-between text-xs text-[var(--color-text-muted)]">
                         <span>{task.project || 'No project'}</span>
                         {task.category && (
-                          <span className="bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">
+                          <span className="bg-[#4248f1]/20 text-[#4248f1] px-1.5 py-0.5 rounded-lg">
                             {task.category}
                           </span>
                         )}
@@ -250,7 +245,7 @@ export function KanbanBoard() {
                               runTask(task.task_id);
                             }}
                             disabled={runningTask === task.task_id}
-                            className="text-xs px-2 py-1 rounded bg-green-100 hover:bg-green-200 text-green-700 disabled:opacity-50"
+                            className="text-xs px-2 py-1 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-500 disabled:opacity-50"
                           >
                             {runningTask === task.task_id ? '⏳' : '▶'} Run
                           </button>
@@ -265,7 +260,7 @@ export function KanbanBoard() {
                                 e.stopPropagation();
                                 handleStatusChange(task.task_id, c.id);
                               }}
-                              className="text-xs px-2 py-1 rounded bg-gray-100 hover:bg-gray-200 text-gray-600"
+                              className="text-xs px-2 py-1 rounded-lg bg-[var(--color-background)] hover:bg-[#4248f1]/10 text-[var(--color-text-muted)] border border-border"
                             >
                               → {c.label}
                             </button>
@@ -286,23 +281,25 @@ export function KanbanBoard() {
       </div>
 
       {selectedTask && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setSelectedTask(null)}>
-          <div className="bg-background rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setSelectedTask(null)}>
+          <div className="bg-[var(--color-panel)] rounded-2xl border border-border p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-start mb-4">
-              <h3 className="text-lg font-semibold">Task Details</h3>
-              <button onClick={() => setSelectedTask(null)} className="text-muted-foreground hover:text-foreground">
-                ✕
+              <h3 className="text-lg font-semibold" style={{ color: '#4248f1' }}>Task Details</h3>
+              <button onClick={() => setSelectedTask(null)} className="text-[var(--color-text-muted)] hover:text-[var(--color-foreground)] hover:bg-[#4248f1]/10 rounded-lg p-1">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
               </button>
             </div>
             <div className="space-y-3 text-sm">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Task ID:</span>
+                <span className="text-[var(--color-text-muted)]">Task ID:</span>
                 <span className="font-mono">{selectedTask.task_id}</span>
               </div>
               {selectedTask.content && (
                 <div className="mt-2">
-                  <span className="text-muted-foreground">Content:</span>
-                  <p className="mt-1 p-2 bg-muted rounded text-xs font-mono whitespace-pre-wrap">{selectedTask.content}</p>
+                  <span className="text-[var(--color-text-muted)]">Content:</span>
+                  <p className="mt-1 p-2 bg-[var(--color-background)] rounded-xl text-xs font-mono whitespace-pre-wrap border border-border">{selectedTask.content}</p>
                 </div>
               )}
               <div className="flex justify-between items-center">

@@ -23,6 +23,11 @@ pub enum AnomalyType {
     InputSizeAnomaly,
     SequentialFailures,
     TimePatternAnomaly,
+    // Death Spiral patterns (OpenClaw-inspired)
+    FileCreationBurst,
+    ToolCallLoop,
+    NoSideEffects,
+    ErrorCascade,
 }
 
 impl AnomalyType {
@@ -36,6 +41,11 @@ impl AnomalyType {
             AnomalyType::InputSizeAnomaly => "input_size_anomaly",
             AnomalyType::SequentialFailures => "sequential_failures",
             AnomalyType::TimePatternAnomaly => "time_pattern_anomaly",
+            // Death Spiral patterns
+            AnomalyType::FileCreationBurst => "file_creation_burst",
+            AnomalyType::ToolCallLoop => "tool_call_loop",
+            AnomalyType::NoSideEffects => "no_side_effects",
+            AnomalyType::ErrorCascade => "error_cascade",
         }
     }
 }
@@ -89,6 +99,30 @@ pub struct SkillStats {
     pub recent_input_sizes: VecDeque<usize>,
 }
 
+/// Configuration constants for anomaly detection
+mod config_constants {
+    /// Maximum executions per minute before triggering high frequency alert
+    pub const DEFAULT_MAX_EXECUTIONS_PER_MINUTE: u32 = 60;
+    /// Standard deviation multiplier for duration anomalies
+    pub const DEFAULT_DURATION_STD_DEV_MULTIPLIER: f64 = 3.0;
+    /// Maximum input size in bytes (1MB)
+    pub const DEFAULT_MAX_INPUT_SIZE_BYTES: usize = 1_000_000;
+    /// Number of sequential failures before alerting
+    pub const DEFAULT_SEQUENTIAL_FAILURE_THRESHOLD: u32 = 5;
+    /// Window for recent stats (in number of executions)
+    pub const DEFAULT_STATS_WINDOW_SIZE: usize = 100;
+    /// Minimum executions before anomaly detection starts
+    pub const DEFAULT_MIN_EXECUTIONS_FOR_ANALYSIS: u32 = 10;
+    /// Max file creates per execution before burst alert
+    pub const DEFAULT_FILE_BURST_THRESHOLD: u32 = 10;
+    /// Max same tool calls before loop alert
+    pub const DEFAULT_TOOL_LOOP_THRESHOLD: u32 = 5;
+    /// Max tool calls with no side effects before alert
+    pub const DEFAULT_NO_SIDE_EFFECTS_THRESHOLD: u32 = 10;
+    /// Max sequential errors before cascade alert
+    pub const DEFAULT_ERROR_CASCADE_THRESHOLD: u32 = 3;
+}
+
 /// Configuration for anomaly detection
 #[derive(Debug, Clone)]
 pub struct AnomalyConfig {
@@ -104,17 +138,32 @@ pub struct AnomalyConfig {
     pub stats_window_size: usize,
     /// Minimum executions before anomaly detection starts
     pub min_executions_for_analysis: u32,
+    // Death Spiral Detection (OpenClaw-inspired)
+    /// Max file creates per 5 seconds before burst alert
+    pub file_burst_threshold: u32,
+    /// Max same tool calls in a row before loop alert
+    pub tool_loop_threshold: u32,
+    /// Max tool calls with no state change before alert
+    pub no_side_effects_threshold: u32,
+    /// Max sequential errors before cascade alert
+    pub error_cascade_threshold: u32,
 }
 
 impl Default for AnomalyConfig {
     fn default() -> Self {
+        use config_constants::*;
         Self {
-            max_executions_per_minute: 60,           // 1 per second
-            duration_std_dev_multiplier: 3.0,        // 3 standard deviations
-            max_input_size_bytes: 1_000_000,        // 1MB
-            sequential_failure_threshold: 5,
-            stats_window_size: 100,
-            min_executions_for_analysis: 10,
+            max_executions_per_minute: DEFAULT_MAX_EXECUTIONS_PER_MINUTE,
+            duration_std_dev_multiplier: DEFAULT_DURATION_STD_DEV_MULTIPLIER,
+            max_input_size_bytes: DEFAULT_MAX_INPUT_SIZE_BYTES,
+            sequential_failure_threshold: DEFAULT_SEQUENTIAL_FAILURE_THRESHOLD,
+            stats_window_size: DEFAULT_STATS_WINDOW_SIZE,
+            min_executions_for_analysis: DEFAULT_MIN_EXECUTIONS_FOR_ANALYSIS,
+            // Death Spiral Detection defaults
+            file_burst_threshold: DEFAULT_FILE_BURST_THRESHOLD,
+            tool_loop_threshold: DEFAULT_TOOL_LOOP_THRESHOLD,
+            no_side_effects_threshold: DEFAULT_NO_SIDE_EFFECTS_THRESHOLD,
+            error_cascade_threshold: DEFAULT_ERROR_CASCADE_THRESHOLD,
         }
     }
 }
@@ -138,6 +187,10 @@ struct ExecutionRecord {
     duration_ms: u64,
     success: bool,
     input_size: usize,
+    // Death Spiral tracking
+    files_created: u32,
+    tool_calls: Vec<String>,
+    had_side_effects: bool,
 }
 
 impl AnomalyDetector {
@@ -157,6 +210,16 @@ impl AnomalyDetector {
     }
 
     /// Record a skill execution for analysis
+    /// 
+    /// # Arguments
+    /// * `skill_name` - Name of the skill executed
+    /// * `task_id` - Task ID for tracking
+    /// * `duration_ms` - Execution duration in milliseconds
+    /// * `success` - Whether execution succeeded
+    /// * `input_size` - Size of input in bytes
+    /// * `files_created` - Number of files created (for death spiral detection)
+    /// * `tool_calls` - List of tools called (for loop detection)
+    /// * `had_side_effects` - Whether execution had observable side effects
     pub async fn record_execution(
         &self,
         skill_name: &str,
@@ -164,8 +227,16 @@ impl AnomalyDetector {
         duration_ms: u64,
         success: bool,
         input_size: usize,
+        files_created: Option<u32>,
+        tool_calls: Option<Vec<String>>,
+        had_side_effects: Option<bool>,
     ) -> Option<Anomaly> {
         let now = Instant::now();
+
+        // Extract death spiral data for anomaly detection (before moving into block)
+        let files_created_val = files_created.unwrap_or(0);
+        let tool_calls_val = tool_calls.unwrap_or_default();
+        let had_side_effects_val = had_side_effects.unwrap_or(true);
 
         // Record in recent executions for frequency analysis
         {
@@ -176,6 +247,9 @@ impl AnomalyDetector {
                 duration_ms,
                 success,
                 input_size,
+                files_created: files_created_val,
+                tool_calls: tool_calls_val.clone(),
+                had_side_effects: had_side_effects_val,
             });
 
             // Keep only last minute of executions
@@ -226,8 +300,15 @@ impl AnomalyDetector {
                 stats.recent_input_sizes.pop_front();
             }
 
-            // Run anomaly detection
-            self.detect_anomalies(stats, task_id, input_size).await
+            // Run anomaly detection (last expression in block returns the value)
+            self.detect_anomalies(
+                stats, 
+                task_id, 
+                input_size,
+                files_created_val,
+                &tool_calls_val,
+                had_side_effects_val,
+            ).await
         };
 
         // Store anomaly if detected
@@ -250,6 +331,9 @@ impl AnomalyDetector {
         stats: &SkillStats,
         task_id: &str,
         input_size: usize,
+        files_created: u32,
+        tool_calls: &[String],
+        had_side_effects: bool,
     ) -> Option<Anomaly> {
         // Skip if not enough data
         if stats.total_executions < self.config.min_executions_for_analysis as u64 {
@@ -321,6 +405,97 @@ impl AnomalyDetector {
                     Some(task_id),
                     format!("Skill {} has {} consecutive failures ({:.1}% error rate)",
                         stats.skill_name, stats.recent_errors, error_rate),
+                ));
+            }
+        }
+
+        // === Death Spiral Detection (OpenClaw-inspired) ===
+
+        // Check 5: File Creation Burst - many files created in short time
+        if files_created > self.config.file_burst_threshold {
+            return Some(self.create_anomaly(
+                AnomalyType::FileCreationBurst,
+                AnomalySeverity::Critical,
+                Some(&stats.skill_name),
+                Some(task_id),
+                format!("Skill {} created {} files in single execution (threshold: {})",
+                    stats.skill_name, files_created, self.config.file_burst_threshold),
+            ));
+        }
+
+        // Check 6: Tool Call Loop - same tool called repeatedly
+        if !tool_calls.is_empty() {
+            // Find most frequent tool call
+            let mut tool_counts: std::collections::HashMap<&String, u32> = std::collections::HashMap::new();
+            for tool in tool_calls {
+                *tool_counts.entry(tool).or_insert(0) += 1;
+            }
+            
+            if let Some((_, &count)) = tool_counts.iter().max_by_key(|(_, c)| *c) {
+                if count >= self.config.tool_loop_threshold {
+                    return Some(self.create_anomaly(
+                        AnomalyType::ToolCallLoop,
+                        AnomalySeverity::High,
+                        Some(&stats.skill_name),
+                        Some(task_id),
+                        format!("Skill {} called tool {} {} times (possible loop)",
+                            stats.skill_name, 
+                            tool_counts.iter().max_by_key(|(_, c)| *c).unwrap().0,
+                            count),
+                    ));
+                }
+            }
+        }
+
+        // Check 7: No Side Effects - execution without observable state changes
+        // Only check if we have enough history to compare
+        if !had_side_effects && stats.total_executions >= 5 {
+            let recent = self.recent_executions.read().await;
+            let skill_recent: Vec<_> = recent.iter()
+                .filter(|r| r.skill_name == stats.skill_name)
+                .collect();
+            
+            if skill_recent.len() >= 5 {
+                let no_effect_count = skill_recent.iter()
+                    .rev()
+                    .take(self.config.no_side_effects_threshold as usize)
+                    .filter(|r| !r.had_side_effects)
+                    .count();
+                
+                if no_effect_count >= self.config.no_side_effects_threshold as usize {
+                    return Some(self.create_anomaly(
+                        AnomalyType::NoSideEffects,
+                        AnomalySeverity::Medium,
+                        Some(&stats.skill_name),
+                        Some(task_id),
+                        format!("Skill {} had no side effects in {} consecutive executions",
+                            stats.skill_name, no_effect_count),
+                    ));
+                }
+            }
+        }
+
+        // Check 8: Error Cascade - errors increasing over time
+        let recent = self.recent_executions.read().await;
+        let skill_recent: Vec<_> = recent.iter()
+            .filter(|r| r.skill_name == stats.skill_name)
+            .collect();
+        
+        if skill_recent.len() >= 3 {
+            let mut error_sequence = Vec::new();
+            for record in skill_recent.iter().rev().take(self.config.error_cascade_threshold as usize) {
+                error_sequence.push(!record.success);
+            }
+            
+            // Check if all recent executions failed
+            if error_sequence.iter().all(|&e| e) && error_sequence.len() >= self.config.error_cascade_threshold as usize {
+                return Some(self.create_anomaly(
+                    AnomalyType::ErrorCascade,
+                    AnomalySeverity::Critical,
+                    Some(&stats.skill_name),
+                    Some(task_id),
+                    format!("Skill {} failed {} times in a row",
+                        stats.skill_name, error_sequence.len()),
                 ));
             }
         }
@@ -435,7 +610,7 @@ mod tests {
 
         // Execute same skill 10 times rapidly
         for i in 0..10 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100).await;
+            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100, None, None, None).await;
         }
 
         let anomalies = detector.get_anomalies().await;
@@ -449,11 +624,11 @@ mod tests {
 
         // Record normal executions
         for i in 0..20 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100).await;
+            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100, None, None, None).await;
         }
 
         // Record one very long execution
-        let anomaly = detector.record_execution("test.skill", "task-long", 10_000, true, 100).await;
+        let anomaly = detector.record_execution("test.skill", "task-long", 10_000, true, 100, None, None, None).await;
 
         assert!(anomaly.is_some());
         assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::UnusualDuration);
@@ -469,7 +644,7 @@ mod tests {
 
         // Record failures
         for i in 0..5 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, false, 100).await;
+            detector.record_execution("test.skill", &format!("task-{}", i), 100, false, 100, None, None, None).await;
         }
 
         let anomalies = detector.get_anomalies().await;
@@ -484,9 +659,57 @@ mod tests {
             ..Default::default()
         });
 
-        let anomaly = detector.record_execution("test.skill", "task-1", 100, true, 10_000_000).await;
+        let anomaly = detector.record_execution("test.skill", "task-1", 100, true, 10_000_000, None, None, None).await;
 
         assert!(anomaly.is_some());
         assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::InputSizeAnomaly);
+    }
+
+    #[tokio::test]
+    async fn test_file_creation_burst() {
+        let detector = AnomalyDetector::with_config(AnomalyConfig {
+            file_burst_threshold: 5,
+            min_executions_for_analysis: 1,
+            ..Default::default()
+        });
+
+        // Create a burst of files
+        let anomaly = detector.record_execution(
+            "test.skill", "task-1", 100, true, 100,
+            Some(10),  // files_created > threshold
+            None,
+            Some(true),
+        ).await;
+
+        assert!(anomaly.is_some());
+        assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::FileCreationBurst);
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_loop() {
+        let detector = AnomalyDetector::with_config(AnomalyConfig {
+            tool_loop_threshold: 3,
+            min_executions_for_analysis: 1,
+            ..Default::default()
+        });
+
+        // Same tool called 5 times
+        let tool_calls = vec![
+            "file.read".to_string(),
+            "file.read".to_string(),
+            "file.read".to_string(),
+            "file.read".to_string(),
+            "file.read".to_string(),
+        ];
+        
+        let anomaly = detector.record_execution(
+            "test.skill", "task-1", 100, true, 100,
+            None,
+            Some(tool_calls),
+            Some(true),
+        ).await;
+
+        assert!(anomaly.is_some());
+        assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::ToolCallLoop);
     }
 }

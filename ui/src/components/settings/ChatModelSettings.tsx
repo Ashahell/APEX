@@ -1,15 +1,6 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiPut, apiDelete } from '../../lib/api';
 
-interface LlmConfig {
-  id: string;
-  name: string;
-  provider: string;
-  url: string;
-  model: string;
-  has_api_key: boolean;
-}
-
 interface ProviderInfo {
   id: string;
   name: string;
@@ -19,37 +10,63 @@ interface ProviderInfo {
   api_type: string;
 }
 
-interface CreateLlmRequest {
+interface LlmConfig {
+  id: string;
   name: string;
   provider: string;
   url: string;
   model: string;
-  api_key?: string;
+  has_api_key: boolean;
+  ctx_length: number | null;
+  ctx_history: number | null;
+  vision: boolean | null;
+  rl_requests: number | null;
+  rl_input: number | null;
+  rl_output: number | null;
+  kwargs: string | null;
 }
 
-interface TestResult {
-  success: boolean;
-  message: string;
-  latency_ms?: number;
+interface FormData {
+  name: string;
+  provider: string;
+  url: string;
+  model: string;
+  api_key: string;
+  ctx_length: number;
+  ctx_history: number;
+  vision: boolean;
+  rl_requests: number;
+  rl_input: number;
+  rl_output: number;
+  kwargs: string;
 }
 
-export function LlmManager() {
-  const [llms, setLlms] = useState<LlmConfig[]>([]);
+const DEFAULT_FORM: FormData = {
+  name: '',
+  provider: 'local',
+  url: 'http://localhost:8080/v1',
+  model: 'qwen3-4b',
+  api_key: '',
+  ctx_length: 4096,
+  ctx_history: 0.3,
+  vision: false,
+  rl_requests: 0,
+  rl_input: 0,
+  rl_output: 0,
+  kwargs: '',
+};
+
+export function ChatModelSettings() {
   const [providers, setProviders] = useState<ProviderInfo[]>([]);
-  const [defaultLlm, setDefaultLlm] = useState<LlmConfig | null>(null);
+  const [llms, setLlms] = useState<LlmConfig[]>([]);
+  const [defaultLlmId, setDefaultLlmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<FormData>(DEFAULT_FORM);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [testResult, setTestResult] = useState<Record<string, TestResult>>({});
-
-  const [formData, setFormData] = useState<CreateLlmRequest>({
-    name: '',
-    provider: 'local',
-    url: 'http://localhost:8080/v1',
-    model: 'qwen3-4b',
-    api_key: '',
-  });
+  const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string; latency_ms?: number }>>({});
 
   useEffect(() => {
     loadData();
@@ -63,10 +80,9 @@ export function LlmManager() {
         apiGet('/api/v1/llms/providers').then(r => r.json() as Promise<ProviderInfo[]>),
       ]);
       setLlms(llmsRes || []);
-      setDefaultLlm(defaultRes);
+      setDefaultLlmId(defaultRes?.id || null);
       setProviders(providersRes || []);
       
-      // Set defaults from first provider
       if (providersRes && providersRes.length > 0) {
         const defaultProvider = providersRes.find(p => p.id === 'local') || providersRes[0];
         setFormData(prev => ({
@@ -102,21 +118,60 @@ export function LlmManager() {
     setSaving(true);
     try {
       const res = await apiPost('/api/v1/llms', {
-        ...formData,
+        name: formData.name,
+        provider: formData.provider,
+        url: formData.url,
+        model: formData.model,
         api_key: formData.api_key || null,
+        ctx_length: formData.ctx_length,
+        ctx_history: formData.ctx_history,
+        vision: formData.vision,
+        rl_requests: formData.rl_requests,
+        rl_input: formData.rl_input,
+        rl_output: formData.rl_output,
+        kwargs: formData.kwargs || null,
       });
       const newLlm = await res.json() as LlmConfig;
       setLlms([...llms, newLlm]);
       setShowAddForm(false);
-      setFormData({
-        name: '',
-        provider: 'local',
-        url: 'http://localhost:8080/v1',
-        model: 'qwen3-4b',
-        api_key: '',
-      });
+      setFormData(DEFAULT_FORM);
+      // Set as default if first LLM
+      if (llms.length === 0) {
+        setDefaultLlmId(newLlm.id);
+        await apiPut('/api/v1/llms/default', { id: newLlm.id });
+      }
     } catch (err) {
       console.error('Failed to add LLM:', err);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleUpdateLlm = async () => {
+    if (!editingId || !formData.name) return;
+    
+    setSaving(true);
+    try {
+      const res = await apiPut(`/api/v1/llms/${editingId}`, {
+        name: formData.name,
+        provider: formData.provider,
+        url: formData.url,
+        model: formData.model,
+        api_key: formData.api_key || null,
+        ctx_length: formData.ctx_length,
+        ctx_history: formData.ctx_history,
+        vision: formData.vision,
+        rl_requests: formData.rl_requests,
+        rl_input: formData.rl_input,
+        rl_output: formData.rl_output,
+        kwargs: formData.kwargs || null,
+      });
+      const updated = await res.json() as LlmConfig;
+      setLlms(llms.map(l => l.id === editingId ? updated : l));
+      setEditingId(null);
+      setFormData(DEFAULT_FORM);
+    } catch (err) {
+      console.error('Failed to update LLM:', err);
     } finally {
       setSaving(false);
     }
@@ -129,8 +184,8 @@ export function LlmManager() {
       await apiDelete(`/api/v1/llms/${id}`);
       const remaining = llms.filter(l => l.id !== id);
       setLlms(remaining);
-      if (defaultLlm?.id === id) {
-        setDefaultLlm(remaining.length > 0 ? remaining[0] : null);
+      if (defaultLlmId === id) {
+        setDefaultLlmId(remaining.length > 0 ? remaining[0].id : null);
       }
     } catch (err) {
       console.error('Failed to delete LLM:', err);
@@ -141,7 +196,7 @@ export function LlmManager() {
     try {
       const res = await apiPut('/api/v1/llms/default', { id });
       const newDefault = await res.json() as LlmConfig;
-      setDefaultLlm(newDefault);
+      setDefaultLlmId(newDefault.id);
     } catch (err) {
       console.error('Failed to set default LLM:', err);
     }
@@ -154,7 +209,7 @@ export function LlmManager() {
     setTestResult(newResults);
     try {
       const res = await apiPost(`/api/v1/llms/${id}/test`, {});
-      const result = await res.json() as TestResult;
+      const result = await res.json();
       setTestResult({ ...testResult, [id]: result });
     } catch (err) {
       setTestResult({ ...testResult, [id]: { success: false, message: 'Failed to test connection' } });
@@ -163,31 +218,44 @@ export function LlmManager() {
     }
   };
 
+  const startEdit = (llm: LlmConfig) => {
+    setEditingId(llm.id);
+    setFormData({
+      name: llm.name,
+      provider: llm.provider,
+      url: llm.url,
+      model: llm.model,
+      api_key: '',
+      ctx_length: llm.ctx_length || 4096,
+      ctx_history: llm.ctx_history || 0.3,
+      vision: llm.vision || false,
+      rl_requests: llm.rl_requests || 0,
+      rl_input: llm.rl_input || 0,
+      rl_output: llm.rl_output || 0,
+      kwargs: llm.kwargs || '',
+    });
+    setShowAddForm(false);
+  };
+
   const currentProvider = providers.find(p => p.id === formData.provider);
 
   if (loading) {
-    return <div className="p-4">Loading LLMs...</div>;
+    return <div className="p-4">Loading chat model settings...</div>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-semibold">LLM Configuration</h2>
-          <p className="text-muted-foreground">Manage multiple LLM providers</p>
-        </div>
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90"
-        >
-          + Add LLM
-        </button>
+      <div>
+        <h3 className="text-lg font-semibold">Chat Model</h3>
+        <p className="text-sm text-muted-foreground">
+          Selection and settings for main chat model used by APEX
+        </p>
       </div>
 
-      {/* Add LLM Form */}
-      {showAddForm && (
-        <div className="border rounded-lg p-4 bg-card">
-          <h3 className="font-semibold mb-4">Add New LLM</h3>
+      {/* Add/Edit Form */}
+      {(showAddForm || editingId) && (
+        <div className="border rounded-lg p-4 bg-card space-y-4">
+          <h4 className="font-semibold">{editingId ? 'Edit LLM' : 'Add New LLM'}</h4>
           <div className="grid gap-4 max-w-2xl">
             <div className="grid grid-cols-4 gap-2 items-center">
               <label className="text-sm">Name</label>
@@ -224,7 +292,6 @@ export function LlmManager() {
                 type="text"
                 value={formData.url}
                 onChange={(e) => setFormData({ ...formData, url: e.target.value })}
-                placeholder="https://api.example.com/v1"
                 className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
               />
             </div>
@@ -234,7 +301,6 @@ export function LlmManager() {
                 type="text"
                 value={formData.model}
                 onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                placeholder="model-name"
                 className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
               />
             </div>
@@ -243,24 +309,78 @@ export function LlmManager() {
                 <label className="text-sm">API Key</label>
                 <input
                   type="password"
-                  value={formData.api_key || ''}
+                  value={formData.api_key}
                   onChange={(e) => setFormData({ ...formData, api_key: e.target.value })}
                   placeholder={currentProvider.id === 'azure' ? 'Azure API Key' : 'sk-...'}
                   className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
                 />
               </div>
             )}
+            <div className="grid grid-cols-4 gap-2 items-center">
+              <label className="text-sm">Context Length</label>
+              <input
+                type="number"
+                value={formData.ctx_length}
+                onChange={(e) => setFormData({ ...formData, ctx_length: parseInt(e.target.value) || 4096 })}
+                className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-2 items-center">
+              <label className="text-sm">History Ratio</label>
+              <div className="col-span-3 flex items-center gap-2">
+                <input
+                  type="range"
+                  min="0.01"
+                  max="1"
+                  step="0.01"
+                  value={formData.ctx_history}
+                  onChange={(e) => setFormData({ ...formData, ctx_history: parseFloat(e.target.value) })}
+                  className="flex-1"
+                />
+                <span className="text-sm font-mono w-12">{formData.ctx_history.toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 gap-2 items-center">
+              <label className="text-sm">Vision</label>
+              <input
+                type="checkbox"
+                checked={formData.vision}
+                onChange={(e) => setFormData({ ...formData, vision: e.target.checked })}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-2 items-center">
+              <label className="text-sm">Rate Limit (req/min)</label>
+              <input
+                type="number"
+                value={formData.rl_requests}
+                onChange={(e) => setFormData({ ...formData, rl_requests: parseInt(e.target.value) || 0 })}
+                className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
+              />
+            </div>
+            <div className="grid grid-cols-4 gap-2 items-center">
+              <label className="text-sm">Additional Params</label>
+              <textarea
+                value={formData.kwargs}
+                onChange={(e) => setFormData({ ...formData, kwargs: e.target.value })}
+                placeholder="temperature=0.7&#10;top_p=0.9"
+                className="col-span-3 px-2 py-1 rounded border bg-background text-foreground font-mono text-sm"
+                rows={3}
+              />
+            </div>
             <div className="flex gap-2 pt-2">
               <button
-                onClick={handleAddLlm}
+                onClick={editingId ? handleUpdateLlm : handleAddLlm}
                 disabled={saving || !formData.name || !formData.url || !formData.model}
                 className="bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90 disabled:opacity-50"
               >
-                {saving ? 'Adding...' : 'Add LLM'}
+                {saving ? 'Saving...' : editingId ? 'Update' : 'Add LLM'}
               </button>
               <button
                 onClick={() => {
                   setShowAddForm(false);
+                  setEditingId(null);
+                  setFormData(DEFAULT_FORM);
                 }}
                 className="px-4 py-2 rounded border hover:bg-muted"
               >
@@ -272,6 +392,15 @@ export function LlmManager() {
       )}
 
       {/* LLM List */}
+      <div className="flex justify-between items-center">
+        <button
+          onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(DEFAULT_FORM); }}
+          className="bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90"
+        >
+          + Add LLM
+        </button>
+      </div>
+
       {llms.length === 0 ? (
         <div className="border rounded-lg p-8 text-center text-muted-foreground">
           No LLMs configured. Add an LLM to get started.
@@ -281,23 +410,21 @@ export function LlmManager() {
           {llms.map((llm) => (
             <div key={llm.id} className="border rounded-lg p-4 bg-card">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold">{llm.name}</span>
-                      {defaultLlm?.id === llm.id && (
-                        <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">
-                          Default
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {providers.find(p => p.id === llm.provider)?.name || llm.provider} • {llm.model}
-                    </div>
-                    <div className="text-xs text-muted-foreground mt-1">
-                      {llm.url}
-                      {llm.has_api_key && ' • API Key configured'}
-                    </div>
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold">{llm.name}</span>
+                    {defaultLlmId === llm.id && (
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded">Default</span>
+                    )}
+                  </div>
+                  <div className="text-sm text-muted-foreground">
+                    {providers.find(p => p.id === llm.provider)?.name || llm.provider} • {llm.model}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {llm.url}
+                    {llm.has_api_key && ' • API Key configured'}
+                    {llm.ctx_length && ` • Context: ${llm.ctx_length}`}
+                    {llm.vision && ' • Vision'}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
@@ -308,7 +435,7 @@ export function LlmManager() {
                   >
                     {testingId === llm.id ? 'Testing...' : 'Test'}
                   </button>
-                  {defaultLlm?.id !== llm.id && (
+                  {defaultLlmId !== llm.id && (
                     <button
                       onClick={() => handleSetDefault(llm.id)}
                       className="px-3 py-1 text-sm border rounded hover:bg-muted"
@@ -316,6 +443,12 @@ export function LlmManager() {
                       Set Default
                     </button>
                   )}
+                  <button
+                    onClick={() => startEdit(llm)}
+                    className="px-3 py-1 text-sm border rounded hover:bg-muted"
+                  >
+                    Edit
+                  </button>
                   <button
                     onClick={() => handleDeleteLlm(llm.id)}
                     className="px-3 py-1 text-sm border border-destructive text-destructive rounded hover:bg-destructive/10"
@@ -335,22 +468,6 @@ export function LlmManager() {
           ))}
         </div>
       )}
-
-      {/* Provider Tips */}
-      <div className="border rounded-lg p-4 bg-muted/50">
-        <h3 className="font-semibold mb-2">Supported Providers</h3>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm text-muted-foreground">
-          {providers.slice(0, 12).map(p => (
-            <div key={p.id} className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-primary"></span>
-              {p.name}
-            </div>
-          ))}
-        </div>
-        <p className="text-xs text-muted-foreground mt-2">
-          Plus many more cloud providers (Azure, Google, Cohere, etc.)
-        </p>
-      </div>
     </div>
   );
 }

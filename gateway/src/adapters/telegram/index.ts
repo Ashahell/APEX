@@ -1,16 +1,15 @@
-import { Telegraf, Context, ChannelAdapter, TaskRequest, TaskResponse } from './types.js';
+import { Telegraf, Context, TaskRequest, TaskResponse } from './types.js';
+import { BaseAdapter } from '../base.js';
 
-export class TelegramAdapter implements ChannelAdapter {
-  readonly channel = 'telegram' as const;
+export class TelegramAdapter extends BaseAdapter {
   private bot: Telegraf<Context>;
-  private onTask: (task: TaskRequest) => Promise<void>;
 
   constructor(
     token: string,
     onTask: (task: TaskRequest) => Promise<void>
   ) {
+    super('telegram', onTask);
     this.bot = new Telegraf(token);
-    this.onTask = onTask;
   }
 
   async start(): Promise<void> {
@@ -19,14 +18,13 @@ export class TelegramAdapter implements ChannelAdapter {
       if (!message || !('text' in message)) return;
       if (!message.from) return;
 
-      const task: TaskRequest = {
-        messageId: String(message.message_id),
-        channel: 'telegram',
-        threadId: 'chat' in ctx && 'id' in ctx.chat ? String(ctx.chat.id) : undefined,
-        author: String(message.from.id),
-        content: message.text,
-        timestamp: new Date(),
-      };
+      const task = this.createTaskRequest(
+        String(message.message_id),
+        String(message.from.id),
+        message.text,
+        new Date(),
+        'chat' in ctx && 'id' in ctx.chat ? String(ctx.chat.id) : undefined
+      );
 
       await this.onTask(task);
     });
@@ -40,8 +38,5 @@ export class TelegramAdapter implements ChannelAdapter {
 
   async stop(): Promise<void> {
     this.bot.stop();
-  }
-
-  async send(response: TaskResponse): Promise<void> {
   }
 }

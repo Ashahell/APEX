@@ -32,6 +32,7 @@ import { Sidebar, AppTab } from './components/ui/Sidebar';
 import { NotificationBell } from './components/ui/NotificationBell';
 import { SkillQuickLaunch } from './components/skills/SkillQuickLaunch';
 import { QuickCommandBar } from './components/ui/QuickCommandBar';
+import { ToastContainer } from './components/ui/Toast';
 import { ThemeEditor } from './components/settings/ThemeEditor';
 import { wsClient } from './lib/websocket';
 
@@ -200,6 +201,8 @@ function AppContent() {
         <div className="flex-1 overflow-hidden">
           {renderContent()}
         </div>
+        
+        <ToastContainer />
       </main>
     </div>
   );

@@ -5,14 +5,42 @@ use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio::sync::RwLock;
 use serde::{Deserialize, Serialize};
+use regex::Regex;
 
 use crate::unified_config::AppConfig;
 
 const VM_STARTUP_TIMEOUT_SECS: u64 = 30;
 const VM_IDLE_TIMEOUT_SECS: u64 = 300;
 const VM_EXECUTION_TIMEOUT_SECS: u64 = 60;
-#[allow(dead_code)]
-const VSOCK_PORT: u32 = 5000;
+
+/// Sanitize command to mitigate command injection
+/// WARNING: This is a defense-in-depth measure. Ideally, shell interpretation should be avoided entirely.
+fn sanitize_command_for_shell(input: &str) -> Result<String, String> {
+    // Block dangerous characters that could enable command injection
+    let dangerous_pattern = Regex::new(r"[;&|`$(){}\\<>]").unwrap();
+    if dangerous_pattern.is_match(input) {
+        return Err("Command contains disallowed characters".to_string());
+    }
+    
+    // Block path traversal attempts
+    if input.contains("..") {
+        return Err("Command contains path traversal attempt".to_string());
+    }
+    
+    // Block common attack patterns
+    let attack_patterns = [
+        "rm -rf", "del /", "format", "dd if=",
+        "wget", "curl |", "nc -e", "/etc/passwd",
+    ];
+    let input_lower = input.to_lowercase();
+    for pattern in attack_patterns {
+        if input_lower.contains(pattern) {
+            return Err("Command contains blocked pattern".to_string());
+        }
+    }
+    
+    Ok(input.to_string())
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ExecutionResult {
@@ -760,6 +788,9 @@ impl VmPool {
         // Firecracker uses a JSON API over HTTP via Unix socket
         // Build the command as a shell script to run inside the VM
         let cmd_str = command.join(" ");
+
+        // Validate command before execution to mitigate injection
+        sanitize_command_for_shell(&cmd_str)?;
 
         // Use firecracker exec binary or direct socket communication
         // For now, we use a simpler approach: nc to send commands

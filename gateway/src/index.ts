@@ -10,10 +10,16 @@ export interface GatewayConfig {
 }
 
 const DEFAULT_CONFIG: GatewayConfig = {
-  natsUrl: 'localhost:4222',
-  routerUrl: 'http://localhost:3000',
-  port: 3001,
-  sharedSecret: process.env.APEX_SHARED_SECRET || 'dev-secret-change-in-production',
+  natsUrl: process.env.APEX_NATS_URL || 'localhost:4222',
+  routerUrl: process.env.APEX_ROUTER_URL || 'http://localhost:3000',
+  port: parseInt(process.env.APEX_GATEWAY_PORT || '3001', 10),
+  sharedSecret: process.env.APEX_SHARED_SECRET || (() => {
+    // Allow dev secret in test/development mode
+    if (process.env.NODE_ENV === 'test') {
+      return 'dev-secret-change-in-production';
+    }
+    throw new Error('APEX_SHARED_SECRET environment variable must be set');
+  })(),
 };
 
 export interface TaskRequest {

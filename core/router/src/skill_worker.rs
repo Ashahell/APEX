@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::broadcast;
 use std::time::Instant;
+use std::collections::HashMap;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::message_bus::{MessageBus, SkillExecutionMessage};
@@ -22,6 +23,41 @@ pub fn init_anomaly_detector() -> &'static AnomalyDetector {
 /// Get the global anomaly detector
 pub fn get_anomaly_detector() -> Option<&'static AnomalyDetector> {
     ANOMALY_DETECTOR.get()
+}
+
+/// Load environment variables from workspace .env file
+fn load_workspace_env(workspace_path: &std::path::Path) -> HashMap<String, String> {
+    let mut env_vars = HashMap::new();
+    
+    let env_file = workspace_path.join(".env");
+    if env_file.exists() {
+        if let Ok(content) = std::fs::read_to_string(&env_file) {
+            for line in content.lines() {
+                let line = line.trim();
+                // Skip comments and empty lines
+                if line.is_empty() || line.starts_with('#') {
+                    continue;
+                }
+                
+                // Parse KEY=VALUE format
+                if let Some((key, value)) = line.split_once('=') {
+                    let key = key.trim().to_string();
+                    let value = value.trim().to_string();
+                    // Remove surrounding quotes if present
+                    let value = if (value.starts_with('"') && value.ends_with('"'))
+                        || (value.starts_with('\'') && value.ends_with('\'')) {
+                        value[1..value.len()-1].to_string()
+                    } else {
+                        value
+                    };
+                    env_vars.insert(key, value);
+                }
+            }
+            tracing::info!("Loaded {} env vars from {:?}", env_vars.len(), env_file);
+        }
+    }
+    
+    env_vars
 }
 
 /// SkillWorker executes skills in either the Bun pool (T0-T2) or VM pool (T3)
@@ -195,6 +231,9 @@ impl SkillWorker {
         // Determine success for anomaly detection before consuming result
         let success = result.is_ok();
         
+        // Clone result for anomaly detection before consuming in match
+        let result_clone = result.clone();
+        
         match result {
             Ok(result) => {
                 circuit_breakers.record_success(&message.skill_name).await;
@@ -234,6 +273,22 @@ impl SkillWorker {
         let duration_ms = execution_start.elapsed().as_millis() as u64;
         let input_size = input_str.len();
         
+        // Extract death spiral detection data from result
+        let files_created = result_clone.as_ref().ok().and_then(|r| {
+            serde_json::from_str::<serde_json::Value>(r)
+                .ok()
+                .and_then(|v| v.get("files_created").and_then(|f| f.as_u64()).map(|f| f as u32))
+        });
+        
+        let tool_calls: Option<Vec<String>> = result_clone.as_ref().ok().and_then(|r| {
+            serde_json::from_str::<serde_json::Value>(r)
+                .ok()
+                .and_then(|v| v.get("tool_calls").and_then(|t| t.as_array().cloned()))
+                .map(|arr| arr.iter().filter_map(|s| s.as_str().map(String::from)).collect::<Vec<_>>())
+        });
+        
+        let had_side_effects = result_clone.as_ref().ok().map(|_| true); // Assume side effects unless explicitly marked otherwise
+        
         if let Some(detector) = get_anomaly_detector() {
             if let Some(anomaly) = detector.record_execution(
                 &message.skill_name,
@@ -241,6 +296,9 @@ impl SkillWorker {
                 duration_ms,
                 success,
                 input_size,
+                files_created,
+                tool_calls,
+                had_side_effects,
             ).await {
                 tracing::warn!(
                     task_id = %message.task_id,
@@ -278,29 +336,60 @@ impl SkillWorker {
 
     /// Execute in VM pool (T3) - provides kernel-level isolation
     async fn execute_in_vm(
-        _vm_pool: &Arc<VmPool>,
+        vm_pool: &Arc<VmPool>,
         message: &SkillExecutionMessage,
     ) -> Result<String, String> {
         // Execute T3 task in isolated VM
-        let _config = crate::vm_pool::VmConfig::default();
+        let skill_name = &message.skill_name;
+        let input = &message.input;
         
-        // For now, we execute a shell command in the VM
-        // Future: implement dedicated VM skill execution
-        let _command = format!(
-            "bun run /opt/apex/skills/{}/src/index.ts",
-            message.skill_name
-        );
-        
-        // Note: This is a simplified implementation
-        // Full implementation would use vm_pool.execute() with proper serialization
         tracing::info!(
-            skill = %message.skill_name,
+            skill = %skill_name,
             tier = "T3",
+            task_id = %message.task_id,
             "Executing in VM pool (T3 isolation)"
         );
+
+        // Acquire a VM from the pool
+        let vm_id = vm_pool.acquire().await.map_err(|e| format!("Failed to acquire VM: {}", e))?;
         
-        // Return a placeholder - actual VM execution requires more integration
-        Err("T3 VM execution not fully implemented yet - use skill pool fallback".to_string())
+        // Prepare the skill execution script
+        // The script will run the skill with the provided input
+        let input_json = serde_json::to_string(input).map_err(|e| format!("Failed to serialize input: {}", e))?;
+        
+        // Build the execution script
+        // This runs the skill with input via bun in the isolated environment
+        let script = format!(
+            r#"bun run /opt/apex/skills/{}/src/index.ts --input '{}' --task-id '{}'"#,
+            skill_name,
+            input_json.replace("'", "'\\''"),
+            message.task_id
+        );
+
+        // Execute in the VM with timeout
+        let result = vm_pool.execute_isolated(&vm_id, &script, Some(60)).await;
+        
+        // Always release the VM back to the pool
+        if let Err(e) = vm_pool.release(&vm_id).await {
+            tracing::warn!(vm_id = %vm_id, error = %e, "Failed to release VM");
+        }
+
+        // Process the result
+        match result {
+            Ok(exec_result) => {
+                if exec_result.success {
+                    Ok(exec_result.output)
+                } else {
+                    let err_msg = if exec_result.stderr.is_empty() {
+                        exec_result.output
+                    } else {
+                        exec_result.stderr
+                    };
+                    Err(err_msg)
+                }
+            }
+            Err(e) => Err(format!("VM execution failed: {}", e))
+        }
     }
 
     async fn execute_skill(message: &SkillExecutionMessage) -> Result<String, String> {
@@ -328,8 +417,13 @@ impl SkillWorker {
         let skills_dir = std::env::var("APEX_SKILLS_DIR")
             .unwrap_or_else(|_| "E:\\projects\\APEX\\skills".to_string());
 
-        let output = tokio::process::Command::new("pnpm")
-            .arg("tsx")
+        // Load workspace .env file
+        let workspace_path = std::path::Path::new(&skills_dir);
+        let workspace_env = load_workspace_env(workspace_path);
+
+        // Build command with environment variables
+        let mut cmd = tokio::process::Command::new("pnpm");
+        cmd.arg("tsx")
             .arg(&cli_path)
             .arg("--skill")
             .arg(skill_name)
@@ -337,8 +431,14 @@ impl SkillWorker {
             .arg(&input_json)
             .arg("--task-id")
             .arg(task_id)
-            .current_dir(&skills_dir)
-            .output()
+            .current_dir(&skills_dir);
+
+        // Inject workspace environment variables
+        for (key, value) in workspace_env {
+            cmd.env(&key, &value);
+        }
+
+        let output = cmd.output()
             .await
             .map_err(|e| format!("Failed to execute skill: {}", e))?;
 

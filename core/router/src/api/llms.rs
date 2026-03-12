@@ -263,6 +263,14 @@ pub struct LlmResponse {
     pub url: String,
     pub model: String,
     pub has_api_key: bool,
+    // Extended settings
+    pub ctx_length: Option<u32>,
+    pub ctx_history: Option<f32>,
+    pub vision: Option<bool>,
+    pub rl_requests: Option<u32>,
+    pub rl_input: Option<u32>,
+    pub rl_output: Option<u32>,
+    pub kwargs: Option<String>,
 }
 
 impl From<LlmConfig> for LlmResponse {
@@ -302,6 +310,13 @@ impl From<LlmConfig> for LlmResponse {
             url: config.url,
             model: config.model,
             has_api_key: config.api_key.is_some(),
+            ctx_length: config.ctx_length,
+            ctx_history: config.ctx_history,
+            vision: config.vision,
+            rl_requests: config.rl_requests,
+            rl_input: config.rl_input,
+            rl_output: config.rl_output,
+            kwargs: config.kwargs,
         }
     }
 }
@@ -313,6 +328,14 @@ pub struct CreateLlmRequest {
     pub url: String,
     pub model: String,
     pub api_key: Option<String>,
+    // Extended settings
+    pub ctx_length: Option<u32>,
+    pub ctx_history: Option<f32>,
+    pub vision: Option<bool>,
+    pub rl_requests: Option<u32>,
+    pub rl_input: Option<u32>,
+    pub rl_output: Option<u32>,
+    pub kwargs: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -322,6 +345,14 @@ pub struct UpdateLlmRequest {
     pub url: Option<String>,
     pub model: Option<String>,
     pub api_key: Option<String>,
+    // Extended settings
+    pub ctx_length: Option<u32>,
+    pub ctx_history: Option<f32>,
+    pub vision: Option<bool>,
+    pub rl_requests: Option<u32>,
+    pub rl_input: Option<u32>,
+    pub rl_output: Option<u32>,
+    pub kwargs: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -393,6 +424,13 @@ async fn add_llm(
         url: payload.url,
         model: payload.model,
         api_key: payload.api_key,
+        ctx_length: payload.ctx_length,
+        ctx_history: payload.ctx_history,
+        vision: payload.vision,
+        rl_requests: payload.rl_requests,
+        rl_input: payload.rl_input,
+        rl_output: payload.rl_output,
+        kwargs: payload.kwargs,
     };
 
     let mut config = state.config.clone();

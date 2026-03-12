@@ -30,13 +30,13 @@ interface CreateServerRequest {
 }
 
 const STATUS_CONFIG: Record<string, { color: string; bg: string; label: string; pulse: boolean }> = {
-  connected: { color: 'text-green-400', bg: 'bg-green-500/20', label: 'Connected', pulse: false },
-  connecting: { color: 'text-yellow-400', bg: 'bg-yellow-500/20', label: 'Connecting', pulse: true },
-  disconnected: { color: 'text-gray-400', bg: 'bg-gray-500/20', label: 'Disconnected', pulse: false },
-  error: { color: 'text-red-400', bg: 'bg-red-500/20', label: 'Error', pulse: false },
+  connected: { color: 'text-green-500', bg: 'bg-green-500/10', label: 'Connected', pulse: false },
+  connecting: { color: 'text-yellow-500', bg: 'bg-yellow-500/10', label: 'Connecting', pulse: true },
+  disconnected: { color: 'text-[var(--color-text-muted)]', bg: 'bg-[var(--color-muted)]', label: 'Disconnected', pulse: false },
+  error: { color: 'text-red-500', bg: 'bg-red-500/10', label: 'Error', pulse: false },
 };
 
-const POLL_INTERVAL_MS = 5000; // Poll every 5 seconds for status updates
+const POLL_INTERVAL_MS = 5000;
 
 export function McpManager() {
   const [servers, setServers] = useState<McpServer[]>([]);
@@ -103,7 +103,6 @@ export function McpManager() {
     }
   }, [selectedServer, loadTools]);
 
-  // Polling for real-time status updates
   useEffect(() => {
     const pollServers = async () => {
       try {
@@ -111,7 +110,6 @@ export function McpManager() {
         if (res.ok) {
           const data: McpServer[] = await res.json();
           
-          // Check for status changes and log
           data.forEach(server => {
             const prevStatus = prevServerStatuses.current.get(server.id);
             if (prevStatus && prevStatus !== server.status) {
@@ -124,7 +122,6 @@ export function McpManager() {
           setLastUpdated(new Date());
           setIsPolling(true);
           
-          // Update selected server if its status changed
           if (selectedServer) {
             const updated = data.find(s => s.id === selectedServer.id);
             if (updated && updated.status !== selectedServer.status) {
@@ -137,13 +134,10 @@ export function McpManager() {
       }
     };
     
-    // Initial poll
     pollServers();
     
-    // Set up polling interval
     pollingRef.current = window.setInterval(pollServers, POLL_INTERVAL_MS);
     
-    // Cleanup on unmount
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current);
@@ -255,7 +249,7 @@ export function McpManager() {
   const getStatusDot = (status: string) => {
     const style = getStatusStyle(status);
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${style.bg} ${style.color}`}>
+      <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-xs ${style.bg} ${style.color} border border-current/20`}>
         <span className={`w-1.5 h-1.5 rounded-full bg-current ${style.pulse ? 'animate-pulse' : ''}`} />
         {style.label}
       </span>
@@ -264,8 +258,20 @@ export function McpManager() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <span className="text-muted-foreground">Loading MCP servers...</span>
+      <div className="flex items-center justify-center h-full">
+        <div className="text-[var(--color-text-muted)] flex items-center gap-2">
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+            <line x1="12" y1="2" x2="12" y2="6"></line>
+            <line x1="12" y1="18" x2="12" y2="22"></line>
+            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+            <line x1="2" y1="12" x2="6" y2="12"></line>
+            <line x1="18" y1="12" x2="22" y2="12"></line>
+            <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+            <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+          </svg>
+          Loading MCP servers...
+        </div>
       </div>
     );
   }
@@ -273,24 +279,25 @@ export function McpManager() {
   return (
     <div className="flex flex-col h-full">
       <McpMarketplace />
-      <div className="border-b p-4 bg-gradient-to-r from-cyan-950/50 to-blue-950/50">
+      {/* Header */}
+      <div className="border-b border-[var(--color-border)] p-4 bg-[var(--color-panel)]">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-cyan-500/20 rounded-lg">
-              <svg className="w-6 h-6 text-cyan-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            <div className="w-10 h-10 rounded-xl bg-[#4248f1]/10 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4248f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="16 18 22 12 16 6"></polyline>
+                <polyline points="8 6 2 12 8 18"></polyline>
               </svg>
             </div>
             <div>
-              <h2 className="text-2xl font-semibold">MCP Servers</h2>
-              <p className="text-muted-foreground text-sm">Model Context Protocol integrations</p>
+              <h2 className="text-xl font-semibold">MCP Servers</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">Model Context Protocol integrations</p>
             </div>
           </div>
           <div className="flex items-center gap-4">
-            {/* Real-time status indicator */}
             {lastUpdated && (
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <span className={`w-2 h-2 rounded-full ${isPolling ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`} />
+              <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
+                <span className={`w-2 h-2 rounded-full ${isPolling ? 'bg-green-500 animate-pulse' : 'bg-[var(--color-muted)]'}`} />
                 <span>
                   {isPolling ? 'Live' : 'Paused'} • Updated {lastUpdated.toLocaleTimeString()}
                 </span>
@@ -298,10 +305,11 @@ export function McpManager() {
             )}
             <button
               onClick={() => setShowAddForm(true)}
-              className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 transition-colors flex items-center gap-2"
+              className="px-4 py-2 bg-[#4248f1] text-white rounded-lg hover:bg-[#353bc5] transition-colors flex items-center gap-2"
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
               </svg>
               Add Server
             </button>
@@ -309,44 +317,46 @@ export function McpManager() {
         </div>
       </div>
 
+      {/* Add Form */}
       {showAddForm && (
-        <div className="border-b p-4 bg-muted/30">
+        <div className="border-b border-[var(--color-border)] p-4 bg-[var(--color-muted)]/20">
           <h3 className="font-semibold mb-3 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
             </svg>
             Add MCP Server
           </h3>
           <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-sm text-muted-foreground block mb-1">Name</label>
+                <label className="text-sm text-[var(--color-text-muted)] block mb-1.5">Name</label>
                 <input
                   type="text"
                   value={formData.name}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg bg-background"
+                  className="w-full px-3 py-2.5 border border-[var(--color-border)] rounded-lg bg-[var(--color-background)] text-[var(--color-text)]"
                   placeholder="my-mcp-server"
                 />
               </div>
               <div>
-                <label className="text-sm text-muted-foreground block mb-1">Command</label>
+                <label className="text-sm text-[var(--color-text-muted)] block mb-1.5">Command</label>
                 <input
                   type="text"
                   value={formData.command}
                   onChange={(e) => setFormData({ ...formData, command: e.target.value })}
-                  className="w-full px-3 py-2 border rounded-lg bg-background font-mono"
+                  className="w-full px-3 py-2.5 border border-[var(--color-border)] rounded-lg bg-[var(--color-background)] text-[var(--color-text)] font-mono text-sm"
                   placeholder="npx"
                 />
               </div>
             </div>
             <div>
-              <label className="text-sm text-muted-foreground block mb-1">Arguments (space-separated)</label>
+              <label className="text-sm text-[var(--color-text-muted)] block mb-1.5">Arguments (space-separated)</label>
               <input
                 type="text"
                 value={formData.args?.join(' ') || ''}
                 onChange={(e) => setFormData({ ...formData, args: e.target.value.split(' ').filter(Boolean) })}
-                className="w-full px-3 py-2 border rounded-lg bg-background font-mono text-sm"
+                className="w-full px-3 py-2.5 border border-[var(--color-border)] rounded-lg bg-[var(--color-background)] text-[var(--color-text)] font-mono text-sm"
                 placeholder="-y @modelcontextprotocol/server-filesystem /path/to/files"
               />
             </div>
@@ -354,13 +364,13 @@ export function McpManager() {
               <button
                 onClick={handleAdd}
                 disabled={!formData.name || !formData.command}
-                className="px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50 transition-colors"
+                className="px-4 py-2 bg-[#4248f1] text-white rounded-lg hover:bg-[#353bc5] disabled:opacity-50 transition-colors"
               >
                 Add Server
               </button>
               <button
                 onClick={() => setShowAddForm(false)}
-                className="px-4 py-2 border rounded-lg hover:bg-muted transition-colors"
+                className="px-4 py-2 border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-muted)] transition-colors"
               >
                 Cancel
               </button>
@@ -370,12 +380,14 @@ export function McpManager() {
       )}
 
       <div className="flex-1 flex overflow-hidden">
-        <div className="w-1/2 border-r overflow-y-auto p-4">
+        {/* Servers List */}
+        <div className="w-1/2 border-r border-[var(--color-border)] overflow-y-auto p-4">
           {servers.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-muted flex items-center justify-center">
-                <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />
+            <div className="text-center py-12 text-[var(--color-text-muted)]">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-[var(--color-muted)] flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="16 18 22 12 16 6"></polyline>
+                  <polyline points="8 6 2 12 8 18"></polyline>
                 </svg>
               </div>
               <p className="font-medium">No MCP servers configured</p>
@@ -386,23 +398,24 @@ export function McpManager() {
               {servers.map((server) => (
                 <div
                   key={server.id}
-                  className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  className={`border border-[var(--color-border)] rounded-xl p-3 cursor-pointer transition-all ${
                     selectedServer?.id === server.id 
-                      ? 'ring-2 ring-cyan-500 bg-cyan-500/10' 
-                      : 'hover:bg-muted/50'
+                      ? 'ring-2 ring-[#4248f1] bg-[#4248f1]/5' 
+                      : 'hover:bg-[var(--color-muted)]/30'
                   }`}
                   onClick={() => setSelectedServer(server)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="p-1.5 bg-muted rounded">
-                        <svg className="w-4 h-4 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14M12 5l7 7-7 7" />
+                      <div className="p-1.5 bg-[var(--color-muted)] rounded">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[var(--color-text-muted)]">
+                          <polyline points="5 12 12 5 19 12"></polyline>
+                          <line x1="12" y1="5" x2="12" y2="19"></line>
                         </svg>
                       </div>
                       <div>
                         <h4 className="font-medium">{server.name}</h4>
-                        <p className="text-xs text-muted-foreground font-mono">{server.command} {server.args?.join(' ')}</p>
+                        <p className="text-xs text-[var(--color-text-muted)] font-mono">{server.command} {server.args?.join(' ')}</p>
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -413,7 +426,7 @@ export function McpManager() {
                     {server.status === 'connected' ? (
                       <button
                         onClick={(e) => { e.stopPropagation(); handleDisconnect(server.id); }}
-                        className="px-3 py-1 text-xs border rounded hover:bg-muted"
+                        className="px-3 py-1.5 text-xs border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-muted)]"
                       >
                         Disconnect
                       </button>
@@ -421,14 +434,14 @@ export function McpManager() {
                       <button
                         onClick={(e) => { e.stopPropagation(); handleConnect(server.id); }}
                         disabled={connecting === server.id}
-                        className="px-3 py-1 text-xs bg-cyan-600 text-white rounded hover:bg-cyan-700 disabled:opacity-50"
+                        className="px-3 py-1.5 text-xs bg-[#4248f1] text-white rounded-lg hover:bg-[#353bc5] disabled:opacity-50"
                       >
                         {connecting === server.id ? 'Connecting...' : 'Connect'}
                       </button>
                     )}
                     <button
                       onClick={(e) => { e.stopPropagation(); handleDelete(server.id); }}
-                      className="px-3 py-1 text-xs text-red-500 hover:bg-red-50 rounded"
+                      className="px-3 py-1.5 text-xs text-red-500 hover:bg-red-500/10 rounded-lg"
                     >
                       Delete
                     </button>
@@ -442,20 +455,26 @@ export function McpManager() {
           )}
         </div>
 
-        <div className="w-1/2 overflow-y-auto p-4">
+        {/* Tools Panel */}
+        <div className="w-1/2 overflow-y-auto p-4 bg-[var(--color-background)]">
           {!selectedServer ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 text-[var(--color-text-muted)]">
               <p>Select a server to view tools</p>
             </div>
           ) : selectedServer.status !== 'connected' ? (
-            <div className="text-center py-12 text-muted-foreground">
+            <div className="text-center py-12 text-[var(--color-text-muted)]">
               <p>Connect to a server to view available tools</p>
             </div>
           ) : tools.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-muted flex items-center justify-center">
-                <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+            <div className="text-center py-12 text-[var(--color-text-muted)]">
+              <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-[var(--color-muted)] flex items-center justify-center">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
                 </svg>
               </div>
               <p className="font-medium">No tools available</p>
@@ -464,69 +483,75 @@ export function McpManager() {
           ) : (
             <div className="space-y-3">
               <h3 className="font-semibold flex items-center gap-2">
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
                 </svg>
                 Available Tools ({tools.length})
               </h3>
               {tools.map((tool) => (
                 <div
                   key={tool.id}
-                  className={`border rounded-lg p-3 cursor-pointer transition-all ${
+                  className={`border border-[var(--color-border)] rounded-lg p-3 cursor-pointer transition-all ${
                     selectedTool?.id === tool.id
-                      ? 'ring-2 ring-cyan-500 bg-cyan-500/10'
-                      : 'hover:bg-muted/50'
+                      ? 'ring-2 ring-[#4248f1] bg-[#4248f1]/5'
+                      : 'hover:bg-[var(--color-muted)]/30'
                   }`}
                   onClick={() => setSelectedTool(tool)}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-400 text-xs font-mono">
+                    <span className="px-2 py-0.5 rounded bg-[#4248f1]/10 text-[#4248f1] text-xs font-mono border border-[#4248f1]/20">
                       MCP
                     </span>
                     <h4 className="font-medium font-mono text-sm">{tool.name}</h4>
                   </div>
                   {tool.description && (
-                    <p className="text-xs text-muted-foreground mt-1">{tool.description}</p>
+                    <p className="text-xs text-[var(--color-text-muted)] mt-1">{tool.description}</p>
                   )}
                 </div>
               ))}
 
               {selectedTool && (
-                <div className="border-t pt-4 mt-4">
+                <div className="border-t border-[var(--color-border)] pt-4 mt-4">
                   <h4 className="font-semibold mb-3 flex items-center gap-2">
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
                     </svg>
                     Execute Tool
                   </h4>
                   <div className="space-y-3">
                     <div>
-                      <label className="text-sm text-muted-foreground block mb-1">Arguments (JSON)</label>
+                      <label className="text-sm text-[var(--color-text-muted)] block mb-1.5">Arguments (JSON)</label>
                       <textarea
                         value={toolArgs}
                         onChange={(e) => setToolArgs(e.target.value)}
-                        className="w-full px-3 py-2 border rounded-lg bg-background font-mono text-sm h-24 resize-none"
+                        className="w-full px-3 py-2 border border-[var(--color-border)] rounded-lg bg-[var(--color-background)] text-[var(--color-text)] font-mono text-sm h-24 resize-none"
                         placeholder='{"key": "value"}'
                       />
                     </div>
                     <button
                       onClick={handleCallTool}
                       disabled={callingTool !== null}
-                      className="w-full px-4 py-2 bg-cyan-600 text-white rounded-lg hover:bg-cyan-700 disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full px-4 py-2 bg-[#4248f1] text-white rounded-lg hover:bg-[#353bc5] disabled:opacity-50 flex items-center justify-center gap-2"
                     >
                       {callingTool ? (
                         <>
-                          <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                            <line x1="12" y1="2" x2="12" y2="6"></line>
+                            <line x1="12" y1="18" x2="12" y2="22"></line>
+                            <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                            <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
                           </svg>
                           Executing...
                         </>
                       ) : (
                         <>
-                          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <polygon points="5 3 19 12 5 21 5 3"></polygon>
                           </svg>
                           Execute
                         </>
@@ -534,18 +559,31 @@ export function McpManager() {
                     </button>
 
                     {toolResult && (
-                      <div className="border rounded-lg p-3 bg-green-500/10">
-                        <h5 className="text-sm font-medium text-green-400 mb-2">Result</h5>
-                        <pre className="text-xs font-mono whitespace-pre-wrap bg-background p-2 rounded overflow-x-auto">
+                      <div className="border border-green-500/20 rounded-lg p-3 bg-green-500/5">
+                        <h5 className="text-sm font-medium text-green-500 mb-2 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                            <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                          </svg>
+                          Result
+                        </h5>
+                        <pre className="text-xs font-mono whitespace-pre-wrap bg-[var(--color-background)] p-2 rounded border border-[var(--color-border)] overflow-x-auto">
                           {toolResult}
                         </pre>
                       </div>
                     )}
 
                     {toolError && (
-                      <div className="border rounded-lg p-3 bg-red-500/10">
-                        <h5 className="text-sm font-medium text-red-400 mb-2">Error</h5>
-                        <pre className="text-xs font-mono whitespace-pre-wrap bg-background p-2 rounded overflow-x-auto">
+                      <div className="border border-red-500/20 rounded-lg p-3 bg-red-500/5">
+                        <h5 className="text-sm font-medium text-red-500 mb-2 flex items-center gap-2">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="15" y1="9" x2="9" y2="15"></line>
+                            <line x1="9" y1="9" x2="15" y2="15"></line>
+                          </svg>
+                          Error
+                        </h5>
+                        <pre className="text-xs font-mono whitespace-pre-wrap bg-[var(--color-background)] p-2 rounded border border-[var(--color-border)] overflow-x-auto">
                           {toolError}
                         </pre>
                       </div>

@@ -2,6 +2,15 @@ import { create } from 'zustand';
 
 export type ConnectionState = 'connected' | 'degraded' | 'disconnected';
 
+export type ToastType = 'success' | 'error' | 'warning' | 'info';
+
+export interface Toast {
+  id: string;
+  type: ToastType;
+  message: string;
+  duration?: number;
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
@@ -73,8 +82,11 @@ interface AppState {
   pendingConfirmation: PendingConfirmation | null;
   messageQueue: string[];
   isProcessingQueue: boolean;
+  toasts: Toast[];
   
   addMessage: (message: Omit<Message, 'id' | 'timestamp'>) => void;
+  addToast: (toast: Omit<Toast, 'id'>) => void;
+  removeToast: (id: string) => void;
   addToMessageQueue: (message: string) => void;
   removeFromMessageQueue: (index: number) => void;
   clearMessageQueue: () => void;
@@ -104,6 +116,7 @@ export const useAppStore = create<AppState>((set) => ({
   pendingConfirmation: null,
   messageQueue: [],
   isProcessingQueue: false,
+  toasts: [],
 
   addMessage: (message) =>
     set((state) => ({
@@ -188,4 +201,17 @@ export const useAppStore = create<AppState>((set) => ({
   setPendingConfirmation: (pendingConfirmation) => set({ pendingConfirmation }),
 
   clearMessages: () => set({ messages: [] }),
+
+  addToast: (toast) =>
+    set((state) => ({
+      toasts: [
+        ...state.toasts,
+        { ...toast, id: crypto.randomUUID() },
+      ],
+    })),
+
+  removeToast: (id) =>
+    set((state) => ({
+      toasts: state.toasts.filter((t) => t.id !== id),
+    })),
 }));

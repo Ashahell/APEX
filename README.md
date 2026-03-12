@@ -28,7 +28,7 @@ APEX is **more secure than both** by design:
 
 ## Status
 
-**Version**: v1.3.0 (Pre-Alpha)
+**Version**: v1.3.2 (Pre-Alpha)
 
 ## Architecture
 
@@ -73,8 +73,14 @@ APEX is **more secure than both** by design:
 - **Dynamic Tool Generation** - LLM generates custom Python tools (POC)
 - **Subagent Pool** - Parallel task splitting (POC)
 
-### UI Features (Basic)
+### UI Features (AgentZero Theme)
 - Real-time chat with task sidebar
+- **AgentZero Styling**: Indigo (#4248f1) primary, CSS variables, SVG icons
+- **Message Reactions**: Copy, edit, regenerate on hover
+- **Toast Notifications**: success/error/warning/info with auto-dismiss
+- **Attachment Support**: File upload with preview
+- **Speech Input**: Voice recording via Web Speech API
+- **Enhanced Welcome Screen**: Quick action cards
 - Kanban board for task management
 - Workflow visualizer (basic)
 - Memory/narrative viewer (basic)

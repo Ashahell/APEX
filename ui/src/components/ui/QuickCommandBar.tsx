@@ -112,11 +112,13 @@ export function QuickCommandBar({ onNavigate, onRunTask, onOpenSettings }: Quick
     return (
       <button
         onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted rounded-md transition-colors"
+        className="flex items-center gap-2 px-3 py-1.5 text-sm text-[var(--color-text-muted)] hover:bg-[#4248f1]/10 rounded-lg transition-colors"
         title="Quick Command (Ctrl+P)"
       >
-        <span className="hidden sm:inline text-xs">⌘</span>
-        <span className="hidden md:inline text-xs border rounded px-1">Ctrl+P</span>
+        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <span className="hidden md:inline text-xs border border-border rounded-lg px-1">Ctrl+P</span>
       </button>
     );
   }
@@ -131,11 +133,13 @@ export function QuickCommandBar({ onNavigate, onRunTask, onOpenSettings }: Quick
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center pt-24">
-      <div className="absolute inset-0 bg-black/50" onClick={() => { setIsOpen(false); setQuery(''); }} />
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => { setIsOpen(false); setQuery(''); }} />
       
-      <div className="relative w-full max-w-xl mx-4 bg-background rounded-xl shadow-2xl border overflow-hidden">
-        <div className="flex items-center gap-3 p-4 border-b">
-          <span className="text-muted-foreground">⌘</span>
+      <div className="relative w-full max-w-xl mx-4 bg-[var(--color-panel)] rounded-2xl shadow-2xl border border-border overflow-hidden">
+        <div className="flex items-center gap-3 p-4 border-b border-border">
+          <svg className="w-5 h-5 text-[var(--color-text-muted)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
             ref={inputRef}
             type="text"
@@ -148,23 +152,26 @@ export function QuickCommandBar({ onNavigate, onRunTask, onOpenSettings }: Quick
                 handleTaskSubmit();
               }
             }}
-            className="flex-1 bg-transparent outline-none text-sm placeholder:text-muted-foreground"
+            className="flex-1 bg-transparent outline-none text-sm placeholder:text-[var(--color-text-muted)]"
+            autoFocus
           />
           <button
             onClick={() => { setIsOpen(false); setQuery(''); }}
-            className="p-1 hover:bg-muted rounded text-sm"
+            className="p-1.5 hover:bg-[#4248f1]/20 rounded-lg transition-colors"
           >
-            ✕
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
           </button>
         </div>
 
         <div className="max-h-96 overflow-y-auto p-2">
           {query.trim().startsWith('>') ? (
             <div className="p-3">
-              <div className="text-xs text-muted-foreground mb-2">Run as task</div>
+              <div className="text-xs text-[var(--color-text-muted)] mb-2">Run as task</div>
               <button
                 onClick={handleTaskSubmit}
-                className="w-full text-left p-3 bg-primary/10 hover:bg-primary/20 rounded-lg transition-colors"
+                className="w-full text-left p-3 bg-[#4248f1]/10 hover:bg-[#4248f1]/20 rounded-xl transition-colors"
               >
                 <span className="font-medium">{query.slice(1).trim() || 'Empty task'}</span>
                 <span className="block text-xs text-muted-foreground mt-1">Press Enter to execute</span>

@@ -1,4 +1,5 @@
-import { ChannelAdapter, TaskRequest, TaskResponse } from '../../types.js';
+import { TaskRequest, TaskResponse } from '../../types.js';
+import { BaseAdapter } from '../base.js';
 
 export interface WhatsAppMessage {
   MessageSid: string;
@@ -7,12 +8,10 @@ export interface WhatsAppMessage {
   Body: string;
 }
 
-export class WhatsAppAdapter implements ChannelAdapter {
-  readonly channel = 'whatsapp' as const;
+export class WhatsAppAdapter extends BaseAdapter {
   private accountSid: string;
   private authToken: string;
   private fromNumber: string;
-  private onTask: (task: TaskRequest) => Promise<void>;
 
   constructor(
     accountSid: string,
@@ -20,27 +19,27 @@ export class WhatsAppAdapter implements ChannelAdapter {
     fromNumber: string,
     onTask: (task: TaskRequest) => Promise<void>
   ) {
+    super('whatsapp', onTask);
     this.accountSid = accountSid;
     this.authToken = authToken;
     this.fromNumber = fromNumber;
-    this.onTask = onTask;
   }
 
   async start(): Promise<void> {
+    // WhatsApp uses webhooks - no persistent connection needed
   }
 
   async stop(): Promise<void> {
+    // Cleanup if needed
   }
 
   async handleIncomingMessage(message: WhatsAppMessage): Promise<void> {
-    const task: TaskRequest = {
-      messageId: message.MessageSid,
-      channel: 'whatsapp',
-      author: message.From,
-      content: message.Body,
-      timestamp: new Date(),
-    };
-
+    const task = this.createTaskRequest(
+      message.MessageSid,
+      message.From,
+      message.Body,
+      new Date()
+    );
     await this.onTask(task);
   }
 

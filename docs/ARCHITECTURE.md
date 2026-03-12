@@ -4,14 +4,14 @@
 > 
 > **Production Gaps**: Security implementation complete (Phases 0-7), comprehensive testing (251+ tests), production hardening docs available, no formal load testing, no disaster recovery procedures, single-node deployment only.
 
-**Date**: 2026-03-10
-**Version**: v1.3.1
+**Date**: 2026-03-12
+**Version**: v1.3.2
 **Status**: Pre-Alpha (Experimental)
 **Scope**: All directories (core/, gateway/, skills/, ui/, execution/)
 
 ---
 
-> **Note on Versioning**: v1.3.0 represents the current development state. Earlier versions (v0.x) were internal development milestones. Version history at bottom explains the progression.
+> **Note on Versioning**: v1.3.2 includes AgentZero UI migration. Earlier versions (v0.x) were internal development milestones. Version history at bottom explains the progression.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -935,6 +935,13 @@ APEX implements a CSS-variable-based theme system with three built-in themes:
 - `useTheme` hook injects CSS variables into `:root`
 - Theme preference persisted in localStorage (`apex-theme-id`)
 - Progressive migration: components can use theme tokens or fallback to Tailwind defaults
+
+**AgentZero UI Migration (v1.3.2):**
+- All UI components migrated to use CSS variables for consistent theming
+- Primary color: Indigo (#4248f1) for AgentZero theme
+- Rounded corners: `rounded-xl` throughout
+- SVG icons replacing emoji for status indicators
+- Components use `bg-[var(--color-panel)]`, `border-[var(--color-border)]`, `text-[var(--color-text)]`
 
 **Theme Tokens:**
 ```

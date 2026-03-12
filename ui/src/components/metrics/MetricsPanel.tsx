@@ -57,28 +57,38 @@ export function MetricsPanel() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
-        <div className="text-muted-foreground">Loading metrics...</div>
+        <div className="text-[var(--color-text-muted)]">Loading metrics...</div>
       </div>
     );
   }
 
   return (
-    <div className="h-full overflow-auto p-4">
+    <div className="h-full overflow-auto p-6">
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Metrics</h2>
-            <p className="text-sm text-muted-foreground">System performance and usage</p>
+          <div className="flex items-center gap-3">
+            <div className="w-12 h-12 rounded-xl bg-[#4248f1]/10 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#4248f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-2xl font-bold">Metrics</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">System performance and usage</p>
+            </div>
           </div>
-          <div className="flex gap-1 border rounded-lg p-1">
+          <div className="flex gap-1 bg-[var(--color-muted)] p-1 rounded-lg">
             {(['hour', 'day', 'week', 'all'] as const).map((range) => (
               <button
                 key={range}
                 onClick={() => setTimeRange(range)}
-                className={`px-3 py-1 rounded text-sm transition-colors ${
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                   timeRange === range
-                    ? 'bg-primary text-primary-foreground'
-                    : 'hover:bg-muted'
+                    ? 'bg-[#4248f1] text-white'
+                    : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
                 }`}
               >
                 {range.charAt(0).toUpperCase() + range.slice(1)}
@@ -87,26 +97,27 @@ export function MetricsPanel() {
           </div>
         </div>
 
+        {/* Stats Grid */}
         <div className="grid grid-cols-4 gap-4">
-          <div className="border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground">Total Tasks</div>
+          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+            <div className="text-sm text-[var(--color-text-muted)]">Total Tasks</div>
             <div className="text-3xl font-bold mt-1">{totalTasks}</div>
           </div>
-          <div className="border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground">Total Cost</div>
+          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+            <div className="text-sm text-[var(--color-text-muted)]">Total Cost</div>
             <div className="text-3xl font-bold mt-1 text-green-500">
               {formatCost(metrics?.total_cost_cents || 0)}
             </div>
           </div>
-          <div className="border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground">Avg Duration</div>
+          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+            <div className="text-sm text-[var(--color-text-muted)]">Avg Duration</div>
             <div className="text-3xl font-bold mt-1">
               {formatDuration(metrics?.average_task_duration_ms || 0)}
             </div>
           </div>
-          <div className="border rounded-lg p-4">
-            <div className="text-sm text-muted-foreground">Success Rate</div>
-            <div className="text-3xl font-bold mt-1">
+          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
+            <div className="text-sm text-[var(--color-text-muted)]">Success Rate</div>
+            <div className="text-3xl font-bold mt-1 text-[#4248f1]">
               {totalTasks > 0 
                 ? getPercentage(statusData['completed'] || 0, totalTasks)
                 : '0'
@@ -115,49 +126,64 @@ export function MetricsPanel() {
           </div>
         </div>
 
+        {/* Charts */}
         <div className="grid grid-cols-2 gap-4">
-          <div className="border rounded-lg">
-            <div className="border-b p-3">
-              <h3 className="font-semibold">Tasks by Tier</h3>
+          <div className="border border-[var(--color-border)] rounded-xl overflow-hidden bg-[var(--color-panel)]">
+            <div className="border-b border-[var(--color-border)] p-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Tasks by Tier
+              </h3>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-4">
               {Object.entries(tierData).map(([tier, count]) => (
                 <div key={tier}>
-                  <div className="flex items-center justify-between text-sm mb-1">
-                    <span className="capitalize">{tier}</span>
-                    <span className="font-medium">{count}</span>
+                  <div className="flex items-center justify-between text-sm mb-2">
+                    <span className="capitalize font-medium">{tier}</span>
+                    <span className="text-[var(--color-text-muted)]">{count}</span>
                   </div>
-                  <div className="h-2 bg-muted rounded-full overflow-hidden">
+                  <div className="h-2 bg-[var(--color-muted)] rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-primary rounded-full"
+                      className="h-full bg-[#4248f1] rounded-full"
                       style={{ width: `${getPercentage(count, totalTasks)}%` }}
                     />
                   </div>
                 </div>
               ))}
               {Object.keys(tierData).length === 0 && (
-                <div className="text-center text-muted-foreground py-4">No data</div>
+                <div className="text-center text-[var(--color-text-muted)] py-4">No data</div>
               )}
             </div>
           </div>
 
-          <div className="border rounded-lg">
-            <div className="border-b p-3">
-              <h3 className="font-semibold">Tasks by Status</h3>
+          <div className="border border-[var(--color-border)] rounded-xl overflow-hidden bg-[var(--color-panel)]">
+            <div className="border-b border-[var(--color-border)] p-4">
+              <h3 className="font-semibold flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="20" x2="18" y2="10"></line>
+                  <line x1="12" y1="20" x2="12" y2="4"></line>
+                  <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                Tasks by Status
+              </h3>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="p-4 space-y-4">
               {Object.entries(statusData).map(([status, count]) => {
                 const color = status === 'completed' ? 'bg-green-500' 
                   : status === 'failed' ? 'bg-red-500'
                   : status === 'running' ? 'bg-blue-500'
-                  : 'bg-muted';
+                  : 'bg-[var(--color-muted)]';
                 return (
                   <div key={status}>
-                    <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="capitalize">{status}</span>
-                      <span className="font-medium">{count}</span>
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span className="capitalize font-medium">{status}</span>
+                      <span className="text-[var(--color-text-muted)]">{count}</span>
                     </div>
-                    <div className="h-2 bg-muted rounded-full overflow-hidden">
+                    <div className="h-2 bg-[var(--color-muted)] rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full ${color}`}
                         style={{ width: `${getPercentage(count, totalTasks)}%` }}
@@ -167,33 +193,40 @@ export function MetricsPanel() {
                 );
               })}
               {Object.keys(statusData).length === 0 && (
-                <div className="text-center text-muted-foreground py-4">No data</div>
+                <div className="text-center text-[var(--color-text-muted)] py-4">No data</div>
               )}
             </div>
           </div>
         </div>
 
-        <div className="border rounded-lg p-4">
-          <h3 className="font-semibold mb-3">Cost Breakdown</h3>
-          <div className="grid grid-cols-3 gap-4 text-sm">
-            <div className="border rounded p-3">
-              <div className="text-muted-foreground">Total Cost</div>
-              <div className="text-xl font-bold text-green-500">
+        {/* Cost Breakdown */}
+        <div className="border border-[var(--color-border)] rounded-xl p-6 bg-[var(--color-panel)]">
+          <h3 className="font-semibold mb-4 flex items-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="12" y1="1" x2="12" y2="23"></line>
+              <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+            </svg>
+            Cost Breakdown
+          </h3>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-background)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Total Cost</div>
+              <div className="text-2xl font-bold text-green-500 mt-1">
                 {formatCost(metrics?.total_cost_cents || 0)}
               </div>
             </div>
-            <div className="border rounded p-3">
-              <div className="text-muted-foreground">Avg Cost/Task</div>
-              <div className="text-xl font-bold">
+            <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-background)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Avg Cost/Task</div>
+              <div className="text-2xl font-bold mt-1">
                 {totalTasks > 0 
                   ? formatCost((metrics?.total_cost_cents || 0) / totalTasks)
                   : '$0.00'
                 }
               </div>
             </div>
-            <div className="border rounded p-3">
-              <div className="text-muted-foreground">Cost per Minute</div>
-              <div className="text-xl font-bold">
+            <div className="border border-[var(--color-border)] rounded-lg p-4 bg-[var(--color-background)]">
+              <div className="text-sm text-[var(--color-text-muted)]">Cost per Minute</div>
+              <div className="text-2xl font-bold mt-1">
                 {metrics?.total_cost ? `$${metrics.total_cost.toFixed(4)}` : '$0.00'}
               </div>
             </div>

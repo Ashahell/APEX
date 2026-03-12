@@ -22,15 +22,15 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.3.1
+- **Version**: v1.3.2
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
 
 ## ⚠️ Pre-Alpha Warnings
 
-- **Security-first but unaudited** — Security implementation complete (Phases 0-7), but not formally penetration tested
-- **Limited testing** — 251+ tests, many features are proof-of-concept
+- **Security-first but unaudited** — Security implementation complete (Phases 0-13), but not formally penetration tested
+- **Limited testing** — 180+ tests, many features are proof-of-concept
 - **API instability** — Breaking changes expected
 - **No production support** — Use at your own risk
 - **Firecracker/VM isolation** — Requires kernel/rootfs configuration
@@ -66,6 +66,8 @@ APEX is **more secure than both** by design:
 - **Phase 9: v0.2.0 Upgrade** ✅ Complete (Firecracker, Agent Zero loop, SKILL.md plugins, PostgreSQL, Config files)
 - **Phase 10: Social Context** ✅ Complete (Moltbook Integration)
 - **Phase 11: Governance & Constitution** ✅ Complete
+- **Phase 12: OpenClaw Integration** ✅ Complete (Death Spiral Detection, External Notifications, Workspace .env)
+- **Phase 13: Code Quality** ✅ Complete (Security fixes, Adapter refactoring, React hooks)
 
 ### Recent Optimizations
 - **API Modularization** ✅ Complete - Split 1556-line monolithic `api.rs` into 9 modular files in `core/router/src/api/`
@@ -75,6 +77,27 @@ APEX is **more secure than both** by design:
 - **Transaction Boundaries** ✅ Complete - Added atomic task update + decision journal writes in deep_task_worker
 - **Security Tests** ✅ Complete - Added 57 security tests (input validation, audit chain, permission tiers)
 - **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
+
+### v0.3.1 OpenClaw Integration
+- **Death Spiral Detection** ✅ Complete - Added 4 new anomaly types (FileCreationBurst, ToolCallLoop, NoSideEffects, ErrorCascade)
+- **External Notifications** ✅ Complete - Discord webhook + Telegram bot integration with API endpoints
+- **Workspace .env Loading** ✅ Complete - Loads .env file for skill execution
+
+### v1.3.2 AgentZero UI Migration
+- **AgentZero Styling** ✅ Complete - Indigo (#4248f1) primary, CSS variables, SVG icons throughout
+- **Toast Notifications** ✅ Complete - Full toast system with success/error/warning/info variants
+- **Message Reactions** ✅ Complete - Copy, edit, regenerate buttons on hover
+- **Attachment Support** ✅ Complete - File upload with preview
+- **Speech Input** ✅ Complete - Web Speech API voice recording
+- **Enhanced Welcome** ✅ Complete - Quick action cards for common tasks
+- **T3 VM Execution** ✅ Complete - Implemented actual VM pool execution for T3 tasks
+
+### v0.3.1 Code Quality Improvements
+- **Security Hardening** ✅ Complete - Removed hardcoded secrets, fixed weak RNG in TOTP, added command injection mitigation
+- **API Error Helpers** ✅ Complete - Added `api_error` module with `api_try!` macro
+- **Base Adapter Class** ✅ Complete - Created `BaseAdapter` for gateway adapters (5 adapters refactored)
+- **React Hooks** ✅ Complete - Created `useApi` hooks for data fetching
+- **Constants** ✅ Complete - Added `config_constants` modules to eliminate magic numbers
 
 ### v0.3.0 New Features
 - **Real-time Agent Thoughts Streaming** - Partial (execution events stream, full thought trace in progress)

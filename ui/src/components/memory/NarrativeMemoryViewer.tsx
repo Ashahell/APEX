@@ -96,26 +96,32 @@ export function NarrativeMemoryViewer() {
   if (selectedEntry && entryContent !== null) {
     return (
       <div className="flex flex-col h-full">
-        <div className="border-b p-4">
+        {/* Header */}
+        <div className="border-b border-[var(--color-border)] p-4">
           <button
             onClick={() => {
               setSelectedEntry(null);
               setEntryContent(null);
             }}
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground"
+            className="flex items-center gap-2 text-sm text-[var(--color-text-muted)] hover:text-[#4248f1] transition-colors"
           >
-            ← Back to list
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="19" y1="12" x2="5" y2="12"></line>
+              <polyline points="12 19 5 12 12 5"></polyline>
+            </svg>
+            Back to list
           </button>
         </div>
+        {/* Content */}
         <div className="flex-1 overflow-auto p-4">
-          <div className="border rounded-lg p-4">
+          <div className="border border-[var(--color-border)] rounded-xl p-4 bg-[var(--color-panel)]">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold">{selectedEntry.task_id}</h3>
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-[var(--color-text-muted)]">
                 {formatDate(selectedEntry.created_at)}
               </span>
             </div>
-            <pre className="whitespace-pre-wrap text-sm font-mono bg-muted p-4 rounded-lg overflow-auto">
+            <pre className="whitespace-pre-wrap text-sm font-mono bg-[var(--color-muted)]/30 p-4 rounded-lg border border-[var(--color-border)] overflow-auto">
               {entryContent}
             </pre>
           </div>
@@ -126,7 +132,8 @@ export function NarrativeMemoryViewer() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b">
+      {/* Tabs */}
+      <div className="border-b border-[var(--color-border)]">
         <nav className="flex">
           {tabs.map((tab) => (
             <button
@@ -134,50 +141,62 @@ export function NarrativeMemoryViewer() {
               onClick={() => setActiveTab(tab.id)}
               className={`px-4 py-3 text-sm font-medium transition-colors relative ${
                 activeTab === tab.id
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
+                  ? 'text-[#4248f1]'
+                  : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
               }`}
             >
               {tab.label}
-              <span className="ml-2 text-xs bg-muted px-2 py-0.5 rounded-full">
+              <span className="ml-2 text-xs bg-[var(--color-muted)] px-2 py-0.5 rounded-full">
                 {tab.count}
               </span>
               {activeTab === tab.id && (
-                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#4248f1]" />
               )}
             </button>
           ))}
         </nav>
       </div>
 
-      <div className="p-4 border-b">
-        <div className="grid grid-cols-4 gap-4">
-          <div className="border rounded-lg p-3 text-center">
-            <div className="text-2xl font-bold">{stats?.total_files || 0}</div>
-            <div className="text-xs text-muted-foreground">Total Files</div>
+      {/* Stats */}
+      <div className="border-b border-[var(--color-border)] p-4 bg-[var(--color-panel)]">
+        <div className="grid grid-cols-4 gap-3">
+          <div className="border border-[var(--color-border)] rounded-lg p-3 text-center bg-[var(--color-background)]">
+            <div className="text-2xl font-bold text-[#4248f1]">{stats?.total_files || 0}</div>
+            <div className="text-xs text-[var(--color-text-muted)]">Total Files</div>
           </div>
-          <div className="border rounded-lg p-3 text-center">
+          <div className="border border-[var(--color-border)] rounded-lg p-3 text-center bg-[var(--color-background)]">
             <div className="text-2xl font-bold">{stats?.journal_entries || 0}</div>
-            <div className="text-xs text-muted-foreground">Journal</div>
+            <div className="text-xs text-[var(--color-text-muted)]">Journal</div>
           </div>
-          <div className="border rounded-lg p-3 text-center">
+          <div className="border border-[var(--color-border)] rounded-lg p-3 text-center bg-[var(--color-background)]">
             <div className="text-2xl font-bold">{stats?.entities || 0}</div>
-            <div className="text-xs text-muted-foreground">Entities</div>
+            <div className="text-xs text-[var(--color-text-muted)]">Entities</div>
           </div>
-          <div className="border rounded-lg p-3 text-center">
+          <div className="border border-[var(--color-border)] rounded-lg p-3 text-center bg-[var(--color-background)]">
             <div className="text-2xl font-bold">{stats?.reflections || 0}</div>
-            <div className="text-xs text-muted-foreground">Reflections</div>
+            <div className="text-xs text-[var(--color-text-muted)]">Reflections</div>
           </div>
         </div>
       </div>
 
+      {/* Entries List */}
       <div className="flex-1 overflow-auto p-4">
         {loading ? (
-          <div className="text-center text-muted-foreground py-8">
+          <div className="text-center text-[var(--color-text-muted)] py-8 flex items-center justify-center gap-2">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+              <line x1="12" y1="2" x2="12" y2="6"></line>
+              <line x1="12" y1="18" x2="12" y2="22"></line>
+              <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+              <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+              <line x1="2" y1="12" x2="6" y2="12"></line>
+              <line x1="18" y1="12" x2="22" y2="12"></line>
+              <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+              <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+            </svg>
             Loading...
           </div>
         ) : entries.length === 0 ? (
-          <div className="text-center text-muted-foreground py-8">
+          <div className="text-center text-[var(--color-text-muted)] py-8">
             No {activeTab} entries found
           </div>
         ) : (
@@ -186,15 +205,15 @@ export function NarrativeMemoryViewer() {
               <button
                 key={entry.id}
                 onClick={() => viewEntry(entry)}
-                className="w-full border rounded-lg p-3 hover:bg-muted/50 transition-colors text-left"
+                className="w-full border border-[var(--color-border)] rounded-lg p-3 hover:bg-[var(--color-muted)]/30 hover:border-[#4248f1]/30 transition-colors text-left"
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-sm font-medium">{entry.task_id}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-[var(--color-text-muted)]">
                     {formatDate(entry.created_at)}
                   </span>
                 </div>
-                <p className="text-sm text-muted-foreground line-clamp-2">
+                <p className="text-sm text-[var(--color-text-muted)] line-clamp-2">
                   {entry.summary}
                 </p>
               </button>

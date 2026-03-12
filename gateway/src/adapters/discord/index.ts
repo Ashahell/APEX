@@ -1,17 +1,16 @@
-import { Client, GatewayIntentBits, Events, Message, ChannelAdapter, TaskRequest, TaskResponse } from './types.js';
+import { Client, GatewayIntentBits, Events, Message, TaskRequest, TaskResponse } from './types.js';
+import { BaseAdapter } from '../base.js';
 
-export class DiscordAdapter implements ChannelAdapter {
-  readonly channel = 'discord' as const;
+export class DiscordAdapter extends BaseAdapter {
   private client: Client;
-  private onTask: (task: TaskRequest) => Promise<void>;
   private token: string;
 
   constructor(
     token: string,
     onTask: (task: TaskRequest) => Promise<void>
   ) {
+    super('discord', onTask);
     this.token = token;
-    this.onTask = onTask;
     this.client = new Client({
       intents: [
         GatewayIntentBits.Guilds,
@@ -26,14 +25,13 @@ export class DiscordAdapter implements ChannelAdapter {
       if (message.author.bot) return;
       if (!message.content) return;
 
-      const task: TaskRequest = {
-        messageId: message.id,
-        channel: 'discord',
-        threadId: message.threadId || undefined,
-        author: message.author.id,
-        content: message.content,
-        timestamp: message.createdAt,
-      };
+      const task = this.createTaskRequest(
+        message.id,
+        message.author.id,
+        message.content,
+        message.createdAt,
+        message.threadId || undefined
+      );
 
       await this.onTask(task);
     });
@@ -47,8 +45,5 @@ export class DiscordAdapter implements ChannelAdapter {
 
   async stop(): Promise<void> {
     this.client.destroy();
-  }
-
-  async send(response: TaskResponse): Promise<void> {
   }
 }

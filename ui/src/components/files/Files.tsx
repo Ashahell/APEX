@@ -110,18 +110,33 @@ export function Files() {
     return new Date(timestamp).toLocaleDateString();
   }
 
-  function getFileIcon(item: FileItem): string {
-    if (item.is_dir) return '📁';
+  function getFileIcon(item: FileItem): React.ReactNode {
+    if (item.is_dir) {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-500">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+        </svg>
+      );
+    }
     const ext = item.name.split('.').pop()?.toLowerCase();
+    const iconClass = 'text-[var(--color-text-muted)]';
     switch (ext) {
-      case 'md': return '📝';
-      case 'json': return '📋';
-      case 'js': case 'ts': case 'jsx': case 'tsx': return '📜';
-      case 'py': return '🐍';
-      case 'rs': return '🦀';
-      case 'html': case 'css': return '🌐';
-      case 'png': case 'jpg': case 'jpeg': case 'gif': return '🖼️';
-      default: return '📄';
+      case 'md':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>;
+      case 'json':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="8" y1="13" x2="16" y2="13"></line><line x1="8" y1="17" x2="16" y2="17"></line></svg>;
+      case 'js': case 'ts': case 'jsx': case 'tsx':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>;
+      case 'py':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"></path><path d="M8 12a2 2 0 1 0 4 0 2 2 0 1 0-4 0z"></path><path d="M16 16a2 2 0 1 0 0-4 2 2 0 1 0 0 4z"></path></svg>;
+      case 'rs':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"></path><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"></path></svg>;
+      case 'html': case 'css':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>;
+      case 'png': case 'jpg': case 'jpeg': case 'gif':
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>;
+      default:
+        return <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={iconClass}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>;
     }
   }
 
@@ -182,82 +197,132 @@ export function Files() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b p-4">
+      <div className="border-b p-4 bg-[var(--color-panel)]">
         <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-semibold">Files</h2>
-            <p className="text-muted-foreground">Browse project files</p>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-[#4248f1]/10 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4248f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+            </div>
+            <div>
+              <h2 className="text-xl font-semibold">Files</h2>
+              <p className="text-sm text-[var(--color-text-muted)]">Browse project files</p>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1 bg-[var(--color-muted)] p-1 rounded-lg">
             <button
               onClick={() => setViewMode('list')}
-              className={`px-3 py-1.5 text-sm rounded ${viewMode === 'list' ? 'bg-primary text-primary-foreground' : 'border'}`}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                viewMode === 'list' ? 'bg-[#4248f1] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+              }`}
             >
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline mr-1">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
               List
             </button>
             <button
               onClick={() => setViewMode('details')}
-              className={`px-3 py-1.5 text-sm rounded ${viewMode === 'details' ? 'bg-primary text-primary-foreground' : 'border'}`}
+              className={`px-3 py-1.5 text-sm rounded-md transition-colors ${
+                viewMode === 'details' ? 'bg-[#4248f1] text-white' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+              }`}
             >
-              Details
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="inline mr-1">
+                <rect x="3" y="3" width="7" height="7"></rect>
+                <rect x="14" y="3" width="7" height="7"></rect>
+                <rect x="14" y="14" width="7" height="7"></rect>
+                <rect x="3" y="14" width="7" height="7"></rect>
+              </svg>
+              Grid
             </button>
           </div>
         </div>
       </div>
 
       <div className="flex-1 flex min-h-0">
-        <div className="flex-1 flex flex-col min-w-0 border-r">
-          <div className="bg-muted p-2 border-b flex items-center gap-2">
+        <div className="flex-1 flex flex-col min-w-0 border-r border-border">
+          <div className="bg-[var(--color-muted)]/30 p-2 border-b border-border flex items-center gap-2">
             <button
               onClick={() => setCurrentPath('/')}
-              className="text-sm hover:underline"
+              className="text-sm px-2 py-1 rounded-xl hover:bg-[#4248f1]/10 transition-colors flex items-center gap-1 text-[#4248f1]"
             >
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+              </svg>
               Home
             </button>
             <button
               onClick={navigateUp}
-              className="text-sm hover:underline"
+              className="text-sm px-2 py-1 rounded hover:bg-[var(--color-muted)] transition-colors flex items-center gap-1 disabled:opacity-50"
               disabled={currentPath === '/'}
             >
-              ⬆️ Up
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+              Up
             </button>
-            <span className="text-muted-foreground">/</span>
-            <span className="text-sm font-mono">{currentPath}</span>
+            <span className="text-[var(--color-text-muted)]">/</span>
+            <span className="text-sm font-mono text-[var(--color-text)]">{currentPath}</span>
           </div>
 
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-muted-foreground">Loading...</span>
+              <div className="text-[var(--color-text-muted)] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                  <line x1="12" y1="2" x2="12" y2="6"></line>
+                  <line x1="12" y1="18" x2="12" y2="22"></line>
+                  <line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+                  <line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+                  <line x1="2" y1="12" x2="6" y2="12"></line>
+                  <line x1="18" y1="12" x2="22" y2="12"></line>
+                  <line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+                  <line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+                </svg>
+                Loading...
+              </div>
             </div>
           ) : error ? (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-red-500">{error}</span>
+              <span className="text-red-500 flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                {error}
+              </span>
             </div>
           ) : files.length === 0 ? (
             <div className="flex-1 flex items-center justify-center">
-              <span className="text-muted-foreground">Empty directory</span>
+              <span className="text-[var(--color-text-muted)] flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg>
+                Empty directory
+              </span>
             </div>
           ) : viewMode === 'list' ? (
             <div className="flex-1 overflow-y-auto">
               <table className="w-full text-sm">
-                <thead className="bg-muted/50 sticky top-0">
+                <thead className="bg-[var(--color-muted)]/30 sticky top-0">
                   <tr className="text-left">
-                    <th className="p-2 font-medium">Name</th>
-                    <th className="p-2 font-medium w-24">Size</th>
-                    <th className="p-2 font-medium w-32">Modified</th>
+                    <th className="p-3 font-medium text-[var(--color-text)]">Name</th>
+                    <th className="p-3 font-medium text-[var(--color-text)] w-24">Size</th>
+                    <th className="p-3 font-medium text-[var(--color-text)] w-32">Modified</th>
                   </tr>
                 </thead>
                 <tbody>
                   {files.map((file) => (
                     <tr
                       key={file.path}
-                      className={`border-t hover:bg-muted/50 cursor-pointer ${
-                        selectedFile?.path === file.path ? 'bg-muted' : ''
+                      className={`border-t border-[var(--color-border)] hover:bg-[var(--color-muted)]/30 cursor-pointer transition-colors ${
+                        selectedFile?.path === file.path ? 'bg-[#4248f1]/5' : ''
                       }`}
                       onClick={() => file.is_dir ? navigateToFolder(file.name) : setSelectedFile(file)}
                       onContextMenu={(e) => handleContextMenu(e, file)}
                     >
-                      <td className="p-2">
+                      <td className="p-3">
                         {renaming === file.path ? (
                           <input
                             type="text"
@@ -267,19 +332,19 @@ export function Files() {
                             onKeyDown={(e) => e.key === 'Enter' && confirmRename(file)}
                             onClick={(e) => e.stopPropagation()}
                             autoFocus
-                            className="px-1 py-0.5 border rounded"
+                            className="px-2 py-1 border rounded bg-[var(--color-background)] text-[var(--color-text)]"
                           />
                         ) : (
                           <span className="flex items-center gap-2">
                             <span>{getFileIcon(file)}</span>
-                            {file.name}
+                            <span className="text-[var(--color-text)]">{file.name}</span>
                           </span>
                         )}
                       </td>
-                      <td className="p-2 text-muted-foreground">
+                      <td className="p-3 text-[var(--color-text-muted)]">
                         {formatSize(file.size)}
                       </td>
-                      <td className="p-2 text-muted-foreground">
+                      <td className="p-3 text-[var(--color-text-muted)]">
                         {formatDate(file.modified)}
                       </td>
                     </tr>
@@ -293,39 +358,53 @@ export function Files() {
                 <div
                   key={file.path}
                   onClick={() => file.is_dir ? navigateToFolder(file.name) : setSelectedFile(file)}
-                  className={`p-4 border rounded-lg text-center cursor-pointer hover:bg-muted/50 ${
-                    selectedFile?.path === file.path ? 'bg-muted border-primary' : ''
+                  className={`p-4 border border-[var(--color-border)] rounded-xl text-center cursor-pointer hover:border-[#4248f1]/30 hover:shadow-md transition-all ${
+                    selectedFile?.path === file.path ? 'bg-[#4248f1]/5 border-[#4248f1]/30' : 'bg-[var(--color-panel)]'
                   }`}
                 >
-                  <div className="text-4xl mb-2">{getFileIcon(file)}</div>
-                  <div className="text-sm truncate">{file.name}</div>
-                  <div className="text-xs text-muted-foreground">{formatSize(file.size)}</div>
+                  <div className="mb-2 flex justify-center">{getFileIcon(file)}</div>
+                  <div className="text-sm truncate text-[var(--color-text)]">{file.name}</div>
+                  <div className="text-xs text-[var(--color-text-muted)]">{formatSize(file.size)}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
 
-        <div className="w-80 flex flex-col">
-          <div className="p-4 border-b">
+        <div className="w-80 flex flex-col bg-[var(--color-panel)]">
+          <div className="p-4 border-b border-[var(--color-border)]">
             <h3 className="font-semibold">Details</h3>
           </div>
           {selectedFile ? (
             <div className="flex-1 flex flex-col min-h-0 p-4">
-              <div className="mb-4">
-                <div className="text-4xl mb-2">{getFileIcon(selectedFile)}</div>
-                <h4 className="font-medium truncate">{selectedFile.name}</h4>
+              <div className="mb-4 flex justify-center">
+                <div className="w-16 h-16 bg-[#4248f1]/10 rounded-xl flex items-center justify-center">
+                  {getFileIcon(selectedFile)}
+                </div>
               </div>
-              <div className="space-y-2 text-sm mb-4">
-                <p><span className="text-muted-foreground">Path:</span> {selectedFile.path}</p>
-                <p><span className="text-muted-foreground">Size:</span> {formatSize(selectedFile.size)}</p>
-                <p><span className="text-muted-foreground">Modified:</span> {formatDate(selectedFile.modified)}</p>
-                <p><span className="text-muted-foreground">Type:</span> {selectedFile.is_dir ? 'Directory' : 'File'}</p>
+              <h4 className="font-medium text-center truncate mb-4">{selectedFile.name}</h4>
+              <div className="space-y-3 text-sm mb-4">
+                <div className="flex justify-between py-2 border-b border-[var(--color-border)]">
+                  <span className="text-[var(--color-text-muted)]">Path</span>
+                  <span className="text-right truncate max-w-[150px] font-mono text-xs">{selectedFile.path}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-[var(--color-border)]">
+                  <span className="text-[var(--color-text-muted)]">Size</span>
+                  <span>{formatSize(selectedFile.size)}</span>
+                </div>
+                <div className="flex justify-between py-2 border-b border-[var(--color-border)]">
+                  <span className="text-[var(--color-text-muted)]">Modified</span>
+                  <span>{formatDate(selectedFile.modified)}</span>
+                </div>
+                <div className="flex justify-between py-2">
+                  <span className="text-[var(--color-text-muted)]">Type</span>
+                  <span>{selectedFile.is_dir ? 'Directory' : 'File'}</span>
+                </div>
               </div>
               {!selectedFile.is_dir && (
-                <div className="flex-1 flex flex-col min-h-0">
-                  <h4 className="font-medium mb-2">Preview</h4>
-                  <pre className="flex-1 overflow-auto text-xs bg-muted p-2 rounded font-mono">
+                <div className="flex-1 flex flex-col min-h-0 mt-2">
+                  <h4 className="font-medium mb-2 text-sm">Preview</h4>
+                  <pre className="flex-1 overflow-auto text-xs bg-[var(--color-muted)]/30 p-3 rounded-lg font-mono">
                     {fileContent || 'Loading...'}
                   </pre>
                 </div>
@@ -333,7 +412,7 @@ export function Files() {
             </div>
           ) : (
             <div className="flex-1 flex items-center justify-center p-4">
-              <p className="text-sm text-muted-foreground text-center">
+              <p className="text-sm text-[var(--color-text-muted)] text-center">
                 Select a file to view details
               </p>
             </div>
@@ -344,26 +423,29 @@ export function Files() {
         {contextMenu && (
           <div
             ref={contextMenuRef}
-            className="fixed bg-background border rounded-lg shadow-xl py-1 min-w-[160px] z-50"
+            className="fixed bg-[var(--color-panel)] border border-[var(--color-border)] rounded-lg shadow-xl py-1 min-w-[160px] z-50"
             style={{ left: contextMenu.x, top: contextMenu.y }}
           >
             <button
               onClick={() => copyPath(contextMenu.file)}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--color-muted)] flex items-center gap-2 text-[var(--color-text)]"
             >
-              📋 Copy Path
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy Path
             </button>
             <button
               onClick={() => startRename(contextMenu.file)}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--color-muted)] flex items-center gap-2 text-[var(--color-text)]"
             >
-              ✏️ Rename
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+              Rename
             </button>
             <button
               onClick={() => deleteFile(contextMenu.file)}
-              className="w-full px-4 py-2 text-left text-sm hover:bg-muted flex items-center gap-2 text-red-500"
+              className="w-full px-4 py-2 text-left text-sm hover:bg-[var(--color-muted)] flex items-center gap-2 text-red-500"
             >
-              🗑️ Delete
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1H7a2-2 2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+              Delete
             </button>
           </div>
         )}

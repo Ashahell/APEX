@@ -155,37 +155,68 @@ export function Workflows() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="border-b p-4">
-        <h2 className="text-2xl font-semibold mb-2">Workflows</h2>
-        <p className="text-muted-foreground">Manage YAML workflow definitions and track executions</p>
+      <div className="border-b p-4 bg-[var(--color-panel)]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-lg bg-[#4248f1]/10 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#4248f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold">Workflows</h2>
+            <p className="text-sm text-[var(--color-text-muted)]">Manage YAML workflow definitions and track executions</p>
+          </div>
+        </div>
       </div>
 
-      <div className="border-b">
-        <nav className="flex px-4">
+      <div className="border-b bg-[var(--color-panel)]">
+        <nav className="flex px-4 gap-1">
           <button
             onClick={() => setActiveTab('list')}
             className={`px-4 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === 'list' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'list' ? 'text-[#4248f1]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}
           >
-            List
-            {activeTab === 'list' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+            <span className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="8" y1="6" x2="21" y2="6"></line>
+                <line x1="8" y1="12" x2="21" y2="12"></line>
+                <line x1="8" y1="18" x2="21" y2="18"></line>
+                <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                <line x1="3" y1="18" x2="3.01" y2="18"></line>
+              </svg>
+              List
+            </span>
+            {activeTab === 'list' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#4248f1]" />}
           </button>
           <button
             onClick={() => setActiveTab('create')}
             className={`px-4 py-3 text-sm font-medium transition-colors relative ${
-              activeTab === 'create' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'create' ? 'text-[#4248f1]' : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
             }`}
           >
-            Create
-            {activeTab === 'create' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+            <span className="flex items-center gap-2">
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="5" x2="12" y2="19"></line>
+                <line x1="5" y1="12" x2="19" y2="12"></line>
+              </svg>
+              Create
+            </span>
+            {activeTab === 'create' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#4248f1]" />}
           </button>
           {activeTab === 'executions' && (
             <button
-              className="px-4 py-3 text-sm font-medium transition-colors relative text-primary"
+              className="px-4 py-3 text-sm font-medium transition-colors relative text-[#4248f1]"
             >
-              Executions
-              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />
+              <span className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                Executions
+              </span>
+              <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#4248f1]" />
             </button>
           )}
         </nav>
@@ -194,88 +225,108 @@ export function Workflows() {
       <div className="flex-1 overflow-auto p-4">
         {activeTab === 'list' && (
           <>
-            <div className="flex gap-4 mb-4">
+            <div className="flex gap-4 mb-4 items-center flex-wrap">
               <select
                 value={categoryFilter}
                 onChange={(e) => setCategoryFilter(e.target.value)}
-                className="px-3 py-2 border rounded-lg bg-background"
+                className="px-3 py-2 border border-[var(--color-border)] rounded-lg bg-[var(--color-background)] text-[var(--color-text)]"
               >
                 <option value="">All Categories</option>
                 {filterOptions.categories.map((cat) => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
-              <label className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-sm text-[var(--color-text)]">
                 <input
                   type="checkbox"
                   checked={showActiveOnly}
                   onChange={(e) => setShowActiveOnly(e.target.checked)}
+                  className="rounded"
                 />
                 Active only
               </label>
               <button
                 onClick={() => setActiveTab('create')}
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 ml-auto"
+                className="px-4 py-2 bg-[#4248f1] text-white rounded-lg hover:bg-[#353bc5] transition-colors ml-auto flex items-center gap-2"
               >
-                + New Workflow
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"></line>
+                  <line x1="5" y1="12" x2="19" y2="12"></line>
+                </svg>
+                New Workflow
               </button>
             </div>
 
             {loading ? (
-              <div className="text-center py-12">Loading...</div>
+              <div className="text-center py-12 text-[var(--color-text-muted)]">Loading...</div>
             ) : workflows.length === 0 ? (
-              <div className="text-center text-muted-foreground py-12">
-                <p className="mb-2">No workflows found</p>
+              <div className="text-center text-[var(--color-text-muted)] py-12">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto opacity-50">
+                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                </svg>
+                <p className="mt-4 mb-2">No workflows found</p>
                 <p className="text-sm">Create a workflow to get started</p>
               </div>
             ) : (
               <div className="space-y-3">
                 {workflows.map((workflow) => (
-                  <div key={workflow.id} className="border rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <h3 className="font-medium">{workflow.name}</h3>
+                  <div key={workflow.id} className="border border-[var(--color-border)] rounded-xl p-4 hover:border-[#4248f1]/30 transition-colors">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-[var(--color-text)]">{workflow.name}</h3>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-1 rounded ${
-                          workflow.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        <span className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+                          workflow.is_active ? 'bg-green-500/10 text-green-500 border border-green-500/20' : 'bg-muted text-[var(--color-text-muted)]'
                         }`}>
                           {workflow.is_active ? 'Active' : 'Inactive'}
                         </span>
                         {workflow.category && (
-                          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-800">
+                          <span className="text-xs px-2.5 py-1 rounded-full bg-[#4248f1]/10 text-[#4248f1] border border-[#4248f1]/20">
                             {workflow.category}
                           </span>
                         )}
                       </div>
                     </div>
                     {workflow.description && (
-                      <p className="text-sm text-muted-foreground mb-2">{workflow.description}</p>
+                      <p className="text-sm text-[var(--color-text-muted)] mb-3">{workflow.description}</p>
                     )}
-                    <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3">
-                      <span>v{workflow.version}</span>
-                      <span>Executions: {workflow.execution_count}</span>
+                    <div className="flex items-center gap-4 text-xs text-[var(--color-text-muted)] mb-4">
+                      <span className="flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle></svg>
+                        v{workflow.version}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+                        {workflow.execution_count} executions
+                      </span>
                       {workflow.avg_duration_secs && (
-                        <span>Avg: {workflow.avg_duration_secs.toFixed(1)}s</span>
+                        <span className="flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                          {workflow.avg_duration_secs.toFixed(1)}s avg
+                        </span>
                       )}
                       {workflow.success_rate !== null && (
-                        <span>Success: {(workflow.success_rate * 100).toFixed(1)}%</span>
+                        <span className="flex items-center gap-1">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                          {(workflow.success_rate * 100).toFixed(1)}% success
+                        </span>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <button
                         onClick={() => handleToggleActive(workflow)}
-                        className="px-3 py-1 text-sm border rounded hover:bg-muted"
+                        className="px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-muted)] transition-colors"
                       >
                         {workflow.is_active ? 'Pause' : 'Activate'}
                       </button>
                       <button
                         onClick={() => viewExecutions(workflow)}
-                        className="px-3 py-1 text-sm border rounded hover:bg-muted"
+                        className="px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg hover:bg-[var(--color-muted)] transition-colors"
                       >
                         View Executions
                       </button>
                       <button
                         onClick={() => handleDeleteWorkflow(workflow.id)}
-                        className="px-3 py-1 text-sm border rounded hover:bg-muted text-red-500"
+                        className="px-3 py-1.5 text-sm border border-[var(--color-border)] rounded-lg hover:bg-red-500/10 text-red-500 transition-colors"
                       >
                         Delete
                       </button>
