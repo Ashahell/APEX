@@ -5,6 +5,36 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::RwLock;
 
+/// Unified configuration constants
+pub mod config_constants {
+    // Server
+    pub const DEFAULT_PORT: u16 = 3000;
+    pub const DEFAULT_HOST: &str = "0.0.0.0";
+
+    // Agent
+    pub const DEFAULT_MAX_ITERATIONS: u32 = 50;
+    pub const DEFAULT_MAX_BUDGET_CENTS: i64 = 500;
+    pub const DEFAULT_CONTEXT_WINDOW_TOKENS: usize = 32768;
+
+    // Execution (VM)
+    pub const DEFAULT_VCPUS: u32 = 2;
+    pub const DEFAULT_MEMORY_MIB: u64 = 2048;
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 60;
+
+    // Skill Pool
+    pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
+    pub const DEFAULT_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
+    pub const DEFAULT_POOL_SIZE: u32 = 4;
+
+    // URLs
+    pub const DEFAULT_LLAMA_URL: &str = "http://localhost:8080";
+    pub const DEFAULT_EMBED_URL: &str = "http://localhost:8081";
+    pub const DEFAULT_NATS_URL: &str = "127.0.0.1:4222";
+
+    // Auth
+    pub const DEFAULT_DEV_SECRET: &str = "dev-secret-change-in-production";
+}
+
 pub static GLOBAL_CONFIG: Lazy<RwLock<Option<AppConfig>>> = Lazy::new(|| RwLock::new(None));
 
 // C4 Step 1: Thread-local config override for test isolation
@@ -41,11 +71,11 @@ pub struct ServerConfig {
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            host: "0.0.0.0".to_string(),
+            host: config_constants::DEFAULT_HOST.to_string(),
             port: std::env::var("APEX_PORT")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(3000),
+                .unwrap_or(config_constants::DEFAULT_PORT),
         }
     }
 }
@@ -114,7 +144,7 @@ impl Default for AgentConfig {
             name: "Local Qwen3-4B".to_string(),
             provider: LlmProvider::Local,
             url: std::env::var("LLAMA_SERVER_URL")
-                .unwrap_or_else(|_| "http://localhost:8080".to_string()),
+                .unwrap_or_else(|_| config_constants::DEFAULT_LLAMA_URL.to_string()),
             model: std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "qwen3-4b".to_string()),
             api_key: None,
             // Extended settings
@@ -130,9 +160,9 @@ impl Default for AgentConfig {
             use_llm: std::env::var("APEX_USE_LLM").is_ok(),
             llama_url: default_llm.url.clone(),
             llama_model: default_llm.model.clone(),
-            max_iterations: 50,
-            max_budget_cents: 500,
-            context_window_tokens: 32768,
+            max_iterations: config_constants::DEFAULT_MAX_ITERATIONS,
+            max_budget_cents: config_constants::DEFAULT_MAX_BUDGET_CENTS,
+            context_window_tokens: config_constants::DEFAULT_CONTEXT_WINDOW_TOKENS,
             model: default_llm.model.clone(),
             llms: vec![default_llm],
             default_llm_id: Some("default".to_string()),
@@ -250,13 +280,13 @@ impl Default for FirecrackerConfig {
                 .unwrap_or(false),
             vcpus: std::env::var("APEX_VM_VCPU")
                 .ok()
-                .and_then(|v| v.parse().ok())
-                .unwrap_or(2),
+                .and_then(|v| v.parse::<u32>().ok())
+                .unwrap_or(config_constants::DEFAULT_VCPUS),
             memory_mib: std::env::var("APEX_VM_MEMORY_MIB")
                 .ok()
                 .and_then(|v| v.parse().ok())
-                .unwrap_or(2048),
-            timeout_secs: 60,
+                .unwrap_or(config_constants::DEFAULT_MEMORY_MIB),
+            timeout_secs: config_constants::DEFAULT_TIMEOUT_SECS,
             kernel_path: std::env::var("APEX_VM_KERNEL").ok(),
             rootfs_path: std::env::var("APEX_VM_ROOTFS").ok(),
             firecracker_path: std::env::var("APEX_FIRECRACKER_PATH").ok(),
@@ -354,7 +384,7 @@ impl Default for NatsConfig {
                 .ok()
                 .map(|v| v == "1")
                 .unwrap_or(false),
-            url: std::env::var("APEX_NATS_URL").unwrap_or_else(|_| "127.0.0.1:4222".to_string()),
+            url: std::env::var("APEX_NATS_URL").unwrap_or_else(|_| config_constants::DEFAULT_NATS_URL.to_string()),
             subject_prefix: std::env::var("APEX_NATS_SUBJECT_PREFIX")
                 .unwrap_or_else(|_| "apex".to_string()),
         }
@@ -489,7 +519,7 @@ impl Default for MemoryConfig {
             embedding_provider: std::env::var("APEX_MEMORY_EMBEDDING_PROVIDER")
                 .unwrap_or_else(|_| "local".to_string()),
             embedding_url: std::env::var("APEX_MEMORY_EMBEDDING_URL")
-                .unwrap_or_else(|_| "http://localhost:8081".to_string()),
+                .unwrap_or_else(|_| config_constants::DEFAULT_EMBED_URL.to_string()),
             embedding_model: std::env::var("APEX_MEMORY_EMBEDDING_MODEL")
                 .unwrap_or_else(|_| "nomic-embed-text".to_string()),
             embedding_dim: std::env::var("APEX_MEMORY_EMBEDDING_DIM")
@@ -556,11 +586,11 @@ impl Default for SkillPoolConfigSection {
             request_timeout_ms: std::env::var("APEX_SKILL_POOL_TIMEOUT")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(30_000),
+                .unwrap_or(config_constants::DEFAULT_REQUEST_TIMEOUT_MS),
             acquire_timeout_ms: std::env::var("APEX_SKILL_POOL_ACQUIRE")
                 .ok()
                 .and_then(|p| p.parse().ok())
-                .unwrap_or(5_000),
+                .unwrap_or(config_constants::DEFAULT_ACQUIRE_TIMEOUT_MS),
         }
     }
 }
