@@ -23,6 +23,13 @@ export interface ExecutionEvent {
   action?: string;
   message?: string;
   tools_used?: string[];
+  consequences?: {
+    files_read: string[];
+    files_written: string[];
+    commands_executed: string[];
+    blast_radius: 'minimal' | 'limited' | 'extensive';
+    summary: string;
+  };
 }
 
 class WebSocketClient {
@@ -139,6 +146,29 @@ class WebSocketClient {
             success: event.success ?? true,
             output: event.output || '',
           });
+        }
+        break;
+      }
+      case 'ApprovalNeeded': {
+        const event = data as unknown as ExecutionEvent;
+        const taskId = (data.task_id || data.taskId || event.step?.toString()) as string;
+        if (taskId) {
+          store.addExecutionStep(taskId, {
+            type: 'ApprovalNeeded',
+            step: event.step || 0,
+            content: event.message || event.action,
+            output: event.tier,
+          });
+          // Set pending confirmation for UI
+          if (event.tier && event.action) {
+            store.setPendingConfirmation({
+              taskId,
+              tier: event.tier as 'T1' | 'T2' | 'T3',
+              action: event.action,
+              skillName: event.tool,
+              consequences: event.consequences,
+            });
+          }
         }
         break;
       }

@@ -396,162 +396,61 @@ impl AgentLoop {
             }
         }
 
-        // Check if we should use subagent pool for parallel execution
-        if self.config.enable_subagents {
-            if let Some(ref pool) = self.config.subagent_pool {
-                if crate::subagent::should_split_task(&goal, state.current_step) {
-                    tracing::info!(goal = %goal, "Task qualifies for subagent splitting");
-                    
-                    // Get LLM config for splitting
-                    let llm_url = self.config.llama_url.as_deref().unwrap_or("http://localhost:8080");
-                    let model = self.config.llama_model.as_deref().unwrap_or("qwen3-4b");
-                    
-                    match pool.split_task(&goal, "", llm_url, model).await {
-                        Ok(subtasks) if !subtasks.is_empty() => {
-                            tracing::info!(subtask_count = subtasks.len(), "Split task into subtasks - executing in parallel");
-                            
-                            // Emit subagent split event
-                            if let Some(ref cb) = self.stream_callback {
-                                cb(serde_json::json!({
-                                    "type": "subagent_split",
-                                    "subtask_count": subtasks.len()
-                                }).to_string());
-                            }
-                            
-                            // Execute subtasks in PARALLEL using tokio::spawn with semaphore
-                            use tokio::sync::Semaphore;
-                            
-                            let max_parallel = pool.max_parallel().min(subtasks.len());
-                            let semaphore = Arc::new(Semaphore::new(max_parallel));
-                            
-                            // Spawn a task for each subtask - they run in parallel with semaphore limit
-                            let mut handles = Vec::new();
-                            
-                            for subtask in &subtasks {
-                                let subtask_id = subtask.id.clone();
-                                let subtask_desc = subtask.description.clone();
-                                let pool = pool.clone();
-                                
-                                // Clone semaphore for this task
-                                let semaphore: Arc<tokio::sync::Semaphore> = Arc::clone(&semaphore);
-                                
-                                let handle = tokio::spawn(async move {
-                                    // Acquire semaphore permit (limits concurrency)
-                                    let permit = semaphore.acquire_owned().await.expect("Semaphore closed");
-                                    
-                                    // Update subtask status to running
-                                    let _ = pool.update_status(&subtask_id, crate::subagent::SubTaskStatus::Running, None).await;
-                                    
-                                    // Execute the subtask (synchronous for Send safety)
-                                    let result = Self::execute_subtask_sync(&subtask_desc);
-                                    
-                                    // Update subtask status to completed
-                                    let _ = pool.update_status(&subtask_id, crate::subagent::SubTaskStatus::Completed, Some(result.clone())).await;
-                                    
-                                    // Drop permit to release semaphore
-                                    drop(permit);
-                                    
-                                    (subtask_id, result)
-                                });
-                                
-                                handles.push(handle);
-                            }
-                            
-                            // Wait for all subtasks to complete and collect results
-                            let mut all_results = Vec::new();
-                            for handle in handles {
-                                match handle.await {
-                                    Ok((_, result)) => {
-                                        all_results.push(result);
-                                    }
-                                    Err(e) => {
-                                        tracing::error!(error = %e, "Subtask panicked");
-                                        all_results.push(format!("ERROR: Task failed - {}", e));
-                                    }
-                                }
-                            }
-                            
-                            // Emit completion with aggregated results
-                            let combined_output = all_results.join("\n---\n");
-                            
-                            // Use stream callback if available
-                            if let Some(ref cb) = self.stream_callback {
-                                cb(serde_json::json!({
-                                    "type": "complete",
-                                    "task_id": task_id,
-                                    "success": true,
-                                    "steps": subtasks.len(),
-                                    "output": combined_output
-                                }).to_string());
-                            }
-                            
-                            return AgentResult {
-                                task_id,
-                                success: true,
-                                steps_executed: subtasks.len() as u32,
-                                total_cost_usd: state.total_cost_usd,
-                                output: combined_output,
-                                history: state.history,
-                                timing_ms: crate::agent_loop::TimingMetrics::default(),
-                            };
-                        }
-                        Ok(_) => {
-                            tracing::debug!("Task too simple for splitting, continuing normal execution");
-                        }
-                        Err(e) => {
-                            tracing::warn!(error = %e, "Failed to split task, continuing normal execution");
-                        }
-                    }
-                }
-            }
-        }
-
         // Initialize working memory scratchpad with goal
         if let Some(ref mut wm) = self.working_memory {
             let _ = wm.update_scratchpad(&format!("Goal: {}\n\n", goal)).await;
         }
 
-        self.emit_stream(serde_json::json!({
-            "type": "start",
-            "task_id": task_id,
-            "goal": goal,
-            "config": {
-                "max_steps": self.config.max_steps,
-                "use_tir": self.config.use_tir,
-            }
-        }).to_string());
+        // Emit start event
+        if let Some(ref callback) = self.stream_callback {
+            callback(serde_json::json!({
+                "type": "start",
+                "task_id": task_id,
+                "goal": goal,
+                "config": {
+                    "max_steps": self.config.max_steps,
+                    "use_tir": self.config.use_tir,
+                }
+            }).to_string());
+        }
 
         while state.can_continue(&self.config, start_time) {
             let step_number = state.current_step + 1;
             let step_start = Instant::now();
             tracing::debug!(task_id = %task_id, step = step_number, "Executing step");
 
-            self.emit_stream(serde_json::json!({
-                "type": "step_start",
-                "step": step_number
-            }).to_string());
+            if let Some(ref callback) = self.stream_callback {
+                callback(serde_json::json!({
+                    "type": "step_start",
+                    "step": step_number
+                }).to_string());
+            }
 
             let plan_start = Instant::now();
             let action = self.plan(&state).await;
             let plan_ms = plan_start.elapsed().as_millis();
 
-            self.emit_stream(serde_json::json!({
-                "type": "thought",
-                "step": step_number,
-                "content": action,
-                "duration_ms": plan_ms
-            }).to_string());
+            if let Some(ref callback) = self.stream_callback {
+                callback(serde_json::json!({
+                    "type": "thought",
+                    "step": step_number,
+                    "content": action,
+                    "duration_ms": plan_ms
+                }).to_string());
+            }
 
             let act_start = Instant::now();
             let observation = self.act(&action, &state).await;
             let act_ms = act_start.elapsed().as_millis();
 
-            self.emit_stream(serde_json::json!({
-                "type": "tool_result",
-                "step": step_number,
-                "observation": observation,
-                "duration_ms": act_ms
-            }).to_string());
+            if let Some(ref callback) = self.stream_callback {
+                callback(serde_json::json!({
+                    "type": "tool_result",
+                    "step": step_number,
+                    "observation": observation,
+                    "duration_ms": act_ms
+                }).to_string());
+            }
 
             let should_continue = self.reflect(&observation, &mut state).await;
 

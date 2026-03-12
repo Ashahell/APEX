@@ -694,7 +694,17 @@ export function Chat() {
             details={pendingConfirmation.consequences ? {
               impact: pendingConfirmation.consequences.summary,
             } : undefined}
-            onConfirm={(_confirmationText, _totpCode) => {
+            onConfirm={async (confirmationText, totpCode) => {
+              if (pendingConfirmation?.taskId) {
+                try {
+                  await apiPost(`/api/v1/tasks/${pendingConfirmation.taskId}/confirm`, {
+                    confirmationText,
+                    totpCode,
+                  });
+                } catch (error) {
+                  console.error('Failed to confirm task:', error);
+                }
+              }
               setPendingConfirmation(null);
             }}
             onCancel={() => {
