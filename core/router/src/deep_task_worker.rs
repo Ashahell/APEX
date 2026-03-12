@@ -341,6 +341,8 @@ impl DeepTaskWorker {
             max_budget_usd: message.budget_usd,
             step_cost_usd: message.budget_usd / message.max_steps as f64,
             time_limit_secs: message.time_limit_secs,
+            use_tir: message.use_tir,
+            enable_subagents: message.enable_subagents,
             ..Default::default()
         };
 

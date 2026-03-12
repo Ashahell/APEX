@@ -34,6 +34,8 @@ pub struct DeepTaskMessage {
     pub budget_usd: f64,
     pub time_limit_secs: Option<u64>,
     pub permission_tier: String,
+    pub use_tir: bool,
+    pub enable_subagents: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -217,6 +219,8 @@ mod tests {
             budget_usd: 1.0,
             time_limit_secs: Some(60),
             permission_tier: "T2".to_string(),
+            use_tir: false,
+            enable_subagents: true,
         });
         
         let received = receiver.recv().await.unwrap();

@@ -78,6 +78,8 @@ async fn create_task(
                     budget_usd,
                     time_limit_secs: payload.time_limit_secs,
                     permission_tier: tier_str.clone(),
+                    use_tir: payload.use_tir.unwrap_or(false),
+                    enable_subagents: payload.enable_subagents.unwrap_or(true),
                 });
 
             state.metrics.record_task(&tier_str, "running").await;

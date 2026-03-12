@@ -343,7 +343,13 @@ export function Chat() {
     addMessage({ role: 'assistant', content: '⏳ Processing...' });
 
     // Load config from localStorage
-    let taskConfig: { max_steps: number; budget_usd: number; time_limit_secs?: number } = { max_steps: 3, budget_usd: 1.0 };
+    let taskConfig: { 
+      max_steps: number; 
+      budget_usd: number; 
+      time_limit_secs?: number;
+      use_tir?: boolean;
+      enable_subagents?: boolean;
+    } = { max_steps: 3, budget_usd: 1.0, use_tir: false, enable_subagents: true };
     try {
       const saved = localStorage.getItem('apex-task-config');
       if (saved) {
@@ -351,6 +357,8 @@ export function Chat() {
         taskConfig = {
           max_steps: parsed.maxSteps || 3,
           budget_usd: parsed.budgetUsd || 1.0,
+          use_tir: parsed.useTir ?? false,
+          enable_subagents: parsed.enableSubagents ?? true,
         };
         if (parsed.timeLimitSecs) {
           taskConfig.time_limit_secs = parsed.timeLimitSecs;

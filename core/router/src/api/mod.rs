@@ -129,6 +129,8 @@ pub struct TaskRequest {
     pub project: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
+    pub use_tir: Option<bool>,
+    pub enable_subagents: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -223,6 +225,8 @@ pub struct ExecuteDeepTaskRequest {
     pub max_steps: Option<u32>,
     pub budget_usd: Option<f64>,
     pub time_limit_secs: Option<u64>,
+    pub use_tir: Option<bool>,
+    pub enable_subagents: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -600,6 +604,8 @@ async fn execute_deep_task(
         budget_usd,
         time_limit_secs,
         permission_tier: "T2".to_string(),
+        use_tir: payload.use_tir.unwrap_or(false),
+        enable_subagents: payload.enable_subagents.unwrap_or(true),
     });
 
     Ok(Json(ExecuteDeepTaskResponse {

@@ -42,6 +42,22 @@ export function Settings() {
   const [newPrefKey, setNewPrefKey] = useState('');
   const [newPrefValue, setNewPrefValue] = useState('');
   const [newPrefEncrypt, setNewPrefEncrypt] = useState(false);
+  const [enableTir, setEnableTir] = useState(false);
+  const [enableSubagents, setEnableSubagents] = useState(true);
+
+  // Load TIR and subagent settings on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('apex-task-config');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        setEnableTir(parsed.useTir ?? false);
+        setEnableSubagents(parsed.enableSubagents ?? true);
+      }
+    } catch (e) {
+      console.warn('Failed to load agent settings:', e);
+    }
+  }, []);
 
   const loadTotpStatus = async () => {
     try {
@@ -777,7 +793,51 @@ export function Settings() {
                   <div className="text-xs text-muted-foreground">Parallel task execution</div>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer">
-                  <input type="checkbox" className="sr-only peer" defaultChecked />
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={enableSubagents}
+                    onChange={(e) => {
+                      const value = e.target.checked;
+                      setEnableSubagents(value);
+                      // Save to localStorage
+                      try {
+                        const saved = localStorage.getItem('apex-task-config');
+                        const config = saved ? JSON.parse(saved) : {};
+                        config.enableSubagents = value;
+                        localStorage.setItem('apex-task-config', JSON.stringify(config));
+                      } catch (err) {
+                        console.warn('Failed to save subagent setting:', err);
+                      }
+                    }}
+                  />
+                  <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-[#4248f1] after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                </label>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-medium">Enable TIR (Tool-Integrated Reasoning)</div>
+                  <div className="text-xs text-muted-foreground">Interleave reasoning with tool execution</div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="sr-only peer" 
+                    checked={enableTir}
+                    onChange={(e) => {
+                      const value = e.target.checked;
+                      setEnableTir(value);
+                      // Save to localStorage
+                      try {
+                        const saved = localStorage.getItem('apex-task-config');
+                        const config = saved ? JSON.parse(saved) : {};
+                        config.useTir = value;
+                        localStorage.setItem('apex-task-config', JSON.stringify(config));
+                      } catch (err) {
+                        console.warn('Failed to save TIR setting:', err);
+                      }
+                    }}
+                  />
                   <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-[#4248f1] after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
                 </label>
               </div>

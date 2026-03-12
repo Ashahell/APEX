@@ -395,6 +395,78 @@ impl AgentLoop {
             }
         }
 
+        // Check if we should use subagent pool for parallel execution
+        if self.config.enable_subagents {
+            if let Some(ref pool) = self.config.subagent_pool {
+                if crate::subagent::should_split_task(&goal, state.current_step) {
+                    tracing::info!(goal = %goal, "Task qualifies for subagent splitting");
+                    
+                    // Get LLM config for splitting
+                    let llm_url = self.config.llama_url.as_deref().unwrap_or("http://localhost:8080");
+                    let model = self.config.llama_model.as_deref().unwrap_or("qwen3-4b");
+                    
+                    match pool.split_task(&goal, "", llm_url, model).await {
+                        Ok(subtasks) if !subtasks.is_empty() => {
+                            tracing::info!(subtask_count = subtasks.len(), "Split task into subtasks");
+                            
+                            self.emit_stream(serde_json::json!({
+                                "type": "subagent_split",
+                                "subtask_count": subtasks.len()
+                            }).to_string());
+                            
+                            // Execute subtasks - in a real implementation, these would run in parallel
+                            // For now, we'll execute them sequentially and aggregate results
+                            let mut all_results = Vec::new();
+                            
+                            for subtask in &subtasks {
+                                // Update subtask status to running
+                                let _ = pool.update_status(&subtask.id, crate::subagent::SubTaskStatus::Running, None).await;
+                                
+                                // Execute subtask as a mini agent loop
+                                let subtask_result = self.run_single_step(&format!("Subtask: {}", subtask.description)).await;
+                                
+                                let result_str = subtask_result.to_string();
+                                let _ = pool.update_status(&subtask.id, crate::subagent::SubTaskStatus::Completed, Some(result_str.clone())).await;
+                                
+                                all_results.push(result_str);
+                                
+                                // Check if all subtasks complete
+                                if pool.is_complete().await {
+                                    break;
+                                }
+                            }
+                            
+                            // Emit completion with aggregated results
+                            let combined_output = all_results.join("\n---\n");
+                            self.emit_stream(serde_json::json!({
+                                "type": "complete",
+                                "task_id": task_id,
+                                "success": true,
+                                "steps": state.current_step,
+                                "output": combined_output
+                            }).to_string());
+                            
+                            return AgentResult {
+                                task_id,
+                                success: true,
+                                steps_executed: state.current_step,
+                                total_cost_usd: state.total_cost_usd,
+                                output: combined_output,
+                                history: state.history,
+                                timing_ms: crate::agent_loop::TimingMetrics::default(),
+                            };
+                        }
+                        Ok(_) => {
+                            tracing::debug!("Task too simple for splitting, continuing normal execution");
+                        }
+                        Err(e) => {
+                            tracing::warn!(error = %e, "Failed to split task, continuing normal execution");
+                        }
+                    }
+                }
+            }
+        }
+
         // Initialize working memory scratchpad with goal
         if let Some(ref mut wm) = self.working_memory {
             let _ = wm.update_scratchpad(&format!("Goal: {}\n\n", goal)).await;
@@ -831,6 +903,16 @@ History:
         }
 
         false
+    }
+
+    /// Run a single step for a subtask (simplified for subagent execution)
+    async fn run_single_step(&self, goal: &str) -> String {
+        let state = AgentState::new("subtask".to_string(), goal.to_string());
+        
+        let action = self.plan(&state).await;
+        let observation = self.act(&action, &state).await;
+        
+        format!("Action: {}\nObservation: {}", action, observation)
     }
 }
 
