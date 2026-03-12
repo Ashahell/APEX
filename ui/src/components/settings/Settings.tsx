@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { apiGet, apiPost, setSetting, deleteSetting, Setting, API_BASE } from '../../lib/api';
+import { apiGet, apiPost, setSetting, getSetting, deleteSetting, Setting, API_BASE } from '../../lib/api';
 import { ConfigViewer } from './ConfigViewer';
 import { McpManager } from './McpManager';
 import { ChatModelSettings } from './ChatModelSettings';
@@ -45,18 +45,51 @@ export function Settings() {
   const [enableTir, setEnableTir] = useState(false);
   const [enableSubagents, setEnableSubagents] = useState(true);
 
-  // Load TIR and subagent settings on mount
+  // Load TIR and subagent settings on mount (from API/database)
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem('apex-task-config');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        setEnableTir(parsed.useTir ?? false);
-        setEnableSubagents(parsed.enableSubagents ?? true);
+    const loadAgentSettings = async () => {
+      try {
+        // Try to load from API (database)
+        const [tirSetting, subagentSetting] = await Promise.allSettled([
+          getSetting('agent.use_tir'),
+          getSetting('agent.enable_subagents'),
+        ]);
+        
+        let tirValue = false;
+        let subagentValue = true;
+        
+        if (tirSetting.status === 'fulfilled') {
+          tirValue = tirSetting.value.value === 'true';
+          setEnableTir(tirValue);
+        }
+        if (subagentSetting.status === 'fulfilled') {
+          subagentValue = subagentSetting.value.value === 'true';
+          setEnableSubagents(subagentValue);
+        }
+        
+        // Sync to localStorage for Chat.tsx fallback
+        const saved = localStorage.getItem('apex-task-config');
+        const config = saved ? JSON.parse(saved) : {};
+        config.useTir = tirValue;
+        config.enableSubagents = subagentValue;
+        localStorage.setItem('apex-task-config', JSON.stringify(config));
+        
+      } catch (e) {
+        // Fallback to localStorage if API fails
+        console.warn('Failed to load agent settings from API, using localStorage:', e);
+        try {
+          const saved = localStorage.getItem('apex-task-config');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            setEnableTir(parsed.useTir ?? false);
+            setEnableSubagents(parsed.enableSubagents ?? true);
+          }
+        } catch (e2) {
+          console.warn('Failed to load from localStorage:', e2);
+        }
       }
-    } catch (e) {
-      console.warn('Failed to load agent settings:', e);
-    }
+    };
+    loadAgentSettings();
   }, []);
 
   const loadTotpStatus = async () => {
@@ -797,17 +830,19 @@ export function Settings() {
                     type="checkbox" 
                     className="sr-only peer" 
                     checked={enableSubagents}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const value = e.target.checked;
                       setEnableSubagents(value);
-                      // Save to localStorage
+                      // Save to API (database) for persistence, localStorage as fallback
                       try {
+                        await setSetting('agent.enable_subagents', String(value), false);
+                        // Also save to localStorage for Chat.tsx fallback
                         const saved = localStorage.getItem('apex-task-config');
                         const config = saved ? JSON.parse(saved) : {};
                         config.enableSubagents = value;
                         localStorage.setItem('apex-task-config', JSON.stringify(config));
                       } catch (err) {
-                        console.warn('Failed to save subagent setting:', err);
+                        console.warn('Failed to save subagent setting to API:', err);
                       }
                     }}
                   />
@@ -824,17 +859,19 @@ export function Settings() {
                     type="checkbox" 
                     className="sr-only peer" 
                     checked={enableTir}
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const value = e.target.checked;
                       setEnableTir(value);
-                      // Save to localStorage
+                      // Save to API (database) for persistence, localStorage as fallback
                       try {
+                        await setSetting('agent.use_tir', String(value), false);
+                        // Also save to localStorage for Chat.tsx fallback
                         const saved = localStorage.getItem('apex-task-config');
                         const config = saved ? JSON.parse(saved) : {};
                         config.useTir = value;
                         localStorage.setItem('apex-task-config', JSON.stringify(config));
                       } catch (err) {
-                        console.warn('Failed to save TIR setting:', err);
+                        console.warn('Failed to save TIR setting to API:', err);
                       }
                     }}
                   />
