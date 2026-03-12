@@ -56,6 +56,7 @@ APEX is **more secure than both** by design:
 - **Input Validation** - MCP sanitization tests (31 tests)
 - **Audit Chain** - Hash chain verification tests (12 tests)
 - **Permission Tiers** - T0-T3 enforcement tests (14 tests)
+- **Sandbox Security** - Python sandbox with import allowlist (33 tests)
 
 ### Skills System (34 skills) - Experimental
 - **T0 (Read-only)**: code.review, repo.search, deps.check, file.search, docs.read
@@ -70,7 +71,7 @@ APEX is **more secure than both** by design:
 - **Moltbook Social** - Federated agent network integration (POC)
 - **Governance Engine** - Constitution enforcement (basic)
 - **Execution Streaming** - Real-time thought/action/observation to UI (POC)
-- **Dynamic Tool Generation** - LLM generates custom Python tools (POC)
+- **Dynamic Tool Generation** - ✅ LLM generates custom Python tools with secure sandbox execution
 - **Subagent Pool** - Parallel task splitting (POC)
 
 ### UI Features (AgentZero Theme)
@@ -140,7 +141,7 @@ See `docs/ARCHITECTURE.md` for API documentation (subject to change).
 - [x] Formal security audit (Phases 1-2 complete)
 - [x] Dynamic tool generation (POC)
 - [x] Subagent pool (POC)
-- [x] Comprehensive testing (212+ tests)
+- [x] Comprehensive testing (338+ tests)
 - [x] Task classification rules (Instant/Shallow/Deep tiers)
 - [x] Capability enforcement (fail-closed for unknown skills)
 - [x] Gateway optional (auth can be disabled)

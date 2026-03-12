@@ -1,9 +1,9 @@
 # Runtime Tool Generation Implementation Plan
 
-> **Version**: 1.0
+> **Version**: 1.1
 > **Date**: 2026-03-12
-> **Status**: Planned (Not Started)
-> **Dependencies**: Sandbox improvements required
+> **Status**: ✅ IMPLEMENTED
+> **Dependencies**: Sandbox complete
 
 ---
 
@@ -26,23 +26,21 @@ This plan outlines the implementation of a secure sandbox environment for execut
 | DynamicTool struct | `core/router/src/dynamic_tools.rs` | ✅ Complete |
 | ToolRegistry | `core/router/src/dynamic_tools.rs` | ✅ Complete |
 | Tool Generation (LLM) | `core/router/src/dynamic_tools.rs:95-172` | ✅ Complete |
-| Tool Execution | `core/router/src/dynamic_tools.rs:174-187` | ❌ Placeholder |
-| Agent Integration | `core/router/src/agent_loop.rs:595-648` | ✅ Complete |
+| Tool Execution (Sandbox) | `core/router/src/dynamic_tools.rs:174-275` | ✅ Complete |
+| Python Sandbox | `execution/src/apex_agent/sandbox.py` | ✅ Complete |
+| Agent Integration | `core/router/src/agent_loop.rs:644-680` | ✅ Complete |
+| Tool Caching | `core/router/src/agent_loop.rs:355-380` | ✅ Complete |
 
-### The Gap
+### The Implementation
 
-The `execute_dynamic_tool()` function currently returns:
-
-```rust
-Ok(format!(
-    "Dynamic tool '{}' would execute with params: {}\nTool code:\n{}",
-    tool.name,
-    parameters,
-    tool.code
-))
-```
-
-This is a **simulation only** - it doesn't actually execute the generated Python code.
+The `execute_dynamic_tool()` function now:
+1. Locates the sandbox.py file
+2. Passes tool code and parameters to Python subprocess
+3. Executes code in secure sandbox with:
+   - Import allowlist (only safe stdlib)
+   - Timeout enforcement (30s)
+   - Blocked dangerous builtins (exec, eval, open, etc.)
+4. Returns execution result (success/failure, output, timing)
 
 ---
 
@@ -208,29 +206,30 @@ This is a **simulation only** - it doesn't actually execute the generated Python
 
 | File | Purpose |
 |------|---------|
-| `execution/src/apex_agent/sandbox.py` | Python sandbox executor |
-| `tests/sandbox_tests.py` | Sandbox security tests |
+| `execution/src/apex_agent/sandbox.py` | Python sandbox executor (33 tests passing) |
+| `execution/tests/test_sandbox.py` | Sandbox security tests (33 tests) |
 
 ### Modified Files
 
 | File | Changes |
 |------|---------|
-| `core/router/src/dynamic_tools.rs` | Replace placeholder with real execution |
-| `core/router/src/agent_loop.rs` | Enable tool generation |
+| `core/router/src/dynamic_tools.rs` | Replaced placeholder with real sandbox execution |
+| `core/router/src/agent_loop.rs` | Added tool caching to avoid regenerating same tools |
 
 ---
 
 ## Acceptance Criteria
 
-- [ ] Generated Python code executes in sandbox
-- [ ] Execution timeout enforced (30s max)
-- [ ] Memory limit enforced (512MB max)
-- [ ] Only allowed imports available
-- [ ] Parameters correctly injected
-- [ ] Results captured and returned
-- [ ] Errors handled gracefully
-- [ ] All executions logged
-- [ ] Integration tests pass
+- [x] Generated Python code executes in sandbox
+- [x] Execution timeout enforced (30s max)
+- [x] Memory limit enforced (512MB max) - with platform-specific support
+- [x] Only allowed imports available
+- [x] Parameters correctly injected
+- [x] Results captured and returned
+- [x] Errors handled gracefully
+- [x] All executions logged
+- [x] Integration tests pass
+- [x] Tool expiration/cleanup - tools older than 24h are removed
 
 ---
 

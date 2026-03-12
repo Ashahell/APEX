@@ -365,11 +365,35 @@ impl AgentLoop {
         has_generation_keyword && has_complex_requirement && not_many_steps
     }
 
+    /// Check if a similar tool already exists in the registry
+    async fn find_similar_tool(&self, goal: &str, registry: &ToolRegistry) -> Option<String> {
+        let tools = registry.list().await;
+        let goal_lower = goal.to_lowercase();
+        
+        for tool in tools {
+            // Check if tool description is related to the goal
+            if tool.description.to_lowercase().contains(&goal_lower[..goal_lower.len().min(50)]) 
+                || goal_lower.contains(&tool.name.replace('_', " ")) {
+                return Some(tool.name);
+            }
+        }
+        
+        None
+    }
+
     pub async fn run(&mut self, task_id: String, goal: String) -> AgentResult {
         let mut state = AgentState::new(task_id.clone(), goal.clone());
         let start_time = AgentState::start_time();
 
         tracing::info!(task_id = %task_id, goal = %state.goal, "Starting agent loop");
+
+        // Cleanup expired dynamic tools (older than 24 hours)
+        if let Some(ref registry) = self.config.tool_registry {
+            let removed = registry.cleanup_expired(24).await;
+            if removed > 0 {
+                tracing::info!(removed = removed, "Cleaned up expired dynamic tools");
+            }
+        }
 
         // Initialize working memory scratchpad with goal
         if let Some(ref mut wm) = self.working_memory {
@@ -643,21 +667,29 @@ History:
                 
                 if self.config.enable_tool_generation && self.should_generate_tool(&state.goal) {
                     if let Some(ref registry) = self.config.tool_registry {
-                        match crate::dynamic_tools::generate_tool(&state.goal, &context, url, model).await {
-                            Ok(tool) => {
-                                tracing::info!(tool = %tool.name, "Generated new dynamic tool");
-                                let tool_name = tool.name.clone();
-                                let tool_desc = tool.description.clone();
-                                registry.register(tool).await;
-                                available_tools.push(tool_name.clone());
-                                self.emit_stream(serde_json::json!({
-                                    "type": "tool_generated",
-                                    "tool": tool_name,
-                                    "description": tool_desc
-                                }).to_string());
-                            }
-                            Err(e) => {
-                                tracing::warn!(error = %e, "Failed to generate tool");
+                        // Check if similar tool already exists (caching)
+                        let existing_tool = self.find_similar_tool(&state.goal, registry).await;
+                        
+                        if let Some(tool_name) = existing_tool {
+                            tracing::info!(tool = %tool_name, "Reusing existing dynamic tool");
+                            available_tools.push(tool_name);
+                        } else {
+                            match crate::dynamic_tools::generate_tool(&state.goal, &context, url, model).await {
+                                Ok(tool) => {
+                                    tracing::info!(tool = %tool.name, "Generated new dynamic tool");
+                                    let tool_name = tool.name.clone();
+                                    let tool_desc = tool.description.clone();
+                                    registry.register(tool).await;
+                                    available_tools.push(tool_name.clone());
+                                    self.emit_stream(serde_json::json!({
+                                        "type": "tool_generated",
+                                        "tool": tool_name,
+                                        "description": tool_desc
+                                    }).to_string());
+                                }
+                                Err(e) => {
+                                    tracing::warn!(error = %e, "Failed to generate tool");
+                                }
                             }
                         }
                     }

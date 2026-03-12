@@ -1,5 +1,7 @@
 import { useAppStore, Task } from '../../stores/appStore';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useState } from 'react';
+import { ThoughtPanel } from './ThoughtPanel';
 
 interface TaskSidebarProps {
   onTaskClick?: (taskId: string) => void;
@@ -7,6 +9,8 @@ interface TaskSidebarProps {
 
 export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
   const tasks = useAppStore((s) => s.tasks);
+  const [showThoughts, setShowThoughts] = useState(false);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
   const activeTasks = tasks
     .filter(t => t.status === 'running' || t.status === 'pending')
@@ -15,6 +19,12 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
   const recentTasks = tasks
     .filter(t => t.status === 'completed' || t.status === 'failed')
     .slice(0, 5);
+
+  const handleTaskClick = (taskId: string) => {
+    setSelectedTaskId(taskId);
+    setShowThoughts(true);
+    onTaskClick?.(taskId);
+  };
 
   const getStatusIcon = (status: Task['status']) => {
     switch (status) {
@@ -93,14 +103,14 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
             </h4>
             <AnimatePresence>
               {activeTasks.map((task) => (
-                <motion.button
-                  key={task.id}
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -20 }}
-                  onClick={() => onTaskClick?.(task.id)}
-                  className="w-full text-left p-2 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-muted)]/50 transition-colors"
-                >
+               <motion.button
+                   key={task.id}
+                   initial={{ opacity: 0, x: 20 }}
+                   animate={{ opacity: 1, x: 0 }}
+                   exit={{ opacity: 0, x: -20 }}
+                   onClick={() => handleTaskClick(task.id)}
+                   className="w-full text-left p-2 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-muted)]/50 transition-colors"
+                 >
                   <div className="flex items-center gap-2 mb-1">
                     {getStatusIcon(task.status)}
                     {getTierBadge(task.tier)}
@@ -130,11 +140,11 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
               Recent
             </h4>
             {recentTasks.map((task) => (
-              <button
-                key={task.id}
-                onClick={() => onTaskClick?.(task.id)}
-                className="w-full text-left p-2 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-muted)]/50 transition-colors"
-              >
+                <button
+                 key={task.id}
+                 onClick={() => handleTaskClick(task.id)}
+                 className="w-full text-left p-2 rounded-xl border border-transparent hover:border-[var(--color-border)] hover:bg-[var(--color-muted)]/50 transition-colors"
+               >
                 <div className="flex items-center gap-2 mb-1">
                   {getStatusIcon(task.status)}
                   <span className="text-xs text-[var(--color-text-muted)]">
@@ -156,6 +166,15 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
           </div>
         )}
       </div>
+      
+      <AnimatePresence>
+        {showThoughts && selectedTaskId && (
+          <ThoughtPanel
+            taskId={selectedTaskId}
+            onClose={() => setShowThoughts(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

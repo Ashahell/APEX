@@ -96,8 +96,14 @@ async fn execute_tool(
 ) -> Result<Json<serde_json::Value>, String> {
     let registry = state.dynamic_tools.read().await;
     
+    // Get sandbox config from unified config
+    let sandbox_config = crate::dynamic_tools::SandboxConfig {
+        memory_limit_mb: state.config.execution.sandbox.memory_limit_mb,
+        timeout_secs: state.config.execution.sandbox.timeout_secs,
+    };
+    
     let result = registry
-        .execute(&name, payload.parameters)
+        .execute(&name, payload.parameters, Some(sandbox_config))
         .await
         .map_err(|e| e.to_string())?;
 

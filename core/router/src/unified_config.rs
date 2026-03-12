@@ -21,6 +21,10 @@ pub mod config_constants {
     pub const DEFAULT_MEMORY_MIB: u64 = 2048;
     pub const DEFAULT_TIMEOUT_SECS: u64 = 60;
 
+    // Sandbox (dynamic tool execution)
+    pub const DEFAULT_SANDBOX_MEMORY_MB: u64 = 512;
+    pub const DEFAULT_SANDBOX_TIMEOUT_SECS: u64 = 30;
+
     // Skill Pool
     pub const DEFAULT_REQUEST_TIMEOUT_MS: u64 = 30_000;
     pub const DEFAULT_ACQUIRE_TIMEOUT_MS: u64 = 5_000;
@@ -243,6 +247,7 @@ pub struct ExecutionConfig {
     pub firecracker: FirecrackerConfig,
     pub gvisor: GvisorConfig,
     pub docker: DockerConfig,
+    pub sandbox: SandboxConfig,
 }
 
 impl Default for ExecutionConfig {
@@ -253,6 +258,7 @@ impl Default for ExecutionConfig {
             firecracker: FirecrackerConfig::default(),
             gvisor: GvisorConfig::default(),
             docker: DockerConfig::default(),
+            sandbox: SandboxConfig::default(),
         }
     }
 }
@@ -339,6 +345,27 @@ impl Default for DockerConfig {
                 .unwrap_or(false),
             image: std::env::var("APEX_DOCKER_IMAGE")
                 .unwrap_or_else(|_| "apex-execution:latest".to_string()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxConfig {
+    pub memory_limit_mb: u64,
+    pub timeout_secs: u64,
+}
+
+impl Default for SandboxConfig {
+    fn default() -> Self {
+        Self {
+            memory_limit_mb: std::env::var("APEX_SANDBOX_MEMORY_MB")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(config_constants::DEFAULT_SANDBOX_MEMORY_MB),
+            timeout_secs: std::env::var("APEX_SANDBOX_TIMEOUT_SECS")
+                .ok()
+                .and_then(|v| v.parse().ok())
+                .unwrap_or(config_constants::DEFAULT_SANDBOX_TIMEOUT_SECS),
         }
     }
 }

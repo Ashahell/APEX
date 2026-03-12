@@ -79,9 +79,9 @@ APEX is **more secure than both** by design:
 - **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
 
 ### v0.3.1 OpenClaw Integration
-- **Death Spiral Detection** ✅ Complete - Added 4 new anomaly types (FileCreationBurst, ToolCallLoop, NoSideEffects, ErrorCascade)
-- **External Notifications** ✅ Complete - Discord webhook + Telegram bot integration with API endpoints
-- **Workspace .env Loading** ✅ Complete - Loads .env file for skill execution
+- **Death Spiral Detection** - ✅ Complete (FileCreationBurst, ToolCallLoop, NoSideEffects patterns)
+- **External Notifications** - ✅ Complete (Discord webhook + Telegram bot integration)
+- **Workspace .env Loading** - ✅ Complete (Loads .env file for skill execution)
 
 ### v1.3.2 AgentZero UI Migration
 - **AgentZero Styling** ✅ Complete - Indigo (#4248f1) primary, CSS variables, SVG icons throughout
@@ -92,6 +92,12 @@ APEX is **more secure than both** by design:
 - **Enhanced Welcome** ✅ Complete - Quick action cards for common tasks
 - **T3 VM Execution** ✅ Complete - Implemented actual VM pool execution for T3 tasks
 
+### v1.4.0 Runtime Tool Generation
+- **Python Sandbox** ✅ Complete - Secure execution environment with import allowlist
+- **Dynamic Tool Execution** ✅ Complete - LLM-generated Python code executes in sandbox
+- **Tool Caching** ✅ Complete - Agents reuse similar tools instead of regenerating
+- **Security Tests** ✅ Complete - 33 sandbox security tests (import blocking, timeout, dangerous patterns)
+
 ### v0.3.1 Code Quality Improvements
 - **Security Hardening** ✅ Complete - Removed hardcoded secrets, fixed weak RNG in TOTP, added command injection mitigation
 - **API Error Helpers** ✅ Complete - Added `api_error` module with `api_try!` macro
@@ -100,13 +106,14 @@ APEX is **more secure than both** by design:
 - **Constants** ✅ Complete - Added `config_constants` modules to eliminate magic numbers
 
 ### v0.3.0 New Features
-- **Real-time Agent Thoughts Streaming** - Partial (execution events stream, full thought trace in progress)
+- **Real-time Agent Thoughts Streaming** - ✅ Complete (execution events stream, UI display implemented)
 - **Consequence Preview** - ✅ Implemented (blast radius shown before T2/T3 actions)
-- **Runtime Tool Generation** - ⏳ Planned (see `docs/RUNTIME_TOOL_GENERATION_PLAN.md`)
+- **Runtime Tool Generation** - ✅ Implemented (see `docs/RUNTIME_TOOL_GENERATION_PLAN.md`)
   - Tool generation: ✅ Implemented (LLM generates Python code)
-  - Tool execution: ❌ Placeholder (needs sandbox implementation)
-- **TIR (Tool-Integrated Reasoning)** - Not implemented
-- **Subagent Pool** - Not implemented
+  - Tool execution: ✅ Implemented (secure Python sandbox with import allowlist)
+  - Tool expiration: ✅ Implemented (24h TTL, auto-cleanup)
+- **TIR (Tool-Integrated Reasoning)** - ✅ Implemented (prompt structure and parsing)
+- **Subagent Pool** - ⚠️ POC (API endpoints created, execution pending)
 - **SOUL.md Identity System** - ✅ Basic implementation
 - **Heartbeat Daemon** - ✅ Implemented
 
@@ -336,6 +343,8 @@ APEX v0.2.0 uses a unified configuration system via `AppConfig` in `core/router/
 | `APEX_USE_DOCKER` | Enable Docker execution (legacy) | true (if isolation=docker) |
 | `APEX_DOCKER_IMAGE` | Docker image | apex-execution:latest |
 | `APEX_USE_FIRECRACKER` | Enable Firecracker VMs (Linux only) | false |
+| `APEX_SANDBOX_MEMORY_MB` | Dynamic tool sandbox memory limit (MB) | 512 |
+| `APEX_SANDBOX_TIMEOUT_SECS` | Dynamic tool sandbox timeout (seconds) | 30 |
 | `APEX_FIRECRACKER_PATH` | firecracker binary path | system PATH |
 | `APEX_VM_VCPU` | VM vCPU count | 2 |
 | `APEX_VM_MEMORY_MIB` | VM memory in MiB | 2048 |
@@ -707,15 +716,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 158 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust unit tests** | 188 | `core/*/src/*_test.rs` or `mod tests` |
 | **Rust integration tests** | 59 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
-| **Python tests** | 20 | `execution/tests/` |
+| **Python tests** | 53 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
-| **UI tests** | 23 | `ui/src/**/*.test.tsx` |
-| **Total** | **251+** | |
-| **Total** | **187** | |
+| **UI tests** | 20 | `ui/src/**/*.test.tsx` |
+| **Total** | **338** | |
 
 ### Running Tests
 

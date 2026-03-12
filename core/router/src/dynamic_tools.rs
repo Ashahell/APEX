@@ -25,6 +25,13 @@ pub struct ToolExecutionContext {
     pub tool_name: String,
     pub parameters: serde_json::Value,
     pub task_id: String,
+    pub sandbox_config: Option<SandboxConfig>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SandboxConfig {
+    pub memory_limit_mb: u64,
+    pub timeout_secs: u64,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -65,16 +72,40 @@ impl ToolRegistry {
         tools.len()
     }
 
+    /// Remove tools older than specified hours
+    /// Returns number of tools removed
+    pub async fn cleanup_expired(&self, max_age_hours: i64) -> usize {
+        let now = chrono::Utc::now().timestamp();
+        let max_age_secs = max_age_hours * 3600;
+        
+        let mut tools = self.tools.write().await;
+        let mut removed_count = 0;
+        
+        tools.retain(|_name, tool| {
+            let age = now - tool.created_at;
+            if age > max_age_secs {
+                removed_count += 1;
+                false  // Remove this tool
+            } else {
+                true  // Keep this tool
+            }
+        });
+        
+        removed_count
+    }
+
     pub async fn execute(
         &self,
         name: &str,
         parameters: serde_json::Value,
+        config: Option<SandboxConfig>,
     ) -> Result<serde_json::Value, String> {
         let tool = self.get(name).await.ok_or("Tool not found")?;
         let result = execute_dynamic_tool(&tool, &parameters, &ToolExecutionContext {
             tool_name: name.to_string(),
             parameters: parameters.clone(),
             task_id: "dynamic".to_string(),
+            sandbox_config: config,
         }).await
         .map_err(|e| e.to_string())?;
         
@@ -174,16 +205,116 @@ Only respond with valid JSON, no explanation."#,
 pub async fn execute_dynamic_tool(
     tool: &DynamicTool,
     parameters: &serde_json::Value,
-    _context: &ToolExecutionContext,
+    context: &ToolExecutionContext,
 ) -> Result<String, String> {
-    tracing::info!(tool = %tool.name, "Executing dynamic tool");
+    use std::process::Command;
+    use std::fs;
+    use std::io::Write;
     
-    Ok(format!(
-        "Dynamic tool '{}' would execute with params: {}\nTool code:\n{}",
-        tool.name,
-        parameters,
-        tool.code
-    ))
+    tracing::info!(tool = %tool.name, "Executing dynamic tool in sandbox");
+    
+    // Convert parameters to JSON string for Python
+    let params_json = parameters.to_string();
+    
+    // Get sandbox config with defaults
+    let (memory_limit_mb, timeout_secs) = context.sandbox_config
+        .as_ref()
+        .map(|c| (c.memory_limit_mb, c.timeout_secs))
+        .unwrap_or((512, 30));
+    
+    // Find the sandbox.py path - try multiple locations
+    let sandbox_paths = vec![
+        // Development: execution/src/apex_agent/sandbox.py
+        std::path::Path::new("execution/src/apex_agent/sandbox.py"),
+        // Alternative: from project root
+        std::path::Path::new("execution/src/apex_agent/sandbox.py"),
+    ];
+    
+    let sandbox_path = sandbox_paths
+        .iter()
+        .find(|p| p.exists())
+        .map(|p| p.to_path_buf())
+        .ok_or_else(|| {
+            tracing::error!("Sandbox not found at any expected location");
+            "Sandbox not found. Expected at execution/src/apex_agent/sandbox.py".to_string()
+        })?;
+    
+    // Get Python executable
+    let python_cmd = if cfg!(windows) { "python" } else { "python3" };
+    
+    // Escape single quotes in the tool code and params for shell
+    let escaped_code = tool.code.replace('\'', "''");
+    let escaped_params = params_json.replace('\'', "''");
+    
+    // Run the sandbox with the tool code inline
+    let output = Command::new(python_cmd)
+        .arg("-c")
+        .arg(format!(
+            r##"
+import sys
+sys.path.insert(0, r'{}')
+from sandbox import PythonSandbox, SandboxConfig
+
+# Tool code
+tool_code = '''{}'''
+
+# Parse parameters
+import json
+try:
+    params = json.loads('''{}''')
+except:
+    params = {{}}
+
+# Execute in sandbox with config
+config = SandboxConfig(
+    memory_limit_mb={},
+    timeout_seconds={}
+)
+sandbox = PythonSandbox(config)
+result = sandbox.execute(tool_code, params, timeout_seconds={})
+
+# Output as JSON
+print(json.dumps(result.to_dict()))
+"##,
+            sandbox_path.display(),
+            escaped_code,
+            escaped_params,
+            memory_limit_mb,
+            timeout_secs,
+            timeout_secs
+        ))
+        .output()
+        .map_err(|e| format!("Failed to execute sandbox: {}", e))?;
+    
+    // Parse the result
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    
+    if !output.status.success() {
+        tracing::error!(tool = %tool.name, stderr = %stderr, "Sandbox execution failed");
+        return Err(format!("Sandbox execution failed: {}", stderr));
+    }
+    
+    // Parse JSON result
+    let result_json: serde_json::Value = serde_json::from_str(&stdout)
+        .map_err(|e| format!("Failed to parse result: {}. Output was: {}", e, stdout))?;
+    
+    let success = result_json["success"].as_bool().unwrap_or(false);
+    let sandbox_output = result_json["output"].as_str().unwrap_or("");
+    let error = result_json["error"].as_str();
+    let exec_time = result_json["execution_time_ms"].as_i64().unwrap_or(0);
+    
+    if success {
+        tracing::info!(tool = %tool.name, exec_time_ms = exec_time, "Tool executed successfully");
+        Ok(format!(
+            "Tool '{}' executed successfully ({}ms):\n{}",
+            tool.name, exec_time, sandbox_output
+        ))
+    } else {
+        let error_msg = error.unwrap_or("Unknown error");
+        tracing::error!(tool = %tool.name, error = %error_msg, "Tool execution failed");
+        Err(format!("Tool execution failed: {}", error_msg))
+    }
 }
 
 #[cfg(test)]
@@ -229,5 +360,42 @@ mod tests {
         registry.register(tool).await;
         assert!(registry.remove("temp_tool").await);
         assert!(!registry.remove("nonexistent").await);
+    }
+
+    #[tokio::test]
+    async fn test_tool_cleanup_expired() {
+        let registry = ToolRegistry::new();
+        let now = chrono::Utc::now().timestamp();
+        
+        // Create tools with different ages
+        let old_tool = DynamicTool {
+            name: "old_tool".to_string(),
+            description: "Tool created 25 hours ago".to_string(),
+            parameters: vec![],
+            code: "pass".to_string(),
+            created_at: now - (25 * 3600),  // 25 hours ago
+        };
+        
+        let new_tool = DynamicTool {
+            name: "new_tool".to_string(),
+            description: "Tool created 1 hour ago".to_string(),
+            parameters: vec![],
+            code: "pass".to_string(),
+            created_at: now - (1 * 3600),  // 1 hour ago
+        };
+        
+        registry.register(old_tool).await;
+        registry.register(new_tool).await;
+        
+        assert_eq!(registry.count().await, 2);
+        
+        // Cleanup tools older than 24 hours
+        let removed = registry.cleanup_expired(24).await;
+        assert_eq!(removed, 1);
+        assert_eq!(registry.count().await, 1);
+        
+        // Verify old tool was removed
+        assert!(registry.get("old_tool").await.is_none());
+        assert!(registry.get("new_tool").await.is_some());
     }
 }

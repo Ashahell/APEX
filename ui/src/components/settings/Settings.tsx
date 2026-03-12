@@ -7,6 +7,7 @@ import { EmbedModelSettings } from './EmbedModelSettings';
 import { ApiKeysManager } from './ApiKeysManager';
 import { LiteLlmSettings } from './LiteLlmSettings';
 import { SecretsManager } from './SecretsManager';
+import { RuntimeSettings } from './RuntimeSettings';
 
 interface VmStats {
   enabled: boolean;
@@ -21,7 +22,7 @@ interface TotpStatus {
   configured: boolean;
 }
 
-type SettingsTab = 'agent' | 'external' | 'mcp' | 'security' | 'vm' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'skills' | 'speech' | 'a2a';
+type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a';
 type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory';
 type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel';
 
@@ -96,6 +97,7 @@ export function Settings() {
     { id: 'skills', label: 'Skills' },
     { id: 'security', label: 'Security' },
     { id: 'vm', label: 'VM Pool' },
+    { id: 'runtime', label: 'Runtime' },
     { id: 'config', label: 'Config' },
     { id: 'preferences', label: 'Preferences' },
     { id: 'notifications', label: 'Notifications' },
@@ -538,6 +540,8 @@ export function Settings() {
             </div>
           </>
         )}
+
+        {activeTab === 'runtime' && <RuntimeSettings />}
 
         {activeTab === 'mcp' && (
           <McpManager />
