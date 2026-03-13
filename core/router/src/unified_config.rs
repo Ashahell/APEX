@@ -275,6 +275,7 @@ pub struct FirecrackerConfig {
     pub network_isolation: bool,
     pub fast_boot: bool,
     pub use_jailer: bool,
+    pub seccomp_level: Option<u8>,
 }
 
 impl Default for FirecrackerConfig {
@@ -308,6 +309,9 @@ impl Default for FirecrackerConfig {
                 .ok()
                 .map(|v| v == "1")
                 .unwrap_or(false),
+            seccomp_level: std::env::var("APEX_VM_SECCOMP_LEVEL")
+                .ok()
+                .and_then(|v| v.parse().ok()),
         }
     }
 }
@@ -861,6 +865,10 @@ impl AppConfig {
             "APEX_VM_MEMORY_MIB".to_string(),
             self.execution.firecracker.memory_mib.to_string(),
         );
+        vars.insert(
+            "APEX_VM_SECCOMP_LEVEL".to_string(),
+            self.execution.firecracker.seccomp_level.map(|v| v.to_string()).unwrap_or_default(),
+        );
 
         vars.insert("APEX_DATABASE_URL".to_string(), "[REDACTED]".to_string());
 
@@ -946,6 +954,15 @@ impl AppConfig {
                     field: "execution.firecracker.rootfs_path".to_string(),
                     message: "Firecracker rootfs path required when enabled".to_string(),
                 });
+            }
+            // Validate seccomp_level if provided (must be between 0-4 if set)
+            if let Some(level) = self.execution.firecracker.seccomp_level {
+                if level > 4 {
+                    errors.push(ValidationError {
+                        field: "execution.firecracker.seccomp_level".to_string(),
+                        message: "Firecracker seccomp level must be between 0-4".to_string(),
+                    });
+                }
             }
         }
 

@@ -65,6 +65,7 @@ pub struct VmConfig {
     pub network_isolation: bool,
     pub fast_boot: bool,
     pub use_jailer: bool,
+    pub seccomp_level: Option<u8>,
 }
 
 impl VmConfig {
@@ -90,21 +91,22 @@ impl VmConfig {
             }
         };
         
-        VmConfig {
-            vcpu_count: config.execution.firecracker.vcpus,
-            memory_mib: config.execution.firecracker.memory_mib,
-            kernel_path: config.execution.firecracker.kernel_path.clone(),
-            rootfs_path: config.execution.firecracker.rootfs_path.clone(),
-            firecracker_path: config.execution.firecracker.firecracker_path.clone(),
-            runsc_path: config.execution.gvisor.runsc_path.clone(),
-            docker_image: Some(config.execution.docker.image.clone()),
-            use_firecracker,
-            use_gvisor,
-            use_docker,
-            network_isolation: config.execution.firecracker.network_isolation,
-            fast_boot: config.execution.firecracker.fast_boot,
-            use_jailer: config.execution.firecracker.use_jailer,
-        }
+         VmConfig {
+             vcpu_count: config.execution.firecracker.vcpus,
+             memory_mib: config.execution.firecracker.memory_mib,
+             kernel_path: config.execution.firecracker.kernel_path.clone(),
+             rootfs_path: config.execution.firecracker.rootfs_path.clone(),
+             firecracker_path: config.execution.firecracker.firecracker_path.clone(),
+             runsc_path: config.execution.gvisor.runsc_path.clone(),
+             docker_image: Some(config.execution.docker.image.clone()),
+             use_firecracker,
+             use_gvisor,
+             use_docker,
+             network_isolation: config.execution.firecracker.network_isolation,
+             fast_boot: config.execution.firecracker.fast_boot,
+             use_jailer: config.execution.firecracker.use_jailer,
+             seccomp_level: config.execution.firecracker.seccomp_level,
+         }
     }
 
     pub fn is_vm_available(&self) -> bool {
@@ -388,6 +390,12 @@ impl VmPool {
         // Security: Disable indirect jumps (mitigates Spectre)
         cmd.arg("--indirect-jumps")
             .arg("off");
+
+        // Security: Seccomp filtering (if configured)
+        if let Some(level) = self.config.seccomp_level {
+            cmd.arg("--seccomp-level")
+                .arg((level as u8).to_string());
+        }
 
         // Security: Disable logging to reduce attack surface
         cmd.arg("--log-path")
