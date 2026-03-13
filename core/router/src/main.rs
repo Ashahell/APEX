@@ -85,13 +85,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Try to load from database first
         let db_config_result = AppConfig::load_from_db(&apex_memory::ConfigRepository::new(&pool)).await;
         match db_config_result {
-            Ok(Some(config)) => {
+            Ok(config) => {
                 tracing::info!("Loaded configuration from database");
                 config
-            }
-            Ok(None) => {
-                tracing::info!("No configuration found in database, falling back to environment/YAML");
-                AppConfig::global()
             }
             Err(e) => {
                 tracing::warn!(error = %e, "Failed to load config from database, falling back to environment/YAML");
