@@ -307,7 +307,7 @@ export function Settings() {
                   <div>
                     <label className="block text-sm font-medium mb-2">Embedding Provider</label>
                     <select className="w-full px-3 py-2 rounded-lg border bg-background">
-                      <option value="local">Local (Ollama)</option>
+                      <option value="local">Local (llama-server)</option>
                       <option value="openai">OpenAI</option>
                     </select>
                   </div>

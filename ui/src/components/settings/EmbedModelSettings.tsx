@@ -70,7 +70,8 @@ export function EmbedModelSettings() {
       <div>
         <h3 className="text-lg font-semibold">Embedding Model</h3>
         <p className="text-sm text-muted-foreground">
-          Selection and settings for embedding model used by memory search
+          Selection and settings for embedding model used by memory search.
+          Current: Local provider using llama-server at <code className="bg-muted px-1 rounded">{config.api_base}</code>
         </p>
       </div>
 
