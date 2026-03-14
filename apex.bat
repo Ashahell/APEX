@@ -513,9 +513,9 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%UI_PORT% ^| findstr LISTENI
     echo Killing existing process on port %UI_PORT% (PID: %%a)
     taskkill /F /PID %%a 2>nul
 )
+echo Starting UI on port %UI_PORT% in %UI_DIR%...
 cd /d "%UI_DIR%"
-echo Starting UI on port %UI_PORT%...
-start "APEX UI Dev" cmd /c "cd /d "%UI_DIR%" && pnpm dev"
+start "APEX UI Dev" cmd /c "pnpm dev"
 timeout /t 3 >nul
 echo UI started on http://localhost:%UI_PORT%
 exit /b 0
