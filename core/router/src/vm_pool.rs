@@ -287,6 +287,15 @@ impl VmPool {
                     let id = format!("vm-warm-{}", ulid::Ulid::new());
                     let mut instance = VmInstance::new(id.clone(), config.clone(), backend.clone());
 
+                    // Clean up any stale containers before spawning
+                    if backend == VmmBackend::Docker {
+                        let container_name = format!("apex-vm-{}", id);
+                        let _ = Command::new("docker")
+                            .args(["rm", "-f", &container_name])
+                            .output()
+                            .await;
+                    }
+
                     if backend != VmmBackend::Mock {
                         if let Err(e) = Self::spawn_vm_static(&id, &mut instance, &config, &backend).await {
                             tracing::warn!("Failed to pre-warm VM {}: {}", id, e);
@@ -468,10 +477,27 @@ impl VmPool {
             .as_deref()
             .unwrap_or("apex-execution:latest");
 
+        let container_name = format!("apex-vm-{}", id);
+        
+        // Clean up any stale container before spawning
+        tracing::info!("Cleaning up stale container before spawn: {}", container_name);
+        let cleanup_result = Command::new("docker")
+            .args(["rm", "-f", &container_name])
+            .output()
+            .await;
+        
+        if let Ok(output) = cleanup_result {
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                tracing::debug!("Container cleanup: {}", stderr.trim());
+            }
+        } else {
+            tracing::warn!("Failed to run docker rm command");
+        }
+
         tracing::info!(vm_id = id, image = image, "Starting Docker container with security constraints");
         tracing::debug!("docker_image config: {:?}", self.config.docker_image);
 
-        let container_name = format!("apex-vm-{}", id);
         let memory_limit = format!("{}m", self.config.memory_mib);
         
         let mut cmd = Command::new("docker");
@@ -572,6 +598,25 @@ impl VmPool {
         if current_size < self.max_size {
             drop(instances);
             let id = format!("vm-{}", current_size);
+
+            // Clean up any stale containers before spawning
+            if self.backend == VmmBackend::Docker {
+                let container_name = format!("apex-vm-{}", id);
+                tracing::info!("Cleaning up stale container: {}", container_name);
+                let output = Command::new("docker")
+                    .args(["rm", "-f", &container_name])
+                    .output()
+                    .await;
+                if let Ok(out) = output {
+                    if !out.status.success() {
+                        let stderr = String::from_utf8_lossy(&out.stderr);
+                        tracing::warn!("docker rm failed: {}", stderr);
+                    }
+                } else if let Err(e) = output {
+                    tracing::warn!("Failed to run docker rm: {}", e);
+                }
+            }
+
             let mut instance =
                 VmInstance::new(id.clone(), self.config.clone(), self.backend.clone());
 

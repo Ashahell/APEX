@@ -4,8 +4,8 @@
 > 
 > **Production Gaps**: Security implementation complete (Phases 0-7), comprehensive testing (251+ tests), production hardening docs available, no formal load testing, no disaster recovery procedures, single-node deployment only.
 
-**Date**: 2026-03-12
-**Version**: v1.3.2
+**Date**: 2026-03-13
+**Version**: v1.4.0
 **Status**: Pre-Alpha (Experimental)
 **Scope**: All directories (core/, gateway/, skills/, ui/, execution/)
 
@@ -432,6 +432,89 @@ interface GatewayConfig {
 | PUT | `/api/v1/llms/config` | Update LLM configuration |
 | GET | `/api/v1/llms/models?provider=` | List models for a provider |
 | POST | `/api/v1/llms/test` | Test LLM connection |
+
+**Secrets (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/secrets` | List all secret references |
+| GET | `/api/v1/secrets/:id` | Get secret by ID |
+| PUT | `/api/v1/secrets/:id` | Update secret description |
+| DELETE | `/api/v1/secrets/:id` | Delete custom secret |
+| GET | `/api/v1/secrets/categories` | List secret categories |
+| GET | `/api/v1/secrets/category/:category` | Get secrets by category |
+| GET | `/api/v1/secrets/rotation/:secret_name` | Get rotation history |
+| GET | `/api/v1/secrets/rotation/recent` | Get recent rotations |
+| GET | `/api/v1/secrets/access/:secret_ref_id` | Get access history |
+| GET | `/api/v1/secrets/access/recent` | Get recent accesses |
+| GET | `/api/v1/secrets/access/failed` | Get failed access attempts |
+| GET | `/api/v1/secrets/predefined` | List predefined secret IDs |
+
+**PDF Tool (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/pdf/upload` | Upload PDF document |
+| GET | `/api/v1/pdf/:id` | Get PDF document |
+| GET | `/api/v1/pdf/:id/text` | Extract text from PDF |
+| POST | `/api/v1/pdf/:id/analyze` | Analyze PDF with LLM |
+| DELETE | `/api/v1/pdf/:id` | Delete PDF document |
+
+**Multimodal Memory (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/memory/multimodal-config` | Get multimodal config |
+| PUT | `/api/v1/memory/multimodal-config` | Update multimodal config |
+| GET | `/api/v1/memory/multimodal/search` | Search multimodal memory |
+
+**Extended Channels (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/channels/extended/list` | List extended channels |
+| GET | `/api/v1/channels/extended/types` | List channel types |
+| POST | `/api/v1/channels/extended` | Create channel settings |
+| GET | `/api/v1/channels/extended/:id` | Get channel settings |
+| PUT | `/api/v1/channels/extended/:id` | Update channel settings |
+| PUT | `/api/v1/channels/extended/:id/toggle` | Toggle channel enabled |
+| DELETE | `/api/v1/channels/extended/:id` | Delete channel settings |
+
+**Session Control (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/sessions/:session_id/yield` | Yield session |
+| POST | `/api/v1/sessions/resume` | Resume session |
+| GET | `/api/v1/sessions/:session_id/resume-history` | Get resume history |
+| GET | `/api/v1/sessions/:session_id/attachments` | List attachments |
+| POST | `/api/v1/sessions/:session_id/attachments` | Upload attachment |
+
+**Dynamic Tools (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/dynamic-tools` | List dynamic tools |
+| POST | `/api/v1/dynamic-tools` | Generate new tool |
+| GET | `/api/v1/dynamic-tools/:name` | Get tool details |
+| DELETE | `/api/v1/dynamic-tools/:name` | Delete tool |
+| POST | `/api/v1/dynamic-tools/:name/execute` | Execute dynamic tool |
+
+**Slack Block Kit (v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/slack/templates` | List all Slack templates |
+| POST | `/api/v1/slack/templates` | Create new template |
+| GET | `/api/v1/slack/templates/:id` | Get template by ID |
+| PUT | `/api/v1/slack/templates/:id` | Update template |
+| DELETE | `/api/v1/slack/templates/:id` | Delete template |
+| POST | `/api/v1/slack/templates/:id/render` | Render template with variables |
+
+**Execution Patterns (Death Spiral Detection, v1.4.0)**
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/patterns` | List recent patterns |
+| GET | `/api/v1/patterns/task/:task_id` | Get patterns by task ID |
+| GET | `/api/v1/patterns/type/:pattern_type` | Get patterns by type |
+| GET | `/api/v1/patterns/severity/:severity` | Get patterns by severity |
+| GET | `/api/v1/patterns/stats` | Get pattern statistics |
+| DELETE | `/api/v1/patterns/task/:task_id` | Delete patterns by task ID |
+| GET | `/api/v1/patterns/templates` | List detection templates |
+| GET | `/api/v1/patterns/templates/:name` | Get detection template by name |
 
 #### Message Bus Types
 ```rust

@@ -22,7 +22,7 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.3.2
+- **Version**: v1.4.0
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
@@ -68,6 +68,16 @@ APEX is **more secure than both** by design:
 - **Phase 11: Governance & Constitution** ✅ Complete
 - **Phase 12: OpenClaw Integration** ✅ Complete (Death Spiral Detection, External Notifications, Workspace .env)
 - **Phase 13: Code Quality** ✅ Complete (Security fixes, Adapter refactoring, React hooks)
+- **v1.4.0: OpenClaw Features** ✅ Complete
+  - Control UI Dashboard ✅ (DashboardLayout, PinnedMessages, SessionManager, CommandPalette)
+  - Fast Mode & Provider Plugins ✅ (FastModeToggle, ModelPicker, provider_repo)
+  - sessions_yield & sessions_resume ✅ (session_control_repo, sessions API, SessionControl UI)
+  - PDF Tool ✅ (pdf_repo, PDF API, PdfUploader, PdfViewer, PdfAnalyzer components)
+  - Multimodal Memory ✅ (multimodal_repo, MultimodalMemory API, MultimodalMemory UI components)
+  - Additional Channels ✅ (channel_settings_repo, channels_extended API, ChannelManager)
+  - Secrets Expansion ✅ (secrets_repo, secrets API, SecretsManager with 64 targets)
+  - Slack Block Kit ✅ (slack_block_repo, slack_blocks API, SlackBlockManager)
+  - Death Spiral Detection ✅ (execution_pattern_repo, patterns API, anomaly detection)
 
 ### Recent Optimizations
 - **API Modularization** ✅ Complete - Split 1556-line monolithic `api.rs` into 9 modular files in `core/router/src/api/`
@@ -263,6 +273,38 @@ APEX is **more secure than both** by design:
 - `POST /api/v1/security/injection/analyze` - Analyze input for injection attempts
 - `GET /api/v1/security/injection/patterns` - List registered injection patterns
 - `GET /api/v1/security/health` - Security component health check
+
+**Secrets (v1.4.0):**
+- `GET /api/v1/secrets` - List all secret references
+- `GET /api/v1/secrets/:id` - Get secret by ID
+- `PUT /api/v1/secrets/:id` - Update secret description
+- `DELETE /api/v1/secrets/:id` - Delete custom secret (predefined cannot be deleted)
+- `GET /api/v1/secrets/categories` - List secret categories
+- `GET /api/v1/secrets/category/:category` - Get secrets by category
+- `GET /api/v1/secrets/rotation/:secret_name` - Get rotation history
+- `GET /api/v1/secrets/rotation/recent` - Get recent rotations
+- `GET /api/v1/secrets/access/:secret_ref_id` - Get access history
+- `GET /api/v1/secrets/access/recent` - Get recent accesses
+- `GET /api/v1/secrets/access/failed` - Get failed access attempts
+- `GET /api/v1/secrets/predefined` - List predefined secret IDs
+
+### Slack Block Kit (v1.4.0)
+- `GET /api/v1/slack/templates` - List all Slack templates
+- `POST /api/v1/slack/templates` - Create new template
+- `GET /api/v1/slack/templates/:id` - Get template by ID
+- `PUT /api/v1/slack/templates/:id` - Update template
+- `DELETE /api/v1/slack/templates/:id` - Delete template
+- `POST /api/v1/slack/templates/:id/render` - Render template with variables
+
+### Execution Patterns (Death Spiral Detection, v1.4.0)
+- `GET /api/v1/patterns` - List recent patterns (supports ?limit=N)
+- `GET /api/v1/patterns/task/:task_id` - Get patterns by task ID
+- `GET /api/v1/patterns/type/:pattern_type` - Get patterns by type
+- `GET /api/v1/patterns/severity/:severity` - Get patterns by severity
+- `GET /api/v1/patterns/stats` - Get pattern statistics
+- `DELETE /api/v1/patterns/task/:task_id` - Delete patterns by task ID
+- `GET /api/v1/patterns/templates` - List detection templates
+- `GET /api/v1/patterns/templates/:name` - Get detection template by name
 
 ### Subagent Pool (Parallel Execution)
 - `POST /api/v1/subagent/decompose` - Decompose task into parallel subtasks using LLM
@@ -716,14 +758,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 188 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust unit tests** | 201 | `core/*/src/*_test.rs` or `mod tests` |
 | **Rust integration tests** | 59 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
 | **Python tests** | 53 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 20 | `ui/src/**/*.test.tsx` |
-| **Total** | **338** | |
+| **Total** | **360** | |
 
 ### Running Tests
 

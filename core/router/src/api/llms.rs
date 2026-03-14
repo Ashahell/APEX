@@ -1,11 +1,18 @@
 use axum::{
     extract::State,
+    extract::Query,
     routing::{get, post, put, delete},
     Json, Router,
+    extract::Path,
 };
 use serde::{Deserialize, Serialize};
+use ulid::Ulid;
 use crate::api::AppState;
 use crate::unified_config::{AppConfig, LlmConfig, LlmProvider, GLOBAL_CONFIG};
+use apex_memory::provider_repo::{
+    ModelFallback, ProviderHealth, ProviderModel, ProviderPlugin, ProviderRepository,
+    SessionFastMode,
+};
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
@@ -18,6 +25,21 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/v1/llms/default", get(get_default_llm))
         .route("/api/v1/llms/default", put(set_default_llm))
         .route("/api/v1/llms/providers", get(list_providers))
+        // Provider plugins (NEW)
+        .route("/api/v1/llms/plugins", get(list_provider_plugins))
+        .route("/api/v1/llms/plugins", post(create_provider_plugin))
+        .route("/api/v1/llms/plugins/:id", get(get_provider_plugin))
+        .route("/api/v1/llms/plugins/:id", put(update_provider_plugin))
+        .route("/api/v1/llms/plugins/:id", delete(delete_provider_plugin))
+        .route("/api/v1/llms/plugins/:id/models", get(list_provider_models))
+        .route("/api/v1/llms/plugins/:id/health", get(get_provider_health_status))
+        // Fast mode (NEW) - session-based only
+        .route("/api/v1/llms/sessions/:session_id/fast-mode", get(get_session_fast_mode))
+        .route("/api/v1/llms/sessions/:session_id/fast-mode", put(set_session_fast_mode))
+        // Model fallbacks (NEW)
+        .route("/api/v1/llms/fallbacks", get(list_model_fallbacks))
+        .route("/api/v1/llms/fallbacks", post(add_model_fallback))
+        .route("/api/v1/llms/fallbacks/:id", delete(delete_model_fallback))
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -724,4 +746,312 @@ async fn set_default_llm(
     }
 
     Ok(Json(LlmResponse::from(llm)))
+}
+
+// ============ Provider Plugins (NEW) ============
+
+#[derive(Debug, Deserialize)]
+pub struct CreateProviderRequest {
+    pub provider_type: String,
+    pub name: String,
+    pub base_url: String,
+    pub api_key: Option<String>,
+    pub default_model: Option<String>,
+    pub config: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateProviderRequest {
+    pub name: Option<String>,
+    pub base_url: Option<String>,
+    pub api_key: Option<String>,
+    pub default_model: Option<String>,
+    pub config: Option<String>,
+    pub enabled: Option<bool>,
+}
+
+async fn list_provider_plugins(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<ProviderPlugin>>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let plugins = repo
+        .list_providers(None, false)
+        .await
+        .map_err(|e| format!("Failed to list providers: {}", e))?;
+    Ok(Json(plugins))
+}
+
+async fn create_provider_plugin(
+    State(state): State<AppState>,
+    Json(req): Json<CreateProviderRequest>,
+) -> Result<Json<ProviderPlugin>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let id = Ulid::new().to_string();
+    let plugin = repo
+        .create_provider(
+            &id,
+            &req.provider_type,
+            &req.name,
+            &req.base_url,
+            req.api_key.as_deref(),
+            req.default_model.as_deref(),
+            req.config.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Failed to create provider: {}", e))?;
+    Ok(Json(plugin))
+}
+
+async fn get_provider_plugin(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<ProviderPlugin>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let plugin = repo
+        .get_provider(&id)
+        .await
+        .map_err(|e| format!("Failed to get provider: {}", e))?;
+    Ok(Json(plugin))
+}
+
+async fn update_provider_plugin(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateProviderRequest>,
+) -> Result<Json<ProviderPlugin>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let plugin = repo
+        .update_provider(
+            &id,
+            req.name.as_deref(),
+            req.base_url.as_deref(),
+            req.api_key.as_deref(),
+            req.default_model.as_deref(),
+            req.config.as_deref(),
+            req.enabled,
+        )
+        .await
+        .map_err(|e| format!("Failed to update provider: {}", e))?;
+    Ok(Json(plugin))
+}
+
+async fn delete_provider_plugin(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    repo.delete_provider(&id)
+        .await
+        .map_err(|e| format!("Failed to delete provider: {}", e))?;
+    Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+async fn list_provider_models(
+    State(state): State<AppState>,
+    Path(provider_id): Path<String>,
+) -> Result<Json<Vec<ProviderModel>>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let models = repo
+        .list_provider_models(&provider_id)
+        .await
+        .map_err(|e| format!("Failed to list models: {}", e))?;
+    Ok(Json(models))
+}
+
+async fn get_provider_health_status(
+    State(state): State<AppState>,
+    Path(provider_id): Path<String>,
+) -> Result<Json<Option<ProviderHealth>>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let health = repo
+        .get_provider_health(&provider_id)
+        .await
+        .map_err(|e| format!("Failed to get health: {}", e))?;
+    Ok(Json(health))
+}
+
+// ============ Fast Mode (NEW) ============
+
+#[derive(Debug, Deserialize)]
+pub struct SetFastModeRequest {
+    pub fast_enabled: bool,
+    pub fast_model: Option<String>,
+    pub fast_config: Option<String>,
+    pub toggles: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FastModeResponse {
+    pub session_id: String,
+    pub fast_enabled: bool,
+    pub fast_model: Option<String>,
+    pub fast_config: Option<serde_json::Value>,
+    pub toggles: Option<serde_json::Value>,
+}
+
+// Global fast mode (stored in memory for now)
+static GLOBAL_FAST_MODE: std::sync::LazyLock<std::sync::Mutex<GlobalFastMode>> = 
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(GlobalFastMode {
+        enabled: false,
+        fast_model: None,
+    }));
+
+struct GlobalFastMode {
+    enabled: bool,
+    fast_model: Option<String>,
+}
+
+async fn get_global_fast_mode(
+    State(_state): State<AppState>,
+) -> Json<GlobalFastMode> {
+    let guard = GLOBAL_FAST_MODE.lock().unwrap();
+    Json(GlobalFastMode {
+        enabled: guard.enabled,
+        fast_model: guard.fast_model.clone(),
+    })
+}
+
+async fn set_global_fast_mode(
+    State(_state): State<AppState>,
+    Json(req): Json<SetFastModeRequest>,
+) -> Json<GlobalFastMode> {
+    let mut guard = GLOBAL_FAST_MODE.lock().unwrap();
+    guard.enabled = req.fast_enabled;
+    guard.fast_model = req.fast_model;
+    Json(GlobalFastMode {
+        enabled: guard.enabled,
+        fast_model: guard.fast_model.clone(),
+    })
+}
+
+async fn get_session_fast_mode(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<FastModeResponse>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let fast_mode = repo
+        .get_session_fast_mode(&session_id)
+        .await
+        .map_err(|e| format!("Failed to get fast mode: {}", e))?;
+
+    match fast_mode {
+        Some(fm) => {
+            let config: Option<serde_json::Value> = fm.fast_config
+                .as_ref()
+                .and_then(|c| serde_json::from_str(c).ok());
+            let toggles: Option<serde_json::Value> = fm.toggles
+                .as_ref()
+                .and_then(|t| serde_json::from_str(t).ok());
+            
+            Ok(Json(FastModeResponse {
+                session_id: fm.session_id,
+                fast_enabled: fm.fast_enabled != 0,
+                fast_model: fm.fast_model,
+                fast_config: config,
+                toggles,
+            }))
+        }
+        None => Ok(Json(FastModeResponse {
+            session_id,
+            fast_enabled: false,
+            fast_model: None,
+            fast_config: None,
+            toggles: None,
+        })),
+    }
+}
+
+async fn set_session_fast_mode(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(req): Json<SetFastModeRequest>,
+) -> Result<Json<FastModeResponse>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let id = Ulid::new().to_string();
+    
+    let fast_mode = repo
+        .upsert_session_fast_mode(
+            &id,
+            &session_id,
+            req.fast_enabled,
+            req.fast_model.as_deref(),
+            req.fast_config.as_deref(),
+            req.toggles.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Failed to set fast mode: {}", e))?;
+
+    let config: Option<serde_json::Value> = fast_mode.fast_config
+        .as_ref()
+        .and_then(|c| serde_json::from_str(c).ok());
+    let toggles: Option<serde_json::Value> = fast_mode.toggles
+        .as_ref()
+        .and_then(|t| serde_json::from_str(t).ok());
+
+    Ok(Json(FastModeResponse {
+        session_id: fast_mode.session_id,
+        fast_enabled: fast_mode.fast_enabled != 0,
+        fast_model: fast_mode.fast_model,
+        fast_config: config,
+        toggles,
+    }))
+}
+
+// ============ Model Fallbacks (NEW) ============
+
+#[derive(Debug, Deserialize)]
+pub struct AddFallbackRequest {
+    pub primary_model: String,
+    pub fallback_model: String,
+    pub provider: Option<String>,
+    pub priority: Option<i32>,
+}
+
+async fn list_model_fallbacks(
+    State(state): State<AppState>,
+    Query(params): Query<FallbackQuery>,
+) -> Result<Json<Vec<ModelFallback>>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let fallbacks = repo
+        .list_fallbacks(params.primary_model.as_deref())
+        .await
+        .map_err(|e| format!("Failed to list fallbacks: {}", e))?;
+    Ok(Json(fallbacks))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct FallbackQuery {
+    pub primary_model: Option<String>,
+}
+
+async fn add_model_fallback(
+    State(state): State<AppState>,
+    Json(req): Json<AddFallbackRequest>,
+) -> Result<Json<ModelFallback>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    let id = Ulid::new().to_string();
+    let priority = req.priority.unwrap_or(1);
+    
+    let fallback = repo
+        .add_fallback(
+            &id,
+            &req.primary_model,
+            &req.fallback_model,
+            req.provider.as_deref(),
+            priority,
+        )
+        .await
+        .map_err(|e| format!("Failed to add fallback: {}", e))?;
+    Ok(Json(fallback))
+}
+
+async fn delete_model_fallback(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let repo = ProviderRepository::new(&state.pool);
+    repo.delete_fallback(&id)
+        .await
+        .map_err(|e| format!("Failed to delete fallback: {}", e))?;
+    Ok(Json(serde_json::json!({ "deleted": true })))
 }

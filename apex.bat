@@ -11,7 +11,7 @@ set "EMBED_PORT=8081"
 set "LLAMA_DIR=D:\Users\ashah\Documents\llama.cpp"
 set "LLAMA_SERVER=%LLAMA_DIR%\llama-server.exe"
 set "LLAMA_MODEL=C:\Users\ashah\.ollama\models\Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
-set "EMBED_MODEL=C:\Program Files\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\omic-embed-text-v1.5-GGUF\omic-embed-text-v1.5.Q4_K_M.gguf"
+set "EMBED_MODEL=D:\Users\ashah\AppData\Local\Programs\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\nomic-embed-text-v1.5-GGUF\nomic-embed-text-v1.5.Q4_K_M.gguf"
 set "DOCKER Desktop=C:\Program Files\Docker\Docker\Docker Desktop.exe"
 
 goto :main

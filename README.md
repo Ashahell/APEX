@@ -28,7 +28,7 @@ APEX is **more secure than both** by design:
 
 ## Status
 
-**Version**: v1.3.2 (Pre-Alpha)
+**Version**: v1.4.0 (Pre-Alpha)
 
 ## Architecture
 
@@ -45,7 +45,7 @@ APEX is **more secure than both** by design:
 ### Core (POC)
 - Task routing with automatic tier classification (Instant/Shallow/Deep)
 - HMAC authentication between components (basic)
-- SQLite database with migrations
+- SQLite database with migrations (22+ migrations)
 - WebSocket real-time updates (basic)
 - Execution streaming with consequence preview (POC)
 
@@ -57,12 +57,26 @@ APEX is **more secure than both** by design:
 - **Audit Chain** - Hash chain verification tests (12 tests)
 - **Permission Tiers** - T0-T3 enforcement tests (14 tests)
 - **Sandbox Security** - Python sandbox with import allowlist (33 tests)
+- **Anomaly Detection** - Runtime behavior monitoring
 
 ### Skills System (34 skills) - Experimental
 - **T0 (Read-only)**: code.review, repo.search, deps.check, file.search, docs.read
 - **T1 (Tap confirm)**: file.delete, git.commit, code.generate, code.format, code.test, code.refactor, code.document, api.test, api.design, db.migrate, db.schema, copy.generate, script.draft, script.outline, seo.optimize, music.extend, music.generate, music.remix, video.edit, video.generate
 - **T2 (Type confirm)**: db.drop, deploy.kubectl, docker.build, docker.run, git.branch, git.force_push, aws.lambda, ci.configure
 - **T3 (TOTP)**: shell.execute
+
+### OpenClaw Integration Features (v1.4.0)
+
+| Feature | Description |
+|---------|-------------|
+| **Control UI Dashboard** | DashboardLayout, PinnedMessages, SessionManager, CommandPalette |
+| **Fast Mode & Provider Plugins** | provider_repo, FastModeToggle, ModelPicker with fallback chains |
+| **sessions_yield & sessions_resume** | Session checkpointing, yield/resume control flow |
+| **PDF Tool** | pdf_repo, PDF upload, text extraction, analysis with LLM |
+| **Multimodal Memory** | Image/audio embeddings with Gemini, hybrid search |
+| **Additional Channels** | 10+ new messaging adapters (Signal, IRC, Matrix, Teams, etc.) |
+| **Secrets Expansion** | 64 predefined secret targets, rotation logs, access audit |
+| **Slack Block Kit** | Rich Slack messages, 6 pre-built templates, variable interpolation |
 
 ### Advanced Features (Research/POC)
 - **SOUL.md Identity** - Agent reads identity file on wake (POC)
@@ -89,6 +103,18 @@ APEX is **more secure than both** by design:
 - System health monitoring
 - Quick command bar (Ctrl+P)
 - Skill quick launcher (Ctrl+K)
+
+### Database Migrations (22+)
+
+| # | Migration | Tables |
+|---|-----------|--------|
+| 015 | control_ui | dashboard_layout, pinned_messages, chat_bookmarks, session_metadata |
+| 016 | fast_mode_providers | provider_plugins, session_fast_mode, model_fallbacks |
+| 017 | subagent_control | session_yield_log, session_resume_history, session_attachments |
+| 018 | pdf_tool | pdf_documents, pdf_extraction_jobs |
+| 019 | multimodal_memory | memory_embeddings, memory_indexing_jobs, memory_multimodal_config |
+| 020 | messaging_channels | channel_settings, channel_templates, channel_webhooks |
+| 021 | secrets_expansion | secret_refs, secret_rotation_log, secret_access_log |
 
 ## Tech Stack (Development)
 
@@ -136,18 +162,50 @@ cd ui && pnpm install  # Frontend
 
 See `docs/ARCHITECTURE.md` for API documentation (subject to change).
 
+### Secrets API (v1.4.0)
+
+```bash
+# List all secrets
+GET /api/v1/secrets
+
+# Get secret by ID
+GET /api/v1/secrets/:id
+
+# List categories
+GET /api/v1/secrets/categories
+
+# Get secrets by category
+GET /api/v1/secrets/category/:category
+
+# Get rotation history
+GET /api/v1/secrets/rotation/:secret_name
+
+# Get recent rotations
+GET /api/v1/secrets/rotation/recent
+
+# Get access history
+GET /api/v1/secrets/access/:secret_ref_id
+
+# Get recent accesses
+GET /api/v1/secrets/access/recent
+
+# Get failed accesses
+GET /api/v1/secrets/access/failed
+```
+
 ## Roadmap
 
 - [x] Formal security audit (Phases 1-2 complete)
 - [x] Dynamic tool generation (POC)
 - [x] Subagent pool (POC)
-- [x] Comprehensive testing (338+ tests)
+- [x] Comprehensive testing (354+ tests)
 - [x] Task classification rules (Instant/Shallow/Deep tiers)
 - [x] Capability enforcement (fail-closed for unknown skills)
 - [x] Gateway optional (auth can be disabled)
 - [x] MCP marketplace UI (templates, install modal, registries)
 - [x] Production hardening (seccomp, AppArmor, SIEM docs)
 - [x] SystemComponent trait (unified lifecycle management)
+- [x] OpenClaw Features (v1.4.0) - Dashboard, Fast Mode, Sessions, PDF, Multimodal, Channels, Secrets
 
 ## License
 

@@ -354,6 +354,146 @@ impl Database {
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_mcp_tools_server ON mcp_tools(server_id)")
             .execute(&self.pool).await.ok();
 
+        // Migration 021: Secrets Expansion
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS secret_refs (
+                id TEXT PRIMARY KEY,
+                ref_key TEXT NOT NULL UNIQUE,
+                secret_name TEXT NOT NULL,
+                env_var TEXT,
+                description TEXT,
+                targets TEXT NOT NULL,
+                category TEXT DEFAULT 'generic',
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_secret_ref_key ON secret_refs(ref_key)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_secret_ref_category ON secret_refs(category)")
+            .execute(&self.pool).await.ok();
+
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS secret_rotation_log (
+                id TEXT PRIMARY KEY,
+                secret_name TEXT NOT NULL,
+                rotated_at TEXT NOT NULL DEFAULT (datetime('now')),
+                rotated_by TEXT,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                old_value_hash TEXT,
+                new_value_hash TEXT
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_rotation_secret ON secret_rotation_log(secret_name)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_rotation_status ON secret_rotation_log(status)")
+            .execute(&self.pool).await.ok();
+
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS secret_access_log (
+                id TEXT PRIMARY KEY,
+                secret_ref_id TEXT NOT NULL,
+                accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
+                access_type TEXT NOT NULL,
+                accessed_by TEXT,
+                success INTEGER DEFAULT 1,
+                error_message TEXT
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_access_ref ON secret_access_log(secret_ref_id)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_access_time ON secret_access_log(accessed_at)")
+            .execute(&self.pool).await.ok();
+
+        // Insert predefined secrets (only if not exists)
+        sqlx::query("INSERT OR IGNORE INTO secret_refs (id, ref_key, secret_name, targets, category) VALUES ('openai_api_key', 'OPENAI_API_KEY', 'OpenAI API Key', '[\"llm.openai\", \"provider.openai\"]', 'api_key')")
+            .execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO secret_refs (id, ref_key, secret_name, targets, category) VALUES ('anthropic_api_key', 'ANTHROPIC_API_KEY', 'Anthropic API Key', '[\"llm.anthropic\", \"provider.anthropic\"]', 'api_key')")
+            .execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO secret_refs (id, ref_key, secret_name, targets, category) VALUES ('github_token', 'GITHUB_TOKEN', 'GitHub Personal Access Token', '[\"git.github\"]', 'token')")
+            .execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO secret_refs (id, ref_key, secret_name, targets, category) VALUES ('custom_1', 'CUSTOM_SECRET_1', 'Custom Secret 1', '[\"custom\"]', 'generic')")
+            .execute(&self.pool).await.ok();
+
+        // Migration 022: Slack Block Kit
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS slack_block_templates (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                template TEXT NOT NULL,
+                description TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_slack_template_name ON slack_block_templates(name)")
+            .execute(&self.pool).await.ok();
+
+        // Insert pre-built Slack templates
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('task_complete', 'task_complete', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "✅ Task Complete: {{task_name}}\\n\\n{{summary}}"}}]}', 'Task completion notification')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('error_alert', 'error_alert', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "⚠️ Error Alert\\n\\n{{error_message}}"}}, {"type": "context", "elements": [{"type": "mrkdwn", "text": "Task: {{task_id}}"}]}]}', 'Error notification')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('task_started', 'task_started', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "🔄 Task Started: {{task_name}}\\n\\n{{description}}"}}]}', 'Task started notification')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('confirmation_request', 'confirmation_request', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "🤔 Confirmation Required\\n\\n{{message}}"}}, {"type": "actions", "block_id": "confirm_actions", "elements": [{"type": "button", "text": {"type": "plain_text", "text": "Approve"}, "style": "primary", "action_id": "approve"}, {"type": "button", "text": {"type": "plain_text", "text": "Deny"}, "style": "danger", "action_id": "deny"}]}]}', 'T1-T3 confirmation request')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('budget_alert', 'budget_alert', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "💰 Budget Alert\\n\\nCurrent spend: ${{current_cost}}\\nBudget limit: ${{budget_limit}}"}}, {"type": "context", "elements": [{"type": "mrkdwn", "text": "{{percentage}}% of budget used"}]}]}', 'Budget threshold notification')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO slack_block_templates (id, name, template, description) VALUES ('session_resume', 'session_resume', '{"blocks": [{"type": "section", "text": {"type": "mrkdwn", "text": "▶️ Session Resumed\\n\\n{{session_info}}"}}]}', 'Session resume notification')"#)
+            .execute(&self.pool).await.ok();
+
+        // Migration 023: Execution Patterns (Death Spiral Detection)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS execution_patterns (
+                id TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                pattern_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                tool_calls TEXT,
+                file_ops TEXT,
+                error_count INTEGER DEFAULT 0,
+                details TEXT,
+                detected_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patterns_task ON execution_patterns(task_id)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patterns_type ON execution_patterns(pattern_type)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patterns_severity ON execution_patterns(severity)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_patterns_detected ON execution_patterns(detected_at)")
+            .execute(&self.pool).await.ok();
+
+        // Pattern alert templates
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS pattern_alert_templates (
+                id TEXT PRIMARY KEY,
+                pattern_type TEXT NOT NULL UNIQUE,
+                title TEXT NOT NULL,
+                description TEXT,
+                severity TEXT NOT NULL,
+                remediation TEXT,
+                created_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await?;
+
+        // Insert default pattern alert templates
+        sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('file_burst', 'file_creation_burst', 'File Creation Burst Detected', 'Multiple files created in short succession - possible infinite generation loop', 'high', 'Review generated files, implement file count limits')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('tool_loop', 'tool_call_loop', 'Tool Call Loop Detected', 'Same tool called multiple times in succession - possible infinite recursion', 'critical', 'Cancel task immediately, review tool selection logic')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('no_side_effects', 'no_side_effects', 'No Side Effects Detected', 'Multiple tool calls with no observable state changes - possible dead loop', 'medium', 'Check tool outputs, verify file writes are working')"#)
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('error_cascade', 'error_cascade', 'Error Cascade Detected', 'Multiple sequential errors - task likely failing repeatedly', 'critical', 'Cancel task, review error logs, check credentials/permissions')"#)
+            .execute(&self.pool).await.ok();
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }

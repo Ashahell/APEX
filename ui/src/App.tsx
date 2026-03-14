@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from './stores/appStore';
 import { ThemeProvider, useTheme } from './hooks/useTheme';
 import { Chat } from './components/chat/Chat';
+import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { Skills } from './components/skills/Skills';
 import { SkillMarketplace } from './components/skills/SkillMarketplace';
 import { ConsequenceViewer } from './components/chat/ConsequenceViewer';
@@ -37,7 +38,7 @@ import { ThemeEditor } from './components/settings/ThemeEditor';
 import { wsClient } from './lib/websocket';
 
 const TAB_ORDER: AppTab[] = [
-  'chat', 'board', 'workflows', 'settings', 'theme',
+  'chat', 'dashboard', 'board', 'workflows', 'settings', 'theme',
   'memory', 'memoryStats', 'narrative',
   'skills', 'marketplace', 'deep',
   'files', 'channels', 'journal', 'audit', 'consequences',
@@ -111,6 +112,7 @@ function AppContent() {
   const renderContent = () => {
     switch (activeTab) {
       case 'chat': return <Chat />;
+      case 'dashboard': return <DashboardLayout />;
       case 'board': return <KanbanBoard />;
       case 'workflows': return <Workflows />;
       case 'settings': return <Settings />;

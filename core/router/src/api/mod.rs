@@ -21,6 +21,13 @@ pub mod llms;
 pub mod subagent;
 pub mod dynamic_tools;
 pub mod security;
+pub mod dashboard;  // NEW
+pub mod sessions;  // NEW
+pub mod pdf;  // NEW
+pub mod channels_extended;  // NEW - Phase 6 Additional Channels
+pub mod secrets;  // NEW - Phase 7 Secrets Expansion
+pub mod slack_blocks;  // NEW - Phase 8 Slack Block Kit
+pub mod execution_patterns;  // NEW - Phase 9 Death Spiral Detection
 
 /// Helper module for API error handling
 pub mod api_error {
@@ -555,6 +562,13 @@ pub fn create_router(state: AppState) -> Router {
         .merge(subagent::router())
         .merge(dynamic_tools::router())
         .merge(security::create_router())
+        .merge(dashboard::router())  // NEW
+        .merge(sessions::router())  // NEW - sessions_yield & sessions_resume
+        .merge(pdf::router())  // NEW - PDF tool
+        .merge(channels_extended::router())  // NEW - Additional Channels (Phase 6)
+        .merge(secrets::router())  // NEW - Secrets Expansion (Phase 7)
+        .merge(slack_blocks::router())  // NEW - Slack Block Kit (Phase 8)
+        .merge(execution_patterns::router())  // NEW - Death Spiral Detection (Phase 9)
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

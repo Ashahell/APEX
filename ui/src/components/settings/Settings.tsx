@@ -7,6 +7,7 @@ import { EmbedModelSettings } from './EmbedModelSettings';
 import { ApiKeysManager } from './ApiKeysManager';
 import { LiteLlmSettings } from './LiteLlmSettings';
 import { SecretsManager } from './SecretsManager';
+import { SlackBlockManager } from './SlackBlockManager';
 import { RuntimeSettings } from './RuntimeSettings';
 
 interface VmStats {
@@ -24,7 +25,7 @@ interface TotpStatus {
 
 type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a';
 type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory';
-type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel';
+type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel' | 'slackblocks';
 
 export function Settings() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('agent');
@@ -386,6 +387,16 @@ export function Settings() {
               >
                 External API
               </button>
+              <button
+                onClick={() => setExternalSubTab('slackblocks')}
+                className={`px-4 py-2 rounded-t transition-colors ${
+                  externalSubTab === 'slackblocks'
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                Slack Blocks
+              </button>
             </div>
             
             {/* Sub-tab content */}
@@ -399,6 +410,7 @@ export function Settings() {
               {externalSubTab === 'externalapi' && (
                 <div className="text-muted-foreground">External API configuration</div>
               )}
+              {externalSubTab === 'slackblocks' && <SlackBlockManager />}
             </div>
           </div>
         )}

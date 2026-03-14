@@ -3,7 +3,7 @@ import clsx from 'clsx';
 
 export type AppTab = 
   // Top-level
-  | 'chat' | 'board' | 'workflows' | 'settings' | 'theme'
+  | 'chat' | 'board' | 'workflows' | 'settings' | 'theme' | 'dashboard'
   // Memory
   | 'memory' | 'memoryStats' | 'narrative'
   // Skills
@@ -39,6 +39,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     icon: '◈',
     items: [
       { id: 'chat', label: 'Chat' },
+      { id: 'dashboard', label: 'Dashboard' },
       { id: 'board', label: 'Board' },
       { id: 'workflows', label: 'Workflows' },
       { id: 'settings', label: 'Settings' },

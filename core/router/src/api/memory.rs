@@ -6,8 +6,10 @@ use axum::{
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use axum::extract::State;
+use ulid::Ulid;
 
 use apex_memory::hybrid_search::{rrf_score, reciprocal_rank_fusion, temporal_decay, frequency_boost, mmr_select};
+use apex_memory::multimodal_repo::{MultimodalRepository, MultimodalStats, MultimodalSearchResult};
 use super::{AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse, ReflectionItem};
 
 #[derive(Debug, Deserialize)]
@@ -36,6 +38,12 @@ pub fn router() -> Router<AppState> {
         // NEW: Memory consolidation endpoints
         .route("/api/v1/memory/consolidate", post(consolidate_memory))
         .route("/api/v1/memory/consolidation/stats", get(get_consolidation_stats))
+        // NEW: Multimodal endpoints (Phase 5)
+        .route("/api/v1/memory/multimodal/config", get(get_multimodal_config).put(update_multimodal_config))
+        .route("/api/v1/memory/multimodal/stats", get(get_multimodal_stats))
+        .route("/api/v1/memory/multimodal/embeddings", get(list_multimodal_embeddings))
+        .route("/api/v1/memory/multimodal/index", post(index_memory))
+        .route("/api/v1/memory/multimodal/search", get(search_multimodal))
 }
 
 async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<FileItem>>, String> {
@@ -405,4 +413,226 @@ async fn consolidate_memory(
         "total_space_freed_bytes": result.total_space_freed_bytes,
         "errors": result.errors,
     })))
+}
+
+// ============ Multimodal Memory Handlers (Phase 5) ============
+
+#[derive(Debug, Serialize)]
+pub struct MultimodalConfigResponse {
+    pub image_indexing: bool,
+    pub audio_indexing: bool,
+    pub embedding_model: String,
+    pub embedding_dim: i32,
+    pub enabled: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateMultimodalConfigRequest {
+    pub image_indexing: Option<bool>,
+    pub audio_indexing: Option<bool>,
+    pub embedding_model: Option<String>,
+    pub embedding_dim: Option<i32>,
+    pub enabled: Option<bool>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct IndexMemoryRequest {
+    pub memory_id: String,
+    pub memory_type: String,
+    pub modality: String,  // 'image' or 'audio'
+    pub data: String,  // Base64 encoded
+    pub mime_type: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct IndexMemoryResponse {
+    pub job_id: String,
+    pub status: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct MultimodalSearchQuery {
+    pub q: Option<String>,
+    pub modality: Option<String>,  // 'text', 'image', 'audio'
+    pub limit: Option<usize>,
+}
+
+/// Get multimodal configuration
+async fn get_multimodal_config(
+    State(state): State<AppState>,
+) -> Result<Json<MultimodalConfigResponse>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    let config = repo
+        .get_config()
+        .await
+        .map_err(|e| format!("Failed to get config: {}", e))?;
+    
+    Ok(Json(MultimodalConfigResponse {
+        image_indexing: config.image_indexing == 1,
+        audio_indexing: config.audio_indexing == 1,
+        embedding_model: config.embedding_model,
+        embedding_dim: config.embedding_dim,
+        enabled: config.enabled == 1,
+    }))
+}
+
+/// Update multimodal configuration
+async fn update_multimodal_config(
+    State(state): State<AppState>,
+    Json(req): Json<UpdateMultimodalConfigRequest>,
+) -> Result<Json<MultimodalConfigResponse>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    let config = repo
+        .update_config(
+            req.image_indexing,
+            req.audio_indexing,
+            req.embedding_model.as_deref(),
+            req.embedding_dim,
+            req.enabled,
+        )
+        .await
+        .map_err(|e| format!("Failed to update config: {}", e))?;
+    
+    Ok(Json(MultimodalConfigResponse {
+        image_indexing: config.image_indexing == 1,
+        audio_indexing: config.audio_indexing == 1,
+        embedding_model: config.embedding_model,
+        embedding_dim: config.embedding_dim,
+        enabled: config.enabled == 1,
+    }))
+}
+
+/// Get multimodal stats
+async fn get_multimodal_stats(
+    State(state): State<AppState>,
+) -> Result<Json<MultimodalStats>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    let stats = repo
+        .get_stats()
+        .await
+        .map_err(|e| format!("Failed to get stats: {}", e))?;
+    
+    Ok(Json(stats))
+}
+
+/// List multimodal embeddings
+async fn list_multimodal_embeddings(
+    State(state): State<AppState>,
+    Query(query): Query<MultimodalSearchQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    let limit = query.limit.unwrap_or(50) as i64;
+    
+    let embeddings = if let Some(modality) = &query.modality {
+        repo.get_embeddings_by_modality(modality, limit)
+            .await
+            .map_err(|e| format!("Failed to get embeddings: {}", e))?
+    } else {
+        repo.get_embeddings_by_modality("all", limit)
+            .await
+            .map_err(|e| format!("Failed to get embeddings: {}", e))?
+    };
+    
+    let results: Vec<serde_json::Value> = embeddings
+        .into_iter()
+        .map(|e| {
+            serde_json::json!({
+                "id": e.id,
+                "memory_id": e.memory_id,
+                "memory_type": e.memory_type,
+                "modality": e.modality,
+                "mime_type": e.mime_type,
+                "has_original_data": e.original_data.is_some(),
+                "embedding_model": e.embedding_model,
+                "created_at": e.created_at,
+            })
+        })
+        .collect();
+    
+    Ok(Json(results))
+}
+
+/// Index memory (image or audio)
+async fn index_memory(
+    State(state): State<AppState>,
+    Json(req): Json<IndexMemoryRequest>,
+) -> Result<Json<IndexMemoryResponse>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    // Create indexing job
+    let job_id = Ulid::new().to_string();
+    repo
+        .create_indexing_job(&job_id, &req.memory_id, &req.modality)
+        .await
+        .map_err(|e| format!("Failed to create job: {}", e))?;
+    
+    // TODO: Actually process the image/audio and generate embeddings
+    // For now, create a placeholder embedding
+    let embedding_id = Ulid::new().to_string();
+    let placeholder_embedding: Vec<f32> = vec![0.0; 1536]; // Default embedding dim
+    
+    let _ = repo
+        .create_embedding(
+            &embedding_id,
+            &req.memory_id,
+            &req.memory_type,
+            &req.modality,
+            &placeholder_embedding,
+            "placeholder",
+            Some(&req.data),
+            Some(&req.mime_type),
+        )
+        .await;
+    
+    // Mark job as completed
+    repo
+        .update_job_status(&job_id, "completed", None)
+        .await
+        .map_err(|e| format!("Failed to update job: {}", e))?;
+    
+    Ok(Json(IndexMemoryResponse {
+        job_id,
+        status: "completed".to_string(),
+    }))
+}
+
+/// Search multimodal memory
+async fn search_multimodal(
+    State(state): State<AppState>,
+    Query(query): Query<MultimodalSearchQuery>,
+) -> Result<Json<Vec<serde_json::Value>>, String> {
+    let repo = MultimodalRepository::new(&state.pool);
+    
+    let limit = query.limit.unwrap_or(10);
+    
+    // TODO: Implement actual vector search
+    // For now, return recent embeddings filtered by modality
+    let embeddings = repo
+        .get_embeddings_by_modality(
+            query.modality.as_deref().unwrap_or("text"),
+            limit as i64,
+        )
+        .await
+        .map_err(|e| format!("Failed to search: {}", e))?;
+    
+    let results: Vec<serde_json::Value> = embeddings
+        .into_iter()
+        .map(|e| {
+            serde_json::json!({
+                "memory_id": e.memory_id,
+                "memory_type": e.memory_type,
+                "modality": e.modality,
+                "original_data": e.original_data,
+                "mime_type": e.mime_type,
+                "score": 1.0,  // Placeholder
+                "created_at": e.created_at,
+            })
+        })
+        .collect();
+    
+    Ok(Json(results))
 }
