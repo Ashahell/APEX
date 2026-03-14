@@ -221,6 +221,7 @@ function applyThemeToDOM(theme: Theme) {
         border: 2px outset ${getColor(button as unknown as Record<string, unknown>, 'bg', '#c0c0c0')} !important; 
       }
       .bg-primary { background: linear-gradient(180deg, ${getColor(primary as unknown as Record<string, unknown>, 'hover', '#0000ee')}, ${getColor(primary as unknown as Record<string, unknown>, 'DEFAULT', '#0000ee')}) !important; color: #fff !important; }
+      select, select option { color: #000000 !important; }
     `;
     applyCSS(css);
   } else if (isAgentZero) {
@@ -255,6 +256,7 @@ function applyThemeToDOM(theme: Theme) {
       }
       button:not(.color-picker):not([type="color"]):hover, .btn:hover { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgHover', '#303055')} !important; }
       button:not(.color-picker):not([type="color"]):active, .btn:active { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgActive', '#1a1a2e')} !important; }
+      select, select option { color: ${getColor(text as unknown as Record<string, unknown>, 'primary', '#e8e8f0')} !important; }
     `;
     applyCSS(css);
   } else {
@@ -288,6 +290,7 @@ function applyThemeToDOM(theme: Theme) {
       }
       button:not(.color-picker):not([type="color"]):hover, .btn:hover { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgHover', '#2a2a34')} !important; }
       button:not(.color-picker):not([type="color"]):active, .btn:active { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgActive', '#0a0a14')} !important; }
+      select, select option { color: ${getColor(text as unknown as Record<string, unknown>, 'primary', '#e8e8ec')} !important; }
     `;
     applyCSS(css);
   }

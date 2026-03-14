@@ -263,6 +263,14 @@ pub fn get_provider_info() -> Vec<ProviderInfo> {
             api_type: "openai".to_string(),
         },
         ProviderInfo {
+            id: "opencode".to_string(),
+            name: "OpenCode".to_string(),
+            default_url: "https://api.opencode.ai/v1".to_string(),
+            default_model: "opencode-3.5".to_string(),
+            requires_api_key: true,
+            api_type: "openai".to_string(),
+        },
+        ProviderInfo {
             id: "custom".to_string(),
             name: "Custom (OpenAI-compatible)".to_string(),
             default_url: "https://your-api.example.com/v1".to_string(),
