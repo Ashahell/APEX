@@ -508,16 +508,24 @@ echo SUCCESS: Embedding server is running and responding!
 exit /b 0
 
 :cmd_ui
-echo Starting UI dev server...
+echo Starting UI dev server on port %UI_PORT%...
 for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%UI_PORT% ^| findstr LISTENING') do (
     echo Killing existing process on port %UI_PORT% (PID: %%a)
     taskkill /F /PID %%a 2>nul
 )
-echo Starting UI on port %UI_PORT% in %UI_DIR%...
 cd /d "%UI_DIR%"
 start "APEX UI Dev" cmd /c "pnpm dev"
+echo Waiting for UI to start...
+timeout /t 5 >nul
+echo UI should be at http://localhost:%UI_PORT%
+exit /b 0
+
+:cmd_ui_serve
+echo Serving built UI on port %UI_PORT%...
+cd /d "%UI_DIR%"
+start "APEX UI" cmd /c "npx serve dist -l %UI_PORT%"
 timeout /t 3 >nul
-echo UI started on http://localhost:%UI_PORT%
+echo UI served at http://localhost:%UI_PORT%
 exit /b 0
 
 :cmd_ui_serve
