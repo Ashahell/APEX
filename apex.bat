@@ -514,13 +514,18 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%UI_PORT% ^| findstr LISTENI
     taskkill /F /PID %%a 2>nul
 )
 cd /d "%UI_DIR%"
-call pnpm dev
+echo Starting UI on port %UI_PORT%...
+start "APEX UI Dev" cmd /c "cd /d "%UI_DIR%" && pnpm dev"
+timeout /t 3 >nul
+echo UI started on http://localhost:%UI_PORT%
 exit /b 0
 
 :cmd_ui_serve
 echo Serving built UI on port %UI_PORT%...
 cd /d "%UI_DIR%"
-npx serve dist -l %UI_PORT%
+start "APEX UI" cmd /c "cd /d "%UI_DIR%" && npx serve dist -l %UI_PORT%"
+timeout /t 2 >nul
+echo UI served on http://localhost:%UI_PORT%
 exit /b 0
 
 :cmd_docker_build
