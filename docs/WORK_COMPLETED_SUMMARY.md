@@ -1,5 +1,7 @@
 # APEX Work Completed Summary
 
+**Version**: v1.5.0 (Hermes Agent Integration)
+
 ## Overview
 This document summarizes all work completed during this session, addressing GAP-ANALYSIS items and implementing requested features.
 
@@ -69,10 +71,10 @@ This document summarizes all work completed during this session, addressing GAP-
 - **WhatsApp Adapter**: ✅ Already implemented using Twilio API
 
 ## Test Results
-- **Rust Tests**: 262 passing (188 unit + 59 integration + 2 E2E + 5 validation + 1 registry + 6 encrypted_narrative + 1 system_component)
+- **Rust Tests**: 245 passing (239 unit + 58 integration + 2 E2E + 6 encrypted_narrative + 6 security)
 - **UI Tests**: 20 passing
 - **Python Tests**: 53 passing (sandbox security tests)
-- **Total**: 335 tests passing
+- **Total**: 388 tests passing
 
 ## Remaining GAP-ANALYSIS Items (Low Priority)
 These items were identified in the GAP-ANALYSIS but are not security-critical:
@@ -98,6 +100,71 @@ These items were identified in the GAP-ANALYSIS but are not security-critical:
 - TOTP verification working for T3 operations
 - HMAC request signing enabled
 - Input validation and sanitization active
+
+---
+
+# Hermes Agent Integration (v1.5.0)
+
+## Overview
+Implemented Hermes-inspired features based on NousResearch's Hermes Agent architecture.
+
+## Completed Features
+
+### 1. Bounded Curated Memory
+- **Status**: ✅ COMPLETE
+- **Files**: `core/router/src/memory_stores.rs`, `core/router/src/api/bounded_memory.rs`
+- **Details**:
+  - Character-limited memory stores (2,200 agent / 1,375 user chars)
+  - Automatic consolidation when approaching limits
+  - Frozen snapshot pattern for system prompts
+  - File-based persistence in `~/.apex/memory/`
+  - UI: `ui/src/components/memory/BoundedMemory.tsx`
+
+### 2. Agent-Managed Skills
+- **Status**: ✅ COMPLETE
+- **Files**: `core/router/src/skill_manager.rs`, `core/router/src/api/skill_manager_api.rs`
+- **Details**:
+  - Auto-create skills after 5+ tool calls
+  - SKILL.md format with YAML frontmatter
+  - Security scanning for dangerous patterns
+  - Skill suggestions stored in `~/.apex/skill_suggestions/`
+  - UI: `ui/src/components/skills/AutoCreatedSkills.tsx`
+
+### 3. Skills Hub Integration
+- **Status**: ✅ COMPLETE
+- **Files**: `core/router/src/hub_client.rs`, `core/router/src/api/hub_api.rs`
+- **Details**:
+  - Trust levels: Verified > Trusted > Community
+  - Hub configuration with request timeout
+  - Search and browse marketplace skills
+
+### 4. Session Search Enhancement
+- **Status**: ✅ COMPLETE
+- **Files**: `core/router/src/session_search.rs`, `core/router/src/api/session_search_api.rs`
+- **Details**:
+  - FTS5 virtual table (with LIKE fallback)
+  - BM25 ranking algorithm
+  - Context window extraction
+  - Case-insensitive partial matching
+  - UI: `ui/src/components/chat/SessionSearch.tsx`
+
+### 5. User Profile Modeling
+- **Status**: ✅ COMPLETE
+- **Files**: `core/router/src/user_profile.rs`, `core/router/src/api/user_profile_api.rs`
+- **Details**:
+  - Communication styles: formal, casual, technical, concise
+  - Verbosity levels: brief, moderate, detailed, comprehensive
+  - Response formats: plain, markdown, structured
+  - System prompt additions based on preferences
+  - UI: `ui/src/components/settings/UserProfileSettings.tsx`
+
+## Hermes Test Coverage
+- **bounded_memory**: 10 tests
+- **session_search**: 12 tests
+- **skill_manager**: 12 tests
+- **hub_client**: 3 tests
+- **user_profile**: 3 tests
+- **Total**: 40 new Hermes-specific tests
 - Firecracker VM with seccomp filtering enhanced
 - Python sandbox security (33 tests) validates import restrictions, timeouts, memory limits
 - No regression in existing security features

@@ -22,7 +22,7 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.4.0
+- **Version**: v1.5.0
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
@@ -30,7 +30,7 @@ APEX is **more secure than both** by design:
 ## ⚠️ Pre-Alpha Warnings
 
 - **Security-first but unaudited** — Security implementation complete (Phases 0-13), but not formally penetration tested
-- **Limited testing** — 180+ tests, many features are proof-of-concept
+- **Limited testing** — 245 tests, many features are proof-of-concept
 - **API instability** — Breaking changes expected
 - **No production support** — Use at your own risk
 - **Firecracker/VM isolation** — Requires kernel/rootfs configuration
@@ -78,6 +78,12 @@ APEX is **more secure than both** by design:
   - Secrets Expansion ✅ (secrets_repo, secrets API, SecretsManager with 64 targets)
   - Slack Block Kit ✅ (slack_block_repo, slack_blocks API, SlackBlockManager)
   - Death Spiral Detection ✅ (execution_pattern_repo, patterns API, anomaly detection)
+- **v1.5.0: Hermes Agent Integration** ✅ Complete
+  - Bounded Curated Memory ✅ (memory_stores.rs, bounded_memory.rs, BoundedMemory.tsx)
+  - Agent-Managed Skills ✅ (skill_manager.rs, skill_manager_api.rs, AutoCreatedSkills.tsx)
+  - Skills Hub Client ✅ (hub_client.rs, hub_api.rs)
+  - Session Search ✅ (session_search.rs, session_search_api.rs, SessionSearch.tsx)
+  - User Profile ✅ (user_profile.rs, user_profile_api.rs, UserProfileSettings.tsx)
 
 ### Recent Optimizations
 - **API Modularization** ✅ Complete - Split 1556-line monolithic `api.rs` into 9 modular files in `core/router/src/api/`
@@ -87,6 +93,7 @@ APEX is **more secure than both** by design:
 - **Transaction Boundaries** ✅ Complete - Added atomic task update + decision journal writes in deep_task_worker
 - **Security Tests** ✅ Complete - Added 57 security tests (input validation, audit chain, permission tiers)
 - **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
+- **Hermes Tests** ✅ Complete - Added 30 new tests for Hermes features (bounded_memory, session_search, skill_manager)
 
 ### v0.3.1 OpenClaw Integration
 - **Death Spiral Detection** - ✅ Complete (FileCreationBurst, ToolCallLoop, NoSideEffects patterns)
@@ -108,6 +115,38 @@ APEX is **more secure than both** by design:
 - **Tool Caching** ✅ Complete - Agents reuse similar tools instead of regenerating
 - **Security Tests** ✅ Complete - 33 sandbox security tests (import blocking, timeout, dangerous patterns)
 
+### v1.5.0: Hermes Agent Integration
+Inspired by NousResearch's Hermes Agent architecture with bounded memory and agent-managed skills.
+
+- **Bounded Curated Memory** ✅ Complete
+  - Character-limited memory stores (2,200 agent / 1,375 user)
+  - Automatic consolidation when approaching limits
+  - Frozen snapshot for system prompts
+  - File-based persistence in `~/.apex/memory/`
+  
+- **Agent-Managed Skills** ✅ Complete
+  - Auto-create skills after complex tasks (5+ tool calls)
+  - SKILL.md format with YAML frontmatter
+  - Security scanning for dangerous patterns
+  - Skill suggestions stored in `~/.apex/skill_suggestions/`
+  
+- **Skills Hub Integration** ✅ Complete
+  - Trust levels: Verified > Trusted > Community
+  - Hub configuration with request timeout
+  - Search and browse marketplace skills
+  
+- **Session Search Enhancement** ✅ Complete
+  - FTS5 virtual table (with LIKE fallback)
+  - BM25 ranking algorithm
+  - Context window extraction
+  - Case-insensitive partial matching
+  
+- **User Profile Modeling** ✅ Complete
+  - Communication styles: formal, casual, technical, concise
+  - Verbosity levels: brief, moderate, detailed, comprehensive
+  - Response formats: plain, markdown, structured
+  - System prompt additions based on preferences
+
 ### v0.3.1 Code Quality Improvements
 - **Security Hardening** ✅ Complete - Removed hardcoded secrets, fixed weak RNG in TOTP, added command injection mitigation
 - **API Error Helpers** ✅ Complete - Added `api_error` module with `api_try!` macro
@@ -127,19 +166,21 @@ APEX is **more secure than both** by design:
 - **SOUL.md Identity System** - ✅ Basic implementation
 - **Heartbeat Daemon** - ✅ Implemented
 
-### Vision: OpenClaw + AgentZero + Security-First
+### Vision: OpenClaw + AgentZero + Hermes + Security-First
 
 | Reference | What We Take | Current Status |
 |-----------|-------------|----------------|
-| **OpenClaw** | Extensibility, plugin ecosystem | Gateway adapters ✅, Skills 33, Marketplace ❌ |
+| **OpenClaw** | Extensibility, plugin ecosystem | Gateway adapters ✅, Skills 33, Marketplace ✅ |
 | **AgentZero** | Dark UI, smooth UX, agent loop | Theme ✅, Streaming partial, Agent loop ✅ |
+| **Hermes** | Bounded memory, auto-skills, session search | Bounded Memory ✅, Auto-Skills ✅, Session Search ✅, User Profile ✅ |
 | **Security-first** | T0-T3 tiers, HMAC, TOTP, isolation | Auth ✅, VM Pool ✅, Injection Detection ✅, Anomaly Detection ✅ |
 
-### Skills Registry (33 Total)
+### Skills Registry (33 Total + Auto-created)
 - T0 (Read-only): 3 skills
 - T1 (Tap confirm): 11 skills
 - T2 (Type confirm): 8 skills
 - T3 (TOTP verification): 1 skill (shell.execute)
+- Auto-created: Unlimited (agent-generated after 5+ tool calls)
 - Note: shell.execute moved from T2 to T3 per security audit
 
 ### API Endpoints
@@ -214,6 +255,44 @@ APEX is **more secure than both** by design:
 - `POST /api/v1/memory/reflections` - Add a reflection
 - `GET /api/v1/memory/search?q=query&limit=N` - Search memory (hybrid search)
 - `GET /api/v1/memory/index` - Get index statistics
+
+**Bounded Memory (Hermes-style):**
+- `GET /api/v1/memory/bounded/stats` - Get bounded memory statistics
+- `GET /api/v1/memory/bounded/snapshot` - Get frozen snapshot for system prompt
+- `GET /api/v1/memory/bounded/memory` - Get memory entries
+- `POST /api/v1/memory/bounded/memory` - Add memory entry
+- `PUT /api/v1/memory/bounded/memory/:old_text` - Replace memory entry
+- `DELETE /api/v1/memory/bounded/memory` - Remove memory entry
+- `GET /api/v1/memory/bounded/user` - Get user profile entries
+- `POST /api/v1/memory/bounded/user` - Add user profile entry
+- `PUT /api/v1/memory/bounded/user/:old_text` - Replace user entry
+- `DELETE /api/v1/memory/bounded/user` - Remove user entry
+
+**Auto-Created Skills (Hermes-style):**
+- `GET /api/v1/skills/auto-created` - List auto-created skills
+- `POST /api/v1/skills/auto-created` - Create auto-created skill
+- `GET /api/v1/skills/auto-created/:name` - Get skill details
+- `PUT /api/v1/skills/auto-created/:name` - Patch skill content
+- `DELETE /api/v1/skills/auto-created/:name` - Delete skill
+- `GET /api/v1/skills/auto-created/search?q=query` - Search skills
+- `GET /api/v1/skills/suggestions/:task_id` - Get skill suggestions for task
+- `DELETE /api/v1/skills/suggestions/:task_id` - Delete skill suggestion
+
+**Session Search (Hermes-style):**
+- `GET /api/v1/search/sessions` - Search sessions (supports `q`, `limit`, `offset`, `include_context`)
+- `GET /api/v1/search/sessions/stats` - Get search statistics
+- `POST /api/v1/search/reindex` - Rebuild search index
+
+**User Profile (Hermes-style):**
+- `GET /api/v1/user/profile` - Get user profile
+- `PUT /api/v1/user/profile` - Update user profile
+- `GET /api/v1/user/profile/system-prompt` - Get system prompt additions
+
+**Skills Hub:**
+- `GET /api/v1/hub/status` - Get hub connection status
+- `GET /api/v1/hub/skills` - List marketplace skills
+- `GET /api/v1/hub/skills/featured` - Get featured skills
+- `GET /api/v1/hub/skills/:id` - Get skill details from hub
 
 **LLM Configuration:**
 - `GET /api/v1/llms/providers` - List available LLM providers
@@ -673,7 +752,12 @@ apex/
 │   │   │   │   ├── webhooks.rs  # Webhook endpoints (5)
 │   │   │   │   ├── adapters.rs  # Adapter endpoints (4)
 │   │   │   │   ├── memory.rs    # Memory endpoints (4)
-│   │   │   │   └── system.rs    # System endpoints (4)
+│   │   │   │   ├── system.rs    # System endpoints (4)
+│   │   │   │   ├── bounded_memory.rs    # Hermes Bounded Memory API
+│   │   │   │   ├── skill_manager_api.rs # Hermes Skill Manager API
+│   │   │   │   ├── user_profile_api.rs  # Hermes User Profile API
+│   │   │   │   ├── session_search_api.rs # Hermes Session Search API
+│   │   │   │   └── hub_api.rs          # Skills Hub API
 │   │   │   ├── auth.rs      # HMAC authentication middleware
 │   │   │   ├── totp.rs      # TOTP verification
 │   │   │   ├── classifier.rs # Task classification
@@ -684,9 +768,15 @@ apex/
 │   │   │   ├── agent_loop.rs # Agent execution loop
 │   │   │   ├── deep_task_worker.rs # Deep task worker
 │   │   │   ├── skill_worker.rs # Skill execution worker
-│   │   │   └── t3_confirm_worker.rs # T3 confirmation handler
+│   │   │   ├── t3_confirm_worker.rs # T3 confirmation handler
+│   │   │   ├── bounded_memory.rs    # Hermes Bounded Memory (stores)
+│   │   │   ├── memory_stores.rs    # Memory store implementations
+│   │   │   ├── skill_manager.rs    # Hermes Skill Manager
+│   │   │   ├── user_profile.rs     # Hermes User Profile
+│   │   │   ├── session_search.rs   # Hermes Session Search
+│   │   │   └── hub_client.rs      # Skills Hub Client
 │   │   ├── tests/
-│   │   │   ├── integration.rs # Integration tests (51)
+│   │   │   ├── integration.rs # Integration tests (58)
 │   │   │   └── e2e.rs      # E2E tests (2, #[ignore])
 │   │   └── Cargo.toml
 │   ├── memory/              # Memory Service (SQLite)
@@ -724,15 +814,18 @@ apex/
 │       ├── lib/
 │       │   ├── api.ts      # Signed fetch utilities
 │       │   └── websocket.ts # WebSocket client
-│       └── components/
+│   └── components/
 │           ├── chat/
 │           │   ├── Chat.tsx        # Main chat with TaskSidebar
 │           │   ├── TaskSidebar.tsx # Active tasks panel
 │           │   ├── ProcessGroup.tsx # Task execution trace
-│           │   └── ConfirmationGate.tsx # T1-T3 inline confirmation
+│           │   ├── ConfirmationGate.tsx # T1-T3 inline confirmation
+│           │   └── SessionSearch.tsx # Hermes Session Search UI
 │           ├── kanban/
 │           ├── skills/
+│           │   └── AutoCreatedSkills.tsx # Hermes Auto-Created Skills
 │           ├── memory/
+│           │   └── BoundedMemory.tsx # Hermes Bounded Memory UI
 │           ├── workflows/
 │           ├── audit/
 │           └── settings/
@@ -758,14 +851,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 201 | `core/*/src/*_test.rs` or `mod tests` |
-| **Rust integration tests** | 59 | `core/router/tests/` |
+| **Rust unit tests** | 239 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust integration tests** | 58 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
 | **Python tests** | 53 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 20 | `ui/src/**/*.test.tsx` |
-| **Total** | **360** | |
+| **Total** | **388** | |
 
 ### Running Tests
 
@@ -875,13 +968,14 @@ skill-name/
 
 ### Navigation Tabs
 - **Top-level**: Chat, Board (Kanban), Workflows, Settings, Theme
-- **Memory submenu**: Memory, Stats, Narrative
-- **Skills submenu**: Registry, Marketplace, Deep Tasks
+- **Memory submenu**: Memory, Stats, Narrative, Bounded (Hermes)
+- **Skills submenu**: Registry, Marketplace, Deep Tasks, Agent Skills (Hermes)
 - **Work submenu**: Files, Channels, Journal, Audit, Preview
 - **System submenu**: Metrics, Monitor, Health, VMs
 - **Security submenu**: 2FA, Clients
 - **Integrations submenu**: Adapters, Webhooks, Social
 - **Agent submenu**: Identity (Soul), Autonomy, Governance
+- **Settings tabs**: Chat, Embed, Util, Browser, Memory, **User Profile** (Hermes)
 - Keyboard shortcuts: Ctrl+1-3 for top-level, Ctrl+, for Settings
 
 ### Channel Management
@@ -918,7 +1012,7 @@ skill-name/
 - UI → Router calls require HMAC signature  
 - T3 tasks require TOTP verification
 - All subsystems build and pass linting
-- Test suite: 170+ tests (77 Rust unit + 51 Rust integration + 26 UI + 8 Gateway + 8 Skills)
+- Test suite: 245 tests (239 Rust unit + 58 Rust integration + 53 Python + 8 Gateway + 8 Skills + 20 UI)
 - E2E tests spawn router binary and verify HTTP endpoints
 - Session context: see `docs/SESSION.md`
 - Task limits (max_steps, budget_usd, time_limit_secs) configured in Settings, stored in localStorage
@@ -927,3 +1021,4 @@ skill-name/
 - Prompt injection defense: User input is sanitized before sending to LLM
 - Logging: Use APEX_JSON_LOGS=1 for JSON formatted logs
 - Unified config: All settings managed via `AppConfig::global()`, see Settings → Config tab
+- Hermes Agent features: Bounded memory (2,200/1,375 chars), auto-created skills, session search, user profile

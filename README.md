@@ -10,6 +10,7 @@ APEX combines the **best of OpenClaw and AgentZero** with **significantly strong
 |-----------|-------------|
 | **OpenClaw** | Open architecture, extensibility, community-driven plugin ecosystem, messaging adapters |
 | **AgentZero** | Dark navy/cyan aesthetic, polished UI, smooth UX patterns, agent loop logic |
+| **Hermes** | Bounded memory, auto-created skills, session search, user profile |
 | **Security-first** | Hardened beyond both — T0-T3 permission tiers, HMAC auth, TOTP verification, input sanitization, connection pooling |
 
 APEX is **more secure than both** by design:
@@ -28,7 +29,7 @@ APEX is **more secure than both** by design:
 
 ## Status
 
-**Version**: v1.4.0 (Pre-Alpha)
+**Version**: v1.5.0 (Pre-Alpha) - Hermes Agent Integration Complete
 
 ## Architecture
 
@@ -77,6 +78,18 @@ APEX is **more secure than both** by design:
 | **Additional Channels** | 10+ new messaging adapters (Signal, IRC, Matrix, Teams, etc.) |
 | **Secrets Expansion** | 64 predefined secret targets, rotation logs, access audit |
 | **Slack Block Kit** | Rich Slack messages, 6 pre-built templates, variable interpolation |
+
+### Hermes Agent Integration Features (v1.5.0)
+
+Inspired by NousResearch's Hermes Agent architecture.
+
+| Feature | Description |
+|---------|-------------|
+| **Bounded Curated Memory** | Character-limited stores (2,200 agent / 1,375 user chars) with automatic consolidation |
+| **Agent-Managed Skills** | Auto-create skills after 5+ tool calls, SKILL.md format with YAML frontmatter |
+| **Skills Hub** | Trust levels (Verified > Trusted > Community), marketplace integration |
+| **Session Search** | FTS5 with LIKE fallback, BM25 ranking, context extraction |
+| **User Profile** | Communication styles, verbosity levels, response format preferences |
 
 ### Advanced Features (Research/POC)
 - **SOUL.md Identity** - Agent reads identity file on wake (POC)
@@ -198,7 +211,7 @@ GET /api/v1/secrets/access/failed
 - [x] Formal security audit (Phases 1-2 complete)
 - [x] Dynamic tool generation (POC)
 - [x] Subagent pool (POC)
-- [x] Comprehensive testing (354+ tests)
+- [x] Comprehensive testing (388+ tests)
 - [x] Task classification rules (Instant/Shallow/Deep tiers)
 - [x] Capability enforcement (fail-closed for unknown skills)
 - [x] Gateway optional (auth can be disabled)
@@ -206,6 +219,7 @@ GET /api/v1/secrets/access/failed
 - [x] Production hardening (seccomp, AppArmor, SIEM docs)
 - [x] SystemComponent trait (unified lifecycle management)
 - [x] OpenClaw Features (v1.4.0) - Dashboard, Fast Mode, Sessions, PDF, Multimodal, Channels, Secrets
+- [x] Hermes Agent Integration (v1.5.0) - Bounded Memory, Auto-Skills, Hub, Session Search, User Profile
 
 ## License
 
