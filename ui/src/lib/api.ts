@@ -1120,3 +1120,146 @@ export async function getPatternTemplate(patternType: string): Promise<PatternAl
 }
 
 export { API_BASE };
+
+// ============================================================================
+// Bounded Memory (Hermes-style)
+// ============================================================================
+
+export interface BoundedMemoryEntry {
+  id: string;
+  content: string;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface BoundedMemoryStats {
+  memory: {
+    store_type: 'Memory' | 'User';
+    used_chars: number;
+    char_limit: number;
+    usage_percent: number;
+    entry_count: number;
+    is_warning: boolean;
+    is_critical: boolean;
+  };
+  user: {
+    store_type: 'Memory' | 'User';
+    used_chars: number;
+    char_limit: number;
+    usage_percent: number;
+    entry_count: number;
+    is_warning: boolean;
+    is_critical: boolean;
+  };
+  combined_usage_percent: number;
+}
+
+export interface EntryListResponse {
+  store_type: string;
+  entries: BoundedMemoryEntry[];
+  used_chars: number;
+  char_limit: number;
+  usage_percent: number;
+}
+
+export interface AddEntryResponse {
+  success: boolean;
+  id: string;
+  used_chars: number;
+  char_limit: number;
+  usage_percent: number;
+}
+
+export interface SnapshotResponse {
+  memory_snapshot: string;
+  user_snapshot: string;
+  combined: string;
+}
+
+// Get bounded memory stats
+export async function getBoundedMemoryStats(): Promise<BoundedMemoryStats> {
+  const response = await apiGet('/api/v1/memory/bounded/stats');
+  if (!response.ok) throw new Error('Failed to get bounded memory stats');
+  return response.json();
+}
+
+// Get frozen snapshot for system prompt
+export async function getBoundedMemorySnapshot(): Promise<SnapshotResponse> {
+  const response = await apiGet('/api/v1/memory/bounded/snapshot');
+  if (!response.ok) throw new Error('Failed to get bounded memory snapshot');
+  return response.json();
+}
+
+// Get memory entries (MEMORY.md)
+export async function getMemoryEntries(): Promise<EntryListResponse> {
+  const response = await apiGet('/api/v1/memory/bounded/memory');
+  if (!response.ok) throw new Error('Failed to get memory entries');
+  return response.json();
+}
+
+// Add memory entry
+export async function addMemoryEntry(content: string): Promise<AddEntryResponse> {
+  const response = await apiPost('/api/v1/memory/bounded/memory', { content });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to add memory entry');
+  }
+  return response.json();
+}
+
+// Replace memory entry
+export async function replaceMemoryEntry(oldText: string, newContent: string): Promise<{ success: boolean }> {
+  const response = await apiPut(`/api/v1/memory/bounded/memory/${encodeURIComponent(oldText)}`, { new_content: newContent });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to replace memory entry');
+  }
+  return response.json();
+}
+
+// Remove memory entry
+export async function removeMemoryEntry(oldText: string): Promise<{ success: boolean }> {
+  const response = await apiDelete(`/api/v1/memory/bounded/memory?old_text=${encodeURIComponent(oldText)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to remove memory entry');
+  }
+  return response.json();
+}
+
+// Get user entries (USER.md)
+export async function getUserEntries(): Promise<EntryListResponse> {
+  const response = await apiGet('/api/v1/memory/bounded/user');
+  if (!response.ok) throw new Error('Failed to get user entries');
+  return response.json();
+}
+
+// Add user entry
+export async function addUserEntry(content: string): Promise<AddEntryResponse> {
+  const response = await apiPost('/api/v1/memory/bounded/user', { content });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to add user entry');
+  }
+  return response.json();
+}
+
+// Replace user entry
+export async function replaceUserEntry(oldText: string, newContent: string): Promise<{ success: boolean }> {
+  const response = await apiPut(`/api/v1/memory/bounded/user/${encodeURIComponent(oldText)}`, { new_content: newContent });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to replace user entry');
+  }
+  return response.json();
+}
+
+// Remove user entry
+export async function removeUserEntry(oldText: string): Promise<{ success: boolean }> {
+  const response = await apiDelete(`/api/v1/memory/bounded/user?old_text=${encodeURIComponent(oldText)}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ message: response.statusText }));
+    throw new Error(error.message || 'Failed to remove user entry');
+  }
+  return response.json();
+}

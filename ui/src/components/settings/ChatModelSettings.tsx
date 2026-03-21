@@ -10,6 +10,20 @@ interface ProviderInfo {
   api_type: string;
 }
 
+// Fallback providers in case API fails
+const FALLBACK_PROVIDERS: ProviderInfo[] = [
+  { id: "local", name: "Local (llama.cpp)", default_url: "http://localhost:8080/v1", default_model: "qwen3-4b", requires_api_key: false, api_type: "openai" },
+  { id: "ollama", name: "Ollama", default_url: "http://localhost:11434/v1", default_model: "llama3.1", requires_api_key: false, api_type: "openai" },
+  { id: "openai", name: "OpenAI", default_url: "https://api.openai.com/v1", default_model: "gpt-4o", requires_api_key: true, api_type: "openai" },
+  { id: "anthropic", name: "Anthropic (Claude)", default_url: "https://api.anthropic.com", default_model: "claude-sonnet-4-20250514", requires_api_key: true, api_type: "anthropic" },
+  { id: "google", name: "Google (Gemini)", default_url: "https://generativelanguage.googleapis.com/v1", default_model: "gemini-2.0-flash", requires_api_key: true, api_type: "google" },
+  { id: "opencode", name: "OpenCode Zen", default_url: "https://opencode.ai/zen", default_model: "big-pickle", requires_api_key: true, api_type: "openai" },
+  { id: "openrouter", name: "OpenRouter", default_url: "https://openrouter.ai/api/v1", default_model: "anthropic/claude-sonnet-4-20250514", requires_api_key: true, api_type: "openai" },
+  { id: "groq", name: "Groq", default_url: "https://api.groq.com/openai/v1", default_model: "llama-3.3-70b-versatile", requires_api_key: true, api_type: "openai" },
+  { id: "together", name: "Together AI", default_url: "https://api.together.ai/v1", default_model: "meta-llama/Llama-3.3-70B-Instruct", requires_api_key: true, api_type: "openai" },
+  { id: "custom", name: "Custom (OpenAI-compatible)", default_url: "https://your-api.example.com/v1", default_model: "model-name", requires_api_key: false, api_type: "openai" },
+];
+
 interface LlmConfig {
   id: string;
   name: string;
@@ -67,6 +81,10 @@ export function ChatModelSettings() {
   const [formData, setFormData] = useState<FormData>(DEFAULT_FORM);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, { success: boolean; message: string; latency_ms?: number }>>({});
+  const [availableModels, setAvailableModels] = useState<{id: string, name: string}[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
+  const [showModelPicker, setShowModelPicker] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -74,17 +92,38 @@ export function ChatModelSettings() {
 
   const loadData = async () => {
     try {
+      // Check if router is reachable first (silently fail if not)
+      await fetch('/api/v1/llms/providers', { method: 'GET' });
+    } catch {
+      // Silently fail - we'll get errors from the actual API calls anyway
+    }
+    
+    try {
       const [llmsRes, defaultRes, providersRes] = await Promise.all([
-        apiGet('/api/v1/llms').then(r => r.json() as Promise<LlmConfig[]>),
-        apiGet('/api/v1/llms/default').then(r => r.json() as Promise<LlmConfig | null>),
-        apiGet('/api/v1/llms/providers').then(r => r.json() as Promise<ProviderInfo[]>),
+        apiGet('/api/v1/llms').then(r => { if (!r.ok) throw new Error('Failed'); return r.json() as Promise<LlmConfig[]>; }).catch(() => []),
+        apiGet('/api/v1/llms/default').then(r => r.ok ? r.json() as Promise<LlmConfig | null> : null).catch(() => null),
+        apiGet('/api/v1/llms/providers').then(r => r.ok ? r.json() as Promise<ProviderInfo[]> : FALLBACK_PROVIDERS).catch(() => FALLBACK_PROVIDERS),
       ]);
       setLlms(llmsRes || []);
       setDefaultLlmId(defaultRes?.id || null);
-      setProviders(providersRes || []);
       
-      if (providersRes && providersRes.length > 0) {
-        const defaultProvider = providersRes.find(p => p.id === 'local') || providersRes[0];
+      // Use API providers or fallback
+      const providers = (providersRes && providersRes.length > 0) ? providersRes : FALLBACK_PROVIDERS;
+      setProviders(providers);
+      
+      // Find default LLM or use first provider
+      let defaultProvider = providers.find(p => p.id === 'local') || providers[0];
+      
+      // If there's a default LLM in the system, use its config
+      if (defaultRes) {
+        setFormData(prev => ({
+          ...prev,
+          name: defaultRes.name,
+          provider: defaultRes.provider,
+          url: defaultRes.url,
+          model: defaultRes.model,
+        }));
+      } else if (defaultProvider) {
         setFormData(prev => ({
           ...prev,
           provider: defaultProvider.id,
@@ -94,6 +133,9 @@ export function ChatModelSettings() {
       }
     } catch (err) {
       console.error('Failed to load data:', err);
+      // Use fallback providers on error
+      setProviders(FALLBACK_PROVIDERS);
+      setError('Could not connect to router. Using offline mode.');
     } finally {
       setLoading(false);
     }
@@ -109,13 +151,44 @@ export function ChatModelSettings() {
         model: provider.default_model,
         api_key: provider.requires_api_key ? prev.api_key : '',
       }));
+      // Reset model picker when provider changes
+      setAvailableModels([]);
+      setShowModelPicker(false);
     }
+  };
+
+  const handleBrowseModels = async () => {
+    const provider = providers.find(p => p.id === formData.provider);
+    if (!provider) return;
+    
+    setLoadingModels(true);
+    setShowModelPicker(true);
+    try {
+      const res = await apiPost('/api/v1/llms/list-models', {
+        url: formData.url,
+        api_key: formData.api_key || null,
+        provider: formData.provider,
+      });
+      const models = await res.json() as {id: string, name: string}[];
+      setAvailableModels(models || []);
+    } catch (err) {
+      console.error('Failed to load models:', err);
+      setAvailableModels([]);
+    } finally {
+      setLoadingModels(false);
+    }
+  };
+
+  const handleSelectModel = (modelId: string) => {
+    setFormData(prev => ({ ...prev, model: modelId }));
+    setShowModelPicker(false);
   };
 
   const handleAddLlm = async () => {
     if (!formData.name || !formData.url || !formData.model) return;
     
     setSaving(true);
+    setError(null);
     try {
       const res = await apiPost('/api/v1/llms', {
         name: formData.name,
@@ -131,6 +204,13 @@ export function ChatModelSettings() {
         rl_output: formData.rl_output,
         kwargs: formData.kwargs || null,
       });
+      
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ message: 'Failed to save LLM' }));
+        setError(errData.message || 'Failed to save LLM');
+        return;
+      }
+      
       const newLlm = await res.json() as LlmConfig;
       setLlms([...llms, newLlm]);
       setShowAddForm(false);
@@ -142,6 +222,7 @@ export function ChatModelSettings() {
       }
     } catch (err) {
       console.error('Failed to add LLM:', err);
+      setError('Failed to add LLM. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -256,6 +337,11 @@ export function ChatModelSettings() {
       {(showAddForm || editingId) && (
         <div className="border rounded-lg p-4 bg-card space-y-4">
           <h4 className="font-semibold">{editingId ? 'Edit LLM' : 'Add New LLM'}</h4>
+          {error && (
+            <div className="bg-red-500/10 border border-red-500 text-red-500 px-3 py-2 rounded text-sm">
+              {error}
+            </div>
+          )}
           <div className="grid gap-4 max-w-2xl">
             <div className="grid grid-cols-4 gap-2 items-center">
               <label className="text-sm">Name</label>
@@ -297,13 +383,50 @@ export function ChatModelSettings() {
             </div>
             <div className="grid grid-cols-4 gap-2 items-center">
               <label className="text-sm">Model</label>
-              <input
-                type="text"
-                value={formData.model}
-                onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                className="col-span-3 px-2 py-1 rounded border bg-background text-foreground"
-              />
+              <div className="col-span-3 flex gap-2">
+                <input
+                  type="text"
+                  value={formData.model}
+                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                  className="flex-1 px-2 py-1 rounded border bg-background text-foreground"
+                  placeholder="Enter model name or browse..."
+                />
+                <button
+                  type="button"
+                  onClick={handleBrowseModels}
+                  disabled={loadingModels || !formData.url}
+                  className="px-3 py-1 text-sm border rounded hover:bg-muted disabled:opacity-50 whitespace-nowrap"
+                >
+                  {loadingModels ? 'Loading...' : 'Browse'}
+                </button>
+              </div>
             </div>
+            {showModelPicker && (
+              <div className="grid grid-cols-4 gap-2 items-start">
+                <label className="text-sm pt-1">Available Models</label>
+                <div className="col-span-3 border rounded max-h-48 overflow-y-auto bg-background">
+                  {availableModels.length === 0 ? (
+                    <div className="p-3 text-sm text-muted-foreground">
+                      {loadingModels ? 'Loading models...' : 'No models found. Make sure URL and API key are correct.'}
+                    </div>
+                  ) : (
+                    <div className="divide-y">
+                      {availableModels.map((model) => (
+                        <button
+                          key={model.id}
+                          type="button"
+                          onClick={() => handleSelectModel(model.id)}
+                          className="w-full text-left px-3 py-2 text-sm hover:bg-muted truncate"
+                          title={model.name}
+                        >
+                          {model.id}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
             {currentProvider?.requires_api_key && (
               <div className="grid grid-cols-4 gap-2 items-center">
                 <label className="text-sm">API Key</label>
@@ -380,7 +503,15 @@ export function ChatModelSettings() {
                 onClick={() => {
                   setShowAddForm(false);
                   setEditingId(null);
-                  setFormData(DEFAULT_FORM);
+                  // Reset to default provider or first available
+                  const defaultProvider = providers.find(p => p.id === 'local') || providers[0] || FALLBACK_PROVIDERS[0];
+                  setFormData({
+                    ...DEFAULT_FORM,
+                    provider: defaultProvider?.id || 'local',
+                    url: defaultProvider?.default_url || 'http://localhost:8080/v1',
+                    model: defaultProvider?.default_model || 'qwen3-4b',
+                  });
+                  setError(null);
                 }}
                 className="px-4 py-2 rounded border hover:bg-muted"
               >
@@ -394,7 +525,7 @@ export function ChatModelSettings() {
       {/* LLM List */}
       <div className="flex justify-between items-center">
         <button
-          onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(DEFAULT_FORM); }}
+          onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(DEFAULT_FORM); setError(null); }}
           className="bg-primary text-primary-foreground px-4 py-2 rounded hover:bg-primary/90"
         >
           + Add LLM

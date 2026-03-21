@@ -5,6 +5,7 @@ import { Chat } from './components/chat/Chat';
 import { DashboardLayout } from './components/dashboard/DashboardLayout';
 import { Skills } from './components/skills/Skills';
 import { SkillMarketplace } from './components/skills/SkillMarketplace';
+import { AutoCreatedSkills } from './components/skills/AutoCreatedSkills';
 import { ConsequenceViewer } from './components/chat/ConsequenceViewer';
 import { Files } from './components/files/Files';
 import { Settings } from './components/settings/Settings';
@@ -40,7 +41,7 @@ import { wsClient } from './lib/websocket';
 const TAB_ORDER: AppTab[] = [
   'chat', 'dashboard', 'board', 'workflows', 'settings', 'theme',
   'memory', 'memoryStats', 'narrative',
-  'skills', 'marketplace', 'deep',
+  'skills', 'marketplace', 'autoCreatedSkills', 'deep',
   'files', 'channels', 'journal', 'audit', 'consequences',
   'metrics', 'monitoring', 'health', 'vm',
   'totp', 'clients',
@@ -122,6 +123,7 @@ function AppContent() {
       case 'narrative': return <NarrativeMemoryViewer />;
       case 'skills': return <Skills />;
       case 'marketplace': return <SkillMarketplace />;
+      case 'autoCreatedSkills': return <AutoCreatedSkills />;
       case 'deep': return <DeepTaskPanel />;
       case 'files': return <Files />;
       case 'channels': return <ChannelManager />;

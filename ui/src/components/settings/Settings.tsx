@@ -3,12 +3,15 @@ import { apiGet, apiPost, setSetting, deleteSetting, Setting, API_BASE } from '.
 import { ConfigViewer } from './ConfigViewer';
 import { McpManager } from './McpManager';
 import { ChatModelSettings } from './ChatModelSettings';
+import { UtilModelSettings } from './UtilModelSettings';
+import { BrowserModelSettings } from './BrowserModelSettings';
 import { EmbedModelSettings } from './EmbedModelSettings';
 import { ApiKeysManager } from './ApiKeysManager';
 import { LiteLlmSettings } from './LiteLlmSettings';
 import { SecretsManager } from './SecretsManager';
 import { SlackBlockManager } from './SlackBlockManager';
 import { RuntimeSettings } from './RuntimeSettings';
+import { UserProfileSettings } from './UserProfileSettings';
 
 interface VmStats {
   enabled: boolean;
@@ -24,7 +27,7 @@ interface TotpStatus {
 }
 
 type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a';
-type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory';
+type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory' | 'profile';
 type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel' | 'slackblocks';
 
 export function Settings() {
@@ -212,78 +215,24 @@ export function Settings() {
               >
                 Memory
               </button>
+              <button
+                onClick={() => setAgentSubTab('profile')}
+                className={`px-4 py-2 rounded-t transition-colors ${
+                  agentSubTab === 'profile'
+                    ? 'bg-primary/10 text-primary border-b-2 border-primary'
+                    : 'hover:bg-muted'
+                }`}
+              >
+                User Profile
+              </button>
             </div>
             
               {/* Sub-tab content */}
             <div className="border rounded-lg p-4">
               {agentSubTab === 'chat' && <ChatModelSettings />}
               {agentSubTab === 'embed' && <EmbedModelSettings />}
-              {agentSubTab === 'util' && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-2">Util Model</h3>
-                    <p className="text-sm text-muted-foreground mb-4">Model used for utility tasks like classification and routing</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Provider</label>
-                      <select className="w-full px-3 py-2 rounded-lg border bg-background">
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic</option>
-                        <option value="ollama">Ollama</option>
-                        <option value="litellm">LiteLLM</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Model</label>
-                      <input type="text" placeholder="gpt-4o-mini" className="w-full px-3 py-2 rounded-lg border bg-background" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Use same as Chat Model</div>
-                      <div className="text-xs text-muted-foreground">Use chat model for utility tasks</div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-[#4248f1] after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                    </label>
-                  </div>
-                </div>
-              )}
-              {agentSubTab === 'browser' && (
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="font-semibold mb-2">Browser Model</h3>
-                    <p className="text-sm text-muted-foreground mb-4">Model used for web browsing and scraping tasks</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Provider</label>
-                      <select className="w-full px-3 py-2 rounded-lg border bg-background">
-                        <option value="openai">OpenAI</option>
-                        <option value="anthropic">Anthropic</option>
-                        <option value="ollama">Ollama</option>
-                        <option value="litellm">LiteLLM</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-2">Model</label>
-                      <input type="text" placeholder="gpt-4o" className="w-full px-3 py-2 rounded-lg border bg-background" />
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                    <div>
-                      <div className="font-medium">Use same as Chat Model</div>
-                      <div className="text-xs text-muted-foreground">Use chat model for browser tasks</div>
-                    </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" className="sr-only peer" defaultChecked />
-                      <div className="w-11 h-6 bg-muted rounded-full peer peer-checked:bg-[#4248f1] after:content-[''] after:absolute after:top-0.5 after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                    </label>
-                  </div>
-                </div>
-              )}
+              {agentSubTab === 'util' && <UtilModelSettings />}
+              {agentSubTab === 'browser' && <BrowserModelSettings />}
               {agentSubTab === 'memory' && (
                 <div className="space-y-4">
                   <div>
@@ -323,6 +272,7 @@ export function Settings() {
                   </div>
                 </div>
               )}
+              {agentSubTab === 'profile' && <UserProfileSettings />}
             </div>
           </div>
         )}

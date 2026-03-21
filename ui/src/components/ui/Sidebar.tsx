@@ -7,7 +7,7 @@ export type AppTab =
   // Memory
   | 'memory' | 'memoryStats' | 'narrative'
   // Skills
-  | 'skills' | 'marketplace' | 'deep'
+  | 'skills' | 'marketplace' | 'autoCreatedSkills' | 'deep'
   // Work
   | 'files' | 'channels' | 'journal' | 'audit' | 'consequences'
   // System
@@ -63,6 +63,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
     items: [
       { id: 'skills', label: 'Registry' },
       { id: 'marketplace', label: 'Marketplace' },
+      { id: 'autoCreatedSkills', label: 'Agent Skills' },
       { id: 'deep', label: 'Deep Tasks' },
     ],
   },
