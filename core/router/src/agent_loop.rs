@@ -34,6 +34,19 @@ const INJECTION_PATTERNS: &[&str] = &[
     r"(?i)translate\s+.*instructions",
 ];
 
+// Bounded memory constants (Hermes-style)
+/// Minimum tool calls to trigger agent memory creation
+const MIN_TOOL_CALLS_FOR_MEMORY: u32 = 3;
+/// Triggers that indicate memory-worthy content
+const MEMORY_TRIGGERS: &[&str] = &[
+    "learned",
+    "discovered",
+    "figured out",
+    "found that",
+    "remember to",
+    "important:",
+];
+
 fn sanitize_for_llm(input: &str) -> String {
     let mut result = input.to_string();
     
@@ -57,12 +70,15 @@ pub struct AgentConfig {
     pub use_llm: bool,
     pub llama_url: Option<String>,
     pub llama_model: Option<String>,
+    pub llama_api_key: Option<String>,
     pub use_tir: bool,
     pub enable_streaming: bool,
     pub enable_tool_generation: bool,
     pub enable_subagents: bool,
     pub tool_registry: Option<ToolRegistry>,
     pub subagent_pool: Option<SubAgentPool>,
+    /// Enable bounded memory for agent self-improvement
+    pub enable_bounded_memory: bool,
 }
 
 impl Default for AgentConfig {
@@ -73,6 +89,11 @@ impl Default for AgentConfig {
 
 impl AgentConfig {
     pub fn from_config(config: &AppConfig) -> Self {
+        // Get API key from the default LLM if available
+        let api_key = config.agent.llms.iter()
+            .find(|l| l.id == config.agent.default_llm_id.as_deref().unwrap_or("default"))
+            .and_then(|l| l.api_key.clone());
+        
         AgentConfig {
             max_steps: config.agent.max_iterations as u32,
             max_budget_usd: config.agent.max_budget_cents as f64 / 100.0,
@@ -88,12 +109,14 @@ impl AgentConfig {
             use_llm: config.agent.use_llm,
             llama_url: Some(config.agent.llama_url.clone()),
             llama_model: Some(config.agent.llama_model.clone()),
+            llama_api_key: api_key,
             use_tir: false,
             enable_streaming: false,
             enable_tool_generation: true,
             enable_subagents: true,
             tool_registry: Some(ToolRegistry::new()),
             subagent_pool: Some(SubAgentPool::new(3)),
+            enable_bounded_memory: true,
         }
     }
 }
@@ -705,7 +728,7 @@ History:
                     }
                 }
 
-                let client = LlamaClient::new(url.clone(), model.clone());
+                let client = LlamaClient::new(url.clone(), model.clone(), self.config.llama_api_key.clone());
                 match client
                     .chat(
                         "You are an autonomous agent. Respond with a single action to take.",
@@ -761,7 +784,7 @@ History:
                     sanitized_action
                 );
 
-                let client = crate::llama::LlamaClient::new(url.clone(), model.clone());
+                let client = crate::llama::LlamaClient::new(url.clone(), model.clone(), self.config.llama_api_key.clone());
                 match client
                     .chat("You are a helpful AI assistant.", &prompt)
                     .await
@@ -858,6 +881,81 @@ History:
         // Simple subtask execution - returns a description of what would be done
         // In a full implementation, this would create a proper agent loop
         format!("Executed subtask: {}", description)
+    }
+    
+    /// Check if the current state contains memory-worthy content
+    /// Returns Some(suggestion) if memory should be saved, None otherwise
+    pub fn suggest_memory_entry(&self, state: &AgentState) -> Option<String> {
+        if !self.config.enable_bounded_memory {
+            return None;
+        }
+        
+        // Check if task had enough tool calls
+        let tool_calls = state.history.iter()
+            .filter(|s| matches!(s, AgentStep { action, .. } if !action.is_empty()))
+            .count() as u32;
+        
+        if tool_calls < MIN_TOOL_CALLS_FOR_MEMORY {
+            return None;
+        }
+        
+        // Check if the goal or observations contain memory triggers
+        let goal_lower = state.goal.to_lowercase();
+        for trigger in MEMORY_TRIGGERS {
+            if goal_lower.contains(trigger) {
+                return Some(format!(
+                    "Memory-worthy content detected: '{}' in goal: {}",
+                    trigger,
+                    state.goal.chars().take(100).collect::<String>()
+                ));
+            }
+        }
+        
+        // Check observations for patterns
+        for step in &state.history {
+            let obs_lower = step.observation.to_lowercase();
+            for trigger in MEMORY_TRIGGERS {
+                if obs_lower.contains(trigger) {
+                    return Some(format!(
+                        "Memory-worthy content detected: '{}' in observation: {}",
+                        trigger,
+                        step.observation.chars().take(100).collect::<String>()
+                    ));
+                }
+            }
+        }
+        
+        None
+    }
+    
+    /// Get memory suggestion prompt for the LLM
+    pub fn get_memory_prompt(&self, state: &AgentState) -> String {
+        let goal = &state.goal;
+        let tool_calls = state.history.len();
+        let steps = state.history.iter()
+            .map(|s| format!("- {}: {}", s.action, s.observation.chars().take(50).collect::<String>()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        
+        format!(
+            r#"Based on your completed task:
+Goal: {goal}
+Tool calls: {tool_calls}
+Steps:
+{steps}
+
+Consider saving a memory entry if you learned something important about:
+- User preferences (e.g., "User prefers X")
+- Environment setup (e.g., "This machine runs Debian 12")
+- Workflow conventions (e.g., "Project uses Go 1.22, run 'make test'")
+- Important lessons learned
+
+If you should save a memory, respond with a JSON object like:
+{{"action": "save_memory", "content": "Your memory entry here (10-500 chars)"}}
+
+If no memory-worthy content, respond with:
+{{"action": "skip"}}"#
+        )
     }
 }
 

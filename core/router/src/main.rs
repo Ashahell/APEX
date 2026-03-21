@@ -8,6 +8,8 @@ use apex_memory::embedder::{Embedder, EmbeddingProvider};
 use apex_memory::background_indexer::{BackgroundIndexer, IndexerConfig};
 use apex_memory::narrative::NarrativeMemory;
 use apex_router::api::{create_router, AppState};
+use apex_router::api::bounded_memory::BoundedMemoryState;
+use apex_router::skill_manager::SkillManager;
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
 use apex_router::deep_task_worker::DeepTaskWorker;
 use apex_router::execution_stream::ExecutionStreamManager;
@@ -24,6 +26,9 @@ use apex_router::soul::loader::SoulLoader;
 use apex_router::soul::SoulConfig;
 use apex_router::totp::TotpManager;
 use apex_router::unified_config::AppConfig;
+use apex_router::user_profile::UserProfileManager;
+use apex_router::session_search::SessionSearch;
+use apex_router::hub_client::HubClient;
 use apex_router::vm_pool::{VmConfig, VmPool};
 use apex_router::rate_limiter::RateLimiter;
 use apex_router::response_cache::ResponseCache;
@@ -87,6 +92,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         match db_config_result {
             Ok(config) => {
                 tracing::info!("Loaded configuration from database");
+                // Also set the global config so API handlers can read from it
+                AppConfig::set_global(config.clone());
                 config
             }
             Err(e) => {
@@ -284,6 +291,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         embedder,
         background_indexer,
         narrative_memory,
+        bounded_memory: {
+            let base_dir = dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".apex")
+                .join("memory");
+            let state = BoundedMemoryState::new(base_dir.to_string_lossy().to_string());
+            // Load existing memory from disk
+            if let Err(e) = state.load().await {
+                tracing::warn!("Failed to load bounded memory: {}", e);
+            }
+            state
+        },
+        skill_manager: {
+            let skills_dir = dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".apex")
+                .join("skills");
+            std::sync::Arc::new(tokio::sync::Mutex::new(SkillManager::new(skills_dir)))
+        },
+        user_profile: {
+            let profile_manager = std::sync::Arc::new(UserProfileManager::new(pool.clone()));
+            if let Err(e) = profile_manager.load().await {
+                tracing::warn!("Failed to load user profile: {}", e);
+            } else {
+                tracing::info!("User profile loaded");
+            }
+            profile_manager
+        },
+        session_search: {
+            let search = SessionSearch::new(pool.clone());
+            std::sync::Arc::new(search)
+        },
+        hub_client: {
+            std::sync::Arc::new(HubClient::new(config.hub.base_url.clone()))
+        },
         totp_manager,
         soul_loader,
         heartbeat_scheduler,
@@ -299,7 +341,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tokio::spawn(worker.run());
 
     let deep_worker =
-        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone(), state_for_deep_worker.narrative_memory.clone());
+        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone(), state_for_deep_worker.narrative_memory.clone(), state_for_deep_worker.skill_manager.clone());
     tokio::spawn(deep_worker.run());
 
     let cleanup_pool = pool_for_workers.clone();

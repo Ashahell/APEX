@@ -118,6 +118,16 @@ async fn create_test_state() -> AppState {
     let narrative_config = apex_memory::narrative::NarrativeConfig::default();
     let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(narrative_config));
 
+    // Create bounded memory state for tests
+    let bounded_memory = apex_router::api::bounded_memory::BoundedMemoryState::new(
+        std::env::temp_dir().to_string_lossy().to_string()
+    );
+
+    // Create skill manager for tests
+    let skill_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
+        apex_router::skill_manager::SkillManager::new(std::env::temp_dir().join("skills"))
+    ));
+
     AppState {
         config: apex_router::unified_config::AppConfig::default(),  // C4 Step 2
         pool: db.pool().clone(),
@@ -144,6 +154,11 @@ async fn create_test_state() -> AppState {
         embedder,
         background_indexer,
         narrative_memory,
+        bounded_memory,
+        skill_manager,
+        user_profile: std::sync::Arc::new(apex_router::user_profile::UserProfileManager::new(db.pool().clone())),
+        session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(db.pool().clone())),
+        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some("https://skills.sh/api/v1".to_string()))),
         totp_manager: apex_router::totp::TotpManager::new(),
         soul_loader: apex_router::soul::loader::SoulLoader::new(apex_router::soul::SoulConfig::default()),
         heartbeat_scheduler: apex_router::heartbeat::HeartbeatScheduler::new(

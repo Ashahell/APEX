@@ -39,6 +39,179 @@ pub mod config_constants {
     pub const DEFAULT_DEV_SECRET: &str = "dev-secret-change-in-production";
 }
 
+/// Memory system constants (Hermes-style bounded memory)
+pub mod memory_constants {
+    /// Default character limit for MEMORY.md (agent's notes)
+    /// ~800 tokens, keeps system prompts bounded
+    pub const DEFAULT_MEMORY_CHAR_LIMIT: usize = 2_200;
+    
+    /// Default character limit for USER.md (user profile)
+    /// ~500 tokens
+    pub const DEFAULT_USER_CHAR_LIMIT: usize = 1_375;
+    
+    /// Capacity threshold for showing warning (80%)
+    pub const MEMORY_WARNING_THRESHOLD: f32 = 0.80;
+    
+    /// Capacity threshold for forcing consolidation (95%)
+    pub const MEMORY_CRITICAL_THRESHOLD: f32 = 0.95;
+    
+    /// Minimum character length for a useful entry
+    pub const MIN_ENTRY_LENGTH: usize = 10;
+    
+    /// Maximum character length for a single entry
+    pub const MAX_ENTRY_LENGTH: usize = 500;
+    
+    /// Delimiter used to separate entries in snapshot
+    pub const ENTRY_DELIMITER: &str = "§";
+    
+    /// Default memory directory name
+    pub const MEMORY_DIR: &str = "memory";
+    
+    /// Memory file names
+    pub const MEMORY_FILE: &str = "memory.md";
+    pub const USER_FILE: &str = "user.md";
+}
+
+/// Skill management constants
+pub mod skill_constants {
+    /// Minimum tool calls to trigger skill creation
+    pub const MIN_TOOL_CALLS_FOR_SKILL: u32 = 5;
+    
+    /// Minimum successful steps to consider task complete
+    pub const MIN_SUCCESSFUL_STEPS: u32 = 3;
+    
+    /// Version string for auto-created skills
+    pub const SKILL_VERSION: &str = "1.0.0";
+    
+    /// Category for agent-created skills
+    pub const AUTO_SKILL_CATEGORY: &str = "auto-created";
+    
+    /// Directory for auto-created skills
+    pub const AUTO_SKILLS_DIR: &str = "skills/auto-created";
+    
+    /// Subdirectory for skill reference files
+    pub const SKILL_REFERENCES_DIR: &str = "references";
+    
+    /// Triggers that indicate memory-worthy content
+    pub const MEMORY_TRIGGERS: [&str; 6] = [
+        "learned",
+        "discovered",
+        "figured out",
+        "found that",
+        "remember to",
+        "important:",
+    ];
+    
+    /// Maximum skill description length
+    pub const MAX_SKILL_DESCRIPTION: usize = 200;
+}
+
+/// Skills hub/marketplace constants
+pub mod hub_constants {
+    use crate::hub_client::TrustLevel;
+    
+    /// Trust level: Built-in (ships with Hermes)
+    pub const TRUST_LEVEL_BUILTIN: &str = "builtin";
+    
+    /// Trust level: Official (in repo)
+    pub const TRUST_LEVEL_OFFICIAL: &str = "official";
+    
+    /// Trust level: Trusted registry
+    pub const TRUST_LEVEL_TRUSTED: &str = "trusted";
+    
+    /// Trust level: Community source
+    pub const TRUST_LEVEL_COMMUNITY: &str = "community";
+    
+    /// Default hub URL
+    pub const DEFAULT_HUB_URL: &str = "https://skills.sh/api/v1";
+    
+    /// Hub request timeout in seconds
+    pub const HUB_REQUEST_TIMEOUT_SECS: u64 = 30;
+    
+    /// Minimum trust level required (verified, trusted, community)
+    pub const MIN_TRUST_LEVEL: TrustLevel = TrustLevel::Community;
+    
+    /// skills.sh base URL
+    pub const SKILLS_SH_URL: &str = "https://skills.sh";
+    
+    /// agentskills.io base URL
+    pub const AGENTSKILLS_URL: &str = "https://agentskills.io";
+    
+    /// Hub cache TTL in seconds (1 hour)
+    pub const HUB_CACHE_TTL_SECS: u64 = 3600;
+    
+    /// Hub list request timeout in milliseconds
+    pub const HUB_LIST_TIMEOUT_MS: u64 = 5000;
+    
+    /// Security scan dangerous patterns
+    pub const DANGEROUS_PATTERNS: [&str; 5] = [
+        r"curl\s+\|\s*sh",
+        r"rm\s+-rf\s+/",
+        r"eval\s+",
+        r"base64\s+-d",
+        r"wget\s+.+\s*\|\s*sh",
+    ];
+}
+
+/// Session search constants
+pub mod search_constants {
+    /// FTS5 tokenizer configuration
+    pub const FTS5_TOKENIZER: &str = "porter unicode61";
+    
+    /// Maximum search results to return
+    pub const MAX_SEARCH_RESULTS: usize = 20;
+    
+    /// Maximum summary length for LLM summarization
+    pub const MAX_SUMMARY_LENGTH: usize = 500;
+    
+    /// BM25 k1 parameter for relevance scoring
+    pub const BM25_K1: f64 = 1.2;
+    
+    /// BM25 b parameter for relevance scoring
+    pub const BM25_B: f64 = 0.75;
+    
+    /// Session search FTS5 table name
+    pub const SESSIONS_FTS_TABLE: &str = "sessions_fts";
+    
+    /// Default session context window
+    pub const DEFAULT_SESSION_CONTEXT_LINES: usize = 50;
+}
+
+/// User modeling constants
+pub mod user_constants {
+    /// Maximum user name length
+    pub const USER_NAME_MAX_LENGTH: usize = 100;
+    
+    /// Maximum preferences total length
+    pub const USER_PREFERENCES_MAX_LENGTH: usize = 1000;
+    
+    /// Maximum preferred tools to track
+    pub const MAX_PREFERRED_TOOLS: usize = 20;
+    
+    /// Maximum preferred categories to track
+    pub const MAX_PREFERRED_CATEGORIES: usize = 10;
+    
+    /// Valid communication styles
+    pub const COMMUNICATION_STYLES: [&str; 4] = [
+        "concise",   // Brief responses
+        "detailed",  // Comprehensive responses
+        "technical", // Technical depth
+        "casual",    // Conversational
+    ];
+    
+    /// Minimum confidence for preference to be included in system prompt
+    pub const PREFERENCE_CONFIDENCE_THRESHOLD: f32 = 0.8;
+    
+    /// Minimum interactions to establish a preference
+    pub const MIN_INTERACTIONS_FOR_PREFERENCE: u32 = 3;
+    
+    /// Default communication style for new users
+    pub const DEFAULT_COMMUNICATION_STYLE: &str = "detailed";
+    
+    /// Maximum pet peeves to track
+    pub const MAX_PET_PEEVES: usize = 10;
+}
+
 pub static GLOBAL_CONFIG: Lazy<RwLock<Option<AppConfig>>> = Lazy::new(|| RwLock::new(None));
 
 // C4 Step 1: Thread-local config override for test isolation
@@ -62,6 +235,7 @@ pub struct AppConfig {
     pub heartbeat: HeartbeatConfig,
     pub moltbook: MoltbookConfigSection,
     pub memory: MemoryConfig,
+    pub hub: HubConfig,
     #[serde(skip)]
     pub config_source: ConfigSource,
 }
@@ -218,6 +392,9 @@ pub enum LlmProvider {
     
     // Venice
     Venice,
+    
+    // OpenCode
+    OpenCode,
     
     // Custom (any OpenAI-compatible endpoint)
     Custom,
@@ -528,6 +705,24 @@ impl Default for MoltbookConfigSection {
     }
 }
 
+/// Skills Hub configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HubConfig {
+    pub enabled: bool,
+    pub base_url: Option<String>,
+    pub request_timeout_secs: u64,
+}
+
+impl Default for HubConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: Some(hub_constants::DEFAULT_HUB_URL.to_string()),
+            request_timeout_secs: hub_constants::HUB_REQUEST_TIMEOUT_SECS,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryConfig {
     pub embedding_provider: String,
@@ -651,6 +846,7 @@ impl Default for AppConfig {
             heartbeat: HeartbeatConfig::default(),
             moltbook: MoltbookConfigSection::default(),
             memory: MemoryConfig::default(),
+            hub: HubConfig::default(),
             config_source: ConfigSource::Environment,
         }
     }

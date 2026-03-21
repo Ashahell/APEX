@@ -28,6 +28,11 @@ pub mod channels_extended;  // NEW - Phase 6 Additional Channels
 pub mod secrets;  // NEW - Phase 7 Secrets Expansion
 pub mod slack_blocks;  // NEW - Phase 8 Slack Block Kit
 pub mod execution_patterns;  // NEW - Phase 9 Death Spiral Detection
+pub mod bounded_memory;  // NEW - Hermes-style bounded memory
+pub mod skill_manager_api;  // NEW - Hermes-style auto-created skills
+pub mod user_profile_api;  // NEW - Hermes-style user profile
+pub mod session_search_api;  // NEW - Hermes-style session search
+pub mod hub_api;  // NEW - Hermes-style skills hub
 
 /// Helper module for API error handling
 pub mod api_error {
@@ -109,19 +114,23 @@ use crate::moltbook::MoltbookClient;
 use crate::soul::loader::SoulLoader;
 use crate::subagent::SubAgentPool;
 use crate::totp::TotpManager;
-use crate::dynamic_tools::ToolRegistry;
+use crate::unified_config::AppConfig;
+use crate::skill_manager::SkillManager;
+use crate::user_profile::UserProfileManager;
+use crate::session_search::SessionSearch;
+use crate::hub_client::HubClient;
 use crate::vm_pool::VmPool;
 use crate::skill_pool::SkillPool;
+use crate::dynamic_tools::ToolRegistry;
 use crate::execution_stream::ExecutionStreamManager;
 use crate::websocket::WebSocketManager;
 use crate::system_health::SystemMonitor;
 use crate::response_cache::ResponseCache;
 use crate::rate_limiter::RateLimiter;
-use apex_memory::{Workflow, WorkflowExecution};
-use apex_memory::task_repo::TaskRepository;
-use apex_memory::tasks::{CreateTask, TaskTier};
-use apex_memory::{embedder::Embedder, background_indexer::BackgroundIndexer, narrative::NarrativeMemory};
-use crate::unified_config::AppConfig;
+use apex_memory::Embedder;
+use apex_memory::background_indexer::BackgroundIndexer;
+use apex_memory::NarrativeMemory;
+use apex_memory::{Workflow, WorkflowExecution, TaskRepository, CreateTask, TaskTier};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TaskRequest {
@@ -270,6 +279,11 @@ pub struct AppState {
     pub embedder: std::sync::Arc<Embedder>,
     pub background_indexer: std::sync::Arc<BackgroundIndexer>,
     pub narrative_memory: std::sync::Arc<NarrativeMemory>,
+    pub bounded_memory: bounded_memory::BoundedMemoryState,
+    pub skill_manager: std::sync::Arc<tokio::sync::Mutex<SkillManager>>,
+    pub user_profile: std::sync::Arc<UserProfileManager>,
+    pub session_search: std::sync::Arc<SessionSearch>,
+    pub hub_client: std::sync::Arc<HubClient>,
     pub totp_manager: TotpManager,
     pub soul_loader: SoulLoader,
     pub heartbeat_scheduler: HeartbeatScheduler,
@@ -569,6 +583,11 @@ pub fn create_router(state: AppState) -> Router {
         .merge(secrets::router())  // NEW - Secrets Expansion (Phase 7)
         .merge(slack_blocks::router())  // NEW - Slack Block Kit (Phase 8)
         .merge(execution_patterns::router())  // NEW - Death Spiral Detection (Phase 9)
+        .merge(bounded_memory::router())  // NEW - Hermes-style Bounded Memory
+        .merge(skill_manager_api::router())  // NEW - Hermes-style Auto-Created Skills
+        .merge(user_profile_api::router())  // NEW - Hermes-style User Profile
+        .merge(session_search_api::router())  // NEW - Hermes-style Session Search
+        .merge(hub_api::router())  // NEW - Hermes-style Skills Hub
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))
