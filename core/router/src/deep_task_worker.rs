@@ -9,6 +9,8 @@ use crate::agent_loop::{AgentConfig, AgentLoop};
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::execution_stream::ExecutionStreamManager;
 use crate::message_bus::{DeepTaskMessage, MessageBus};
+use crate::skill_manager::SkillManager;
+use crate::unified_config::skill_constants::*;
 use crate::vm_pool::VmPool;
 use crate::websocket::WebSocketManager;
 
@@ -20,6 +22,7 @@ pub struct DeepTaskWorker {
     execution_streams: ExecutionStreamManager,
     ws_manager: WebSocketManager,
     narrative_memory: std::sync::Arc<NarrativeMemory>,
+    skill_manager: std::sync::Arc<tokio::sync::Mutex<SkillManager>>,
 }
 
 impl DeepTaskWorker {
@@ -31,6 +34,7 @@ impl DeepTaskWorker {
         execution_streams: ExecutionStreamManager,
         ws_manager: WebSocketManager,
         narrative_memory: std::sync::Arc<NarrativeMemory>,
+        skill_manager: std::sync::Arc<tokio::sync::Mutex<SkillManager>>,
     ) -> Self {
         Self {
             pool,
@@ -40,6 +44,7 @@ impl DeepTaskWorker {
             execution_streams,
             ws_manager,
             narrative_memory,
+            skill_manager,
         }
     }
 
@@ -192,6 +197,9 @@ impl DeepTaskWorker {
                 ).await {
                     tracing::warn!(task_id = %message.task_id, error = %e, "Failed to write narrative");
                 }
+                
+                // Check if this task should suggest a skill (Hermes-style agent learning)
+                self.check_and_suggest_skill(&message.task_id, &message.content, &tools_used, &final_output).await;
                 
                 let mut tx = match self.pool.begin().await {
                     Ok(tx) => tx,
@@ -346,7 +354,11 @@ impl DeepTaskWorker {
             ..Default::default()
         };
 
-        tracing::info!(use_llm = config.use_llm, llama_url = ?config.llama_url, "Agent config");
+        tracing::info!(use_llm = config.use_llm, llama_url = ?config.llama_url, llama_model = ?config.llama_model, "Agent config");
+        
+        // Debug: also log what AppConfig::global() returns
+        let global_config = crate::unified_config::AppConfig::global();
+        tracing::info!(global_use_llm = global_config.agent.use_llm, global_llama_url = %global_config.agent.llama_url, "Global config");
 
         let mut agent_builder = AgentLoop::new(config)
             .with_execution_stream(stream);
@@ -407,5 +419,120 @@ impl DeepTaskWorker {
             
             (entry_id, title, decision, context)
         }).collect()
+    }
+    
+    /// Check if a task is complex enough to suggest a skill and suggest it if appropriate
+    async fn check_and_suggest_skill(
+        &self,
+        task_id: &str,
+        task_content: &str,
+        tools_used: &[String],
+        output: &str,
+    ) {
+        // Check if task is complex enough (minimum tool calls threshold)
+        if tools_used.len() < MIN_TOOL_CALLS_FOR_SKILL as usize {
+            tracing::debug!(task_id = %task_id, tools_used = tools_used.len(), "Task too simple for skill suggestion");
+            return;
+        }
+        
+        // Generate a skill name from the task content
+        let skill_name = self.generate_skill_name(task_content);
+        
+        // Check if similar skill already exists
+        let manager = self.skill_manager.lock().await;
+        if manager.skill_exists(&skill_name) {
+            tracing::debug!(task_id = %task_id, skill_name = %skill_name, "Similar skill already exists");
+            return;
+        }
+        
+        // Generate skill content from the task execution
+        let skill_content = self.generate_skill_content(task_content, tools_used, output);
+        
+        // Log skill suggestion for later review (actual creation would require LLM)
+        tracing::info!(
+            task_id = %task_id,
+            skill_name = %skill_name,
+            tools_used = ?tools_used,
+            "Task qualifies for skill creation"
+        );
+        
+        // In a full implementation, we would:
+        // 1. Call LLM to generate skill content
+        // 2. Ask user for confirmation (T1/T2 tier)
+        // 3. Create the skill via skill_manager.create_skill()
+        
+        // For now, we log it - the user can review and create skills via the UI
+        let suggestion = serde_json::json!({
+            "task_id": task_id,
+            "skill_name": skill_name,
+            "task_content": task_content,
+            "skill_content": skill_content,
+            "tools_used": tools_used,
+            "suggested_at": chrono::Utc::now().to_rfc3339(),
+        });
+        
+        // Store suggestion for UI review
+        let suggestion_path = dirs::data_local_dir()
+            .unwrap_or_default()
+            .join("apex")
+            .join("skill_suggestions");
+        
+        if let Err(e) = std::fs::create_dir_all(&suggestion_path) {
+            tracing::warn!(error = %e, "Failed to create skill suggestions directory");
+            return;
+        }
+        
+        let suggestion_file = suggestion_path.join(format!("{}.json", task_id));
+        if let Err(e) = std::fs::write(&suggestion_file, suggestion.to_string()) {
+            tracing::warn!(error = %e, "Failed to write skill suggestion");
+        } else {
+            tracing::info!(task_id = %task_id, "Skill suggestion saved for review");
+        }
+    }
+    
+    /// Generate a skill name from task content
+    fn generate_skill_name(&self, task_content: &str) -> String {
+        // Extract key words and create slug
+        let words: Vec<&str> = task_content
+            .split(|c: char| c.is_whitespace() || c == '-' || c == '_' || c == '.' || c == '/' || c == '\\')
+            .filter(|w| w.len() > 3)
+            .filter(|w| !Self::is_common_word(w))
+            .take(4)
+            .collect();
+        
+        if words.is_empty() {
+            format!("task-{}", &task_content[..task_content.len().min(20)].to_lowercase())
+        } else {
+            words.join("-").to_lowercase()
+        }
+    }
+    
+    /// Check if word is a common word that shouldn't be in skill name
+    fn is_common_word(word: &str) -> bool {
+        let common = ["the", "and", "for", "with", "this", "that", "from", "have", "been", "were", "they", "what", "when", "where", "which", "about", "into", "make", "just", "also", "very", "some", "could", "would", "should"];
+        common.contains(&word.to_lowercase().as_str())
+    }
+    
+    /// Generate skill content from task execution
+    fn generate_skill_content(&self, task_content: &str, tools_used: &[String], _output: &str) -> String {
+        // Extract key actions from the task
+        let action_summary = task_content
+            .lines()
+            .take(3)
+            .collect::<Vec<_>>()
+            .join(" ");
+        
+        format!(
+            "This skill was auto-generated from task execution.\n\n\
+            ## Task\n\
+            {}\n\n\
+            ## Tools Used\n\
+            {}\n\n\
+            ## Notes\n\
+            - Successfully completed\n\
+            - Can be reused for similar tasks\n",
+            action_summary,
+            tools_used.join(", ")
+        )
     }
 }
