@@ -397,12 +397,9 @@ pub struct TestLlmResponse {
 }
 
 async fn list_llms(State(state): State<AppState>) -> Json<Vec<LlmResponse>> {
-    // Use GLOBAL_CONFIG which is the source of truth (shared across all requests)
-    let llms = if let Ok(config) = GLOBAL_CONFIG.read() {
-        config.as_ref().map(|c| c.agent.llms.clone()).unwrap_or_default()
-    } else {
-        state.config.agent.llms.clone()
-    };
+    // Use state.config directly to ensure test isolation.
+    // GLOBAL_CONFIG is intentionally ignored here — handlers should use State, not globals.
+    let llms = state.config.agent.llms.clone();
     Json(llms.into_iter().map(LlmResponse::from).collect())
 }
 

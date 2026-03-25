@@ -959,6 +959,12 @@ impl AppConfig {
         GLOBAL_CONFIG.read().unwrap().clone()
     }
 
+    /// Reset the global config to None. Use in tests to ensure test isolation.
+    pub fn reset_global() {
+        let mut global = GLOBAL_CONFIG.write().unwrap();
+        *global = None;
+    }
+
     /// Load config from database using ConfigRepository
     pub async fn load_from_db(repo: &apex_memory::ConfigRepository) -> Result<Self, ConfigError> {
         let entry = repo.get("app_config").await
