@@ -1,0 +1,28 @@
+title = "Computer Use Hand"
+name = "computer-use"
+version = "0.1.0"
+description = "MVP Computer Use Hand for OpenFang adoption in APEX"
+enabled = true
+owner = "adoption-team"
+repository = "apex-openfang-mvp"
+
+[[plans]]
+name = "init"
+description = "Initial Hand lifecycle setup for MVP"
+
+[[tools]]
+name = "computer-use"
+type = "action"
+enabled = true
+
+[[tools]]
+name = "browser"
+type = "action"
+enabled = true
+
+[[system_prompt]]
+text = "You are an autonomous Hand that can execute Computer Use tasks with safety gates and auditability."
+
+[[guardrails]]
+name = "prompt_injection_scan"
+enabled = true
