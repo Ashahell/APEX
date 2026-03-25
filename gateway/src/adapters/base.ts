@@ -1,3 +1,4 @@
+import Pino from 'pino';
 import { TaskRequest, TaskResponse, Channel } from '../../types.js';
 
 /**
@@ -7,10 +8,16 @@ import { TaskRequest, TaskResponse, Channel } from '../../types.js';
 export abstract class BaseAdapter {
   readonly channel: Channel;
   protected onTask: (task: TaskRequest) => Promise<void>;
+  protected logger: Pino.Logger;
   
-  constructor(channel: Channel, onTask: (task: TaskRequest) => Promise<void>) {
+  constructor(
+    channel: Channel, 
+    onTask: (task: TaskRequest) => Promise<void>,
+    logger?: Pino.Logger
+  ) {
     this.channel = channel;
     this.onTask = onTask;
+    this.logger = logger || Pino({ name: `adapter-${channel}` });
   }
   
   /**

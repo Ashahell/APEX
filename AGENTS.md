@@ -22,7 +22,7 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.5.0
+- **Version**: v1.6.0 (Sapphire Features)
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
@@ -30,7 +30,7 @@ APEX is **more secure than both** by design:
 ## ⚠️ Pre-Alpha Warnings
 
 - **Security-first but unaudited** — Security implementation complete (Phases 0-13), but not formally penetration tested
-- **Limited testing** — 245 tests, many features are proof-of-concept
+- **Limited testing** — 461 tests, many features are proof-of-concept
 - **API instability** — Breaking changes expected
 - **No production support** — Use at your own risk
 - **Firecracker/VM isolation** — Requires kernel/rootfs configuration
@@ -84,6 +84,14 @@ APEX is **more secure than both** by design:
   - Skills Hub Client ✅ (hub_client.rs, hub_api.rs)
   - Session Search ✅ (session_search.rs, session_search_api.rs, SessionSearch.tsx)
   - User Profile ✅ (user_profile.rs, user_profile_api.rs, UserProfileSettings.tsx)
+- **v1.6.0: Sapphire Features** ✅ Complete
+  - Tool Maker Runtime Validation ✅ (tool_validator.rs, tool_sandbox.rs, ToolValidationSettings.tsx)
+  - Persona Assembly ✅ (persona.rs, persona_api.rs, PersonaList.tsx, PersonaEditor.tsx)
+  - Context Scope Isolation ✅ (context_scope.rs, context_scope_api.rs)
+  - Continuity Scheduler ✅ (continuity.rs, continuity_api.rs, ContinuitySettings.tsx)
+  - Plugin Signing ✅ (skill_signer.rs, signing_api.rs, SkillSecurity.tsx)
+  - Privacy Toggle ✅ (privacy_guard.rs, privacy_api.rs, PrivacySettings.tsx)
+  - Story Engine ✅ (story_engine.rs, story_api.rs, StoryPlayer.tsx, StoryEditor.tsx)
 
 ### Recent Optimizations
 - **API Modularization** ✅ Complete - Split 1556-line monolithic `api.rs` into 9 modular files in `core/router/src/api/`
@@ -851,14 +859,14 @@ apex/
 
 | Component | Tests | Location |
 |-----------|-------|----------|
-| **Rust unit tests** | 239 | `core/*/src/*_test.rs` or `mod tests` |
-| **Rust integration tests** | 58 | `core/router/tests/` |
+| **Rust unit tests** | 313 | `core/*/src/*_test.rs` or `mod tests` |
+| **Rust integration tests** | 59 | `core/router/tests/` |
 | **Rust e2e tests** | 2 | `core/router/tests/e2e.rs` (run with `-- --ignored`) |
 | **Python tests** | 53 | `execution/tests/` |
 | **Gateway tests** | 8 | `gateway/src/*.test.ts` |
 | **Skills tests** | 8 | `skills/src/*.test.ts` |
 | **UI tests** | 20 | `ui/src/**/*.test.tsx` |
-| **Total** | **388** | |
+| **Total** | **461** | |
 
 ### Running Tests
 

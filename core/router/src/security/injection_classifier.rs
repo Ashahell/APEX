@@ -105,6 +105,48 @@ static INJECTION_PATTERNS: LazyLock<Vec<(Regex, &'static str, InjectionType, Thr
         ]
     });
 
+/// Pre-compiled shell dangerous patterns for skill execution
+static SHELL_DANGEROUS_PATTERNS: LazyLock<Vec<(Regex, &'static str, ThreatLevel)>> =
+    LazyLock::new(|| {
+        vec![
+            (
+                Regex::new(r"rm\s+-rf\s+/").unwrap(),
+                "Recursive delete",
+                ThreatLevel::Critical,
+            ),
+            (
+                Regex::new(r">\s*/dev/sd").unwrap(),
+                "Disk write",
+                ThreatLevel::Critical,
+            ),
+            (
+                Regex::new(r"dd\s+if=").unwrap(),
+                "Direct disk access",
+                ThreatLevel::Critical,
+            ),
+            (
+                Regex::new(r"mkfs\.").unwrap(),
+                "Filesystem format",
+                ThreatLevel::Critical,
+            ),
+            (
+                Regex::new(r"chmod\s+777").unwrap(),
+                "World-writable",
+                ThreatLevel::High,
+            ),
+            (
+                Regex::new(r"wget.*\|\s*sh").unwrap(),
+                "Download and execute",
+                ThreatLevel::Critical,
+            ),
+            (
+                Regex::new(r"curl.*\|\s*sh").unwrap(),
+                "Download and execute",
+                ThreatLevel::Critical,
+            ),
+        ]
+    });
+
 /// The Injection Classifier - first line of defense against malicious inputs
 pub struct InjectionClassifier;
 
@@ -215,29 +257,11 @@ impl InjectionClassifier {
 
     /// Check for dangerous shell patterns
     fn check_shell_dangerous(input: &str) -> InjectionDetectionResult {
-        let dangerous_patterns = [
-            (r"rm\s+-rf\s+/", "Recursive delete", ThreatLevel::Critical),
-            (r">\s*/dev/sd", "Disk write", ThreatLevel::Critical),
-            (r"dd\s+if=", "Direct disk access", ThreatLevel::Critical),
-            (r"mkfs\.", "Filesystem format", ThreatLevel::Critical),
-            (r"chmod\s+777", "World-writable", ThreatLevel::High),
-            (
-                r"wget.*\|\s*sh",
-                "Download and execute",
-                ThreatLevel::Critical,
-            ),
-            (
-                r"curl.*\|\s*sh",
-                "Download and execute",
-                ThreatLevel::Critical,
-            ),
-        ];
-
-        for (pattern, desc, severity) in dangerous_patterns {
-            if Regex::new(pattern).map_or(false, |r| r.is_match(input)) {
+        for (regex, desc, severity) in SHELL_DANGEROUS_PATTERNS.iter() {
+            if regex.is_match(input) {
                 return InjectionDetectionResult {
                     is_safe: false,
-                    threat_level: severity,
+                    threat_level: *severity,
                     injection_type: Some(InjectionType::CommandInjection),
                     matched_pattern: Some(desc.to_string()),
                     message: format!("Dangerous shell command detected: {}", desc),

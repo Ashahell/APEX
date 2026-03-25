@@ -4,6 +4,7 @@
 
 pub mod agent_loop;
 pub mod api;
+pub mod auth;
 pub mod circuit_breaker;
 pub mod classifier;
 pub mod deep_task_worker;
@@ -42,6 +43,19 @@ pub mod user_profile;
 pub mod vm_pool;
 pub mod webhook;
 pub mod websocket;
+pub mod tool_validator;  // Feature 1: Tool Maker Validation
+pub mod tool_sandbox;   // Feature 1: Tool Sandbox
+pub mod persona;       // Feature 2: Persona Assembly
+pub mod privacy_guard; // Feature 6: Privacy Toggle
+pub mod context_scope; // Feature 3: Context Scope Isolation
+pub mod continuity;    // Feature 4: Continuity Scheduler
+pub mod skill_signer;  // Feature 5: Plugin Signing
+pub mod story_engine;  // Feature 7: Story Engine
+pub mod computer_use;  // Computer Use implementation (WIP)
+pub mod computer_use_hands_api; // Hands MVP API for computer-use
+pub mod computer_use_embedding_integration; // demo embedding wiring helper
+pub mod computer_use_api; // Minimal Axum API for Computer Use MVP
+pub mod streaming;  // Patch 11: SSE streaming endpoints for Hands and MCP
 
 pub use apex_memory;
 pub use apex_security;

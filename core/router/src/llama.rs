@@ -7,6 +7,7 @@ pub struct LlamaClient {
     client: Client,
     base_url: String,
     model: String,
+    api_key: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -39,17 +40,22 @@ struct ResponseMessage {
 }
 
 impl LlamaClient {
-    pub fn new(base_url: String, model: String) -> Self {
+    pub fn new(base_url: String, model: String, api_key: Option<String>) -> Self {
         Self {
             client: Client::new(),
             base_url: base_url.trim_end_matches('/').to_string(),
             model,
+            api_key,
         }
     }
 
     pub fn from_env() -> Self {
         let config = AppConfig::global();
-        Self::new(config.agent.llama_url, config.agent.llama_model)
+        // Get the API key from the default LLM if available
+        let api_key = config.agent.llms.iter()
+            .find(|l| l.id == config.agent.default_llm_id.as_deref().unwrap_or("default"))
+            .and_then(|l| l.api_key.clone());
+        Self::new(config.agent.llama_url, config.agent.llama_model, api_key)
     }
 
     pub async fn chat(&self, system_prompt: &str, user_prompt: &str) -> Result<String, String> {
@@ -73,31 +79,60 @@ impl LlamaClient {
 
         tracing::debug!(url = %url, model = %self.model, "Calling llama-server");
 
-        let response = self
-            .client
-            .post(&url)
-            .json(&request)
-            .send()
-            .await
-            .map_err(|e| format!("Failed to connect to llama-server: {}", e))?;
+        // Retry logic for rate limits (429)
+        let max_retries = 3;
+        let mut last_error = String::new();
+        
+        for attempt in 0..max_retries {
+            if attempt > 0 {
+                let delay = tokio::time::Duration::from_secs(2_u64.pow(attempt));
+                tracing::info!(attempt = attempt + 1, delay_secs = delay.as_secs(), "Retrying LLM request after rate limit");
+                tokio::time::sleep(delay).await;
+            }
 
-        if !response.status().is_success() {
-            let status = response.status();
-            let body = response.text().await.unwrap_or_default();
-            tracing::error!(status = %status, body = %body, "LLM request failed");
-            return Err(format!("LLM request failed: {} - {}", status, body));
+            let mut req = self.client.post(&url).json(&request);
+            
+            // Add API key if available
+            if let Some(ref key) = self.api_key {
+                tracing::debug!(has_api_key = true, key_length = key.len(), "Sending request with API key");
+                req = req.header("Authorization", format!("Bearer {}", key));
+            } else {
+                tracing::warn!("No API key available for LLM request");
+            }
+            
+            let response = req
+                .send()
+                .await
+                .map_err(|e| format!("Failed to connect to llama-server: {}", e))?;
+
+            if !response.status().is_success() {
+                let status = response.status();
+                let body = response.text().await.unwrap_or_default();
+                
+                // Check for rate limit (429)
+                if status.as_u16() == 429 && attempt < max_retries - 1 {
+                    tracing::warn!(status = %status, attempt = attempt + 1, "Rate limited, will retry");
+                    last_error = format!("{} - {}", status, body);
+                    continue;
+                }
+                
+                tracing::error!(status = %status, body = %body, "LLM request failed");
+                return Err(format!("LLM request failed: {} - {}", status, body));
+            }
+
+            let chat_response: ChatResponse = response
+                .json()
+                .await
+                .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
+
+            return chat_response
+                .choices
+                .first()
+                .map(|c| c.message.content.clone())
+                .ok_or_else(|| "No response from LLM".to_string());
         }
-
-        let chat_response: ChatResponse = response
-            .json()
-            .await
-            .map_err(|e| format!("Failed to parse LLM response: {}", e))?;
-
-        chat_response
-            .choices
-            .first()
-            .map(|c| c.message.content.clone())
-            .ok_or_else(|| "No response from LLM".to_string())
+        
+        Err(format!("LLM rate limit exceeded after {} retries: {}", max_retries, last_error))
     }
 
     pub async fn generate(&self, prompt: &str) -> Result<String, String> {
@@ -173,7 +208,7 @@ mod tests {
             return;
         }
 
-        let client = LlamaClient::new(config.agent.llama_url, config.agent.llama_model);
+        let client = LlamaClient::new(config.agent.llama_url, config.agent.llama_model, None);
 
         let result = client.chat("You are a helpful assistant.", "Say 'hello' in one word.").await;
         

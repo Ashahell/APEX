@@ -231,8 +231,10 @@ impl SkillWorker {
         // Determine success for anomaly detection before consuming result
         let success = result.is_ok();
         
-        // Clone result for anomaly detection before consuming in match
-        let result_clone = result.clone();
+        // Parse result JSON once for anomaly detection (extract before consuming)
+        let parsed_result = result.as_ref().ok().and_then(|r| {
+            serde_json::from_str::<serde_json::Value>(r).ok()
+        });
         
         match result {
             Ok(result) => {
@@ -273,21 +275,16 @@ impl SkillWorker {
         let duration_ms = execution_start.elapsed().as_millis() as u64;
         let input_size = input_str.len();
         
-        // Extract death spiral detection data from result
-        let files_created = result_clone.as_ref().ok().and_then(|r| {
-            serde_json::from_str::<serde_json::Value>(r)
-                .ok()
-                .and_then(|v| v.get("files_created").and_then(|f| f.as_u64()).map(|f| f as u32))
+        // Extract death spiral detection data from parsed result
+        let files_created = parsed_result.as_ref().and_then(|v| {
+            v.get("files_created").and_then(|f| f.as_u64()).map(|f| f as u32)
         });
         
-        let tool_calls: Option<Vec<String>> = result_clone.as_ref().ok().and_then(|r| {
-            serde_json::from_str::<serde_json::Value>(r)
-                .ok()
-                .and_then(|v| v.get("tool_calls").and_then(|t| t.as_array().cloned()))
-                .map(|arr| arr.iter().filter_map(|s| s.as_str().map(String::from)).collect::<Vec<_>>())
-        });
+        let tool_calls: Option<Vec<String>> = parsed_result.as_ref().and_then(|v| {
+            v.get("tool_calls").and_then(|t| t.as_array().cloned())
+        }).map(|arr| arr.iter().filter_map(|s| s.as_str().map(String::from)).collect::<Vec<_>>());
         
-        let had_side_effects = result_clone.as_ref().ok().map(|_| true); // Assume side effects unless explicitly marked otherwise
+        let had_side_effects = parsed_result.as_ref().map(|_| true); // Assume side effects unless explicitly marked otherwise
         
         if let Some(detector) = get_anomaly_detector() {
             if let Some(anomaly) = detector.record_execution(

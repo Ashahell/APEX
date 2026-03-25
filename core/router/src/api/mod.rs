@@ -33,6 +33,13 @@ pub mod skill_manager_api;  // NEW - Hermes-style auto-created skills
 pub mod user_profile_api;  // NEW - Hermes-style user profile
 pub mod session_search_api;  // NEW - Hermes-style session search
 pub mod hub_api;  // NEW - Hermes-style skills hub
+pub mod tool_validation;  // NEW - Tool Maker Validation (Feature 1)
+pub mod persona_api;    // NEW - Persona Assembly (Feature 2)
+pub mod signing_api;   // NEW - Plugin Signing (Feature 5)
+pub mod story_api;     // NEW - Story Engine (Feature 7)
+pub mod continuity_api; // NEW - Continuity Scheduler (Feature 4)
+pub mod privacy_api;    // NEW - Privacy Toggle (Feature 6)
+pub mod context_scope_api; // NEW - Context Scope (Feature 3)
 
 /// Helper module for API error handling
 pub mod api_error {
@@ -289,6 +296,20 @@ pub struct AppState {
     pub heartbeat_scheduler: HeartbeatScheduler,
     pub mcp_manager: std::sync::Arc<McpServerManager>,
     pub anomaly_detector: Option<std::sync::Arc<crate::security::AnomalyDetector>>,
+    // Feature 5: Plugin Signing
+    pub signature_store: std::sync::Arc<std::sync::Mutex<crate::skill_signer::SignatureStore>>,
+    // Feature 7: Story Engine
+    pub story_engine: std::sync::Arc<std::sync::Mutex<crate::story_engine::StoryEngine>>,
+    // Feature 4: Continuity Scheduler
+    pub continuity_state: std::sync::Arc<std::sync::Mutex<crate::api::continuity_api::ContinuityState>>,
+    // Feature 6: Privacy Toggle
+    pub privacy_guard: std::sync::Arc<std::sync::Mutex<crate::privacy_guard::PrivacyGuard>>,
+    // Feature 3: Context Scope
+    pub context_scope_state: std::sync::Arc<std::sync::Mutex<crate::api::context_scope_api::ContextScopeState>>,
+    // Patch 15: Replay protection backend (trait-injected, configurable)
+    pub replay_protection: std::sync::Arc<dyn crate::security::replay_protection::ReplayProtection>,
+    // Patch 16: Streaming analytics
+    pub streaming_metrics: std::sync::Arc<crate::streaming::StreamingMetrics>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -588,6 +609,14 @@ pub fn create_router(state: AppState) -> Router {
         .merge(user_profile_api::router())  // NEW - Hermes-style User Profile
         .merge(session_search_api::router())  // NEW - Hermes-style Session Search
         .merge(hub_api::router())  // NEW - Hermes-style Skills Hub
+        .merge(tool_validation::create_tool_validation_router())  // NEW - Tool Validation (Feature 1)
+        .merge(persona_api::create_persona_router())  // NEW - Persona Assembly (Feature 2)
+        .merge(signing_api::create_signing_router())  // NEW - Plugin Signing (Feature 5)
+        .merge(story_api::create_story_router())  // NEW - Story Engine (Feature 7)
+        .merge(continuity_api::create_continuity_router())  // NEW - Continuity (Feature 4)
+        .merge(privacy_api::create_privacy_router())  // NEW - Privacy (Feature 6)
+        .merge(context_scope_api::create_context_scope_router())  // NEW - Context Scope (Feature 3)
+        .merge(crate::streaming::create_streaming_router(state.clone()))  // NEW - Patch 11: SSE streaming for Hands and MCP
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

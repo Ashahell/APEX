@@ -37,7 +37,7 @@ export class DiscordAdapter extends BaseAdapter {
     });
 
     this.client.on(Events.Error, (error: Error) => {
-      console.error('Discord client error:', error);
+      this.logger.error({ error }, 'Discord client error');
     });
 
     await this.client.login(this.token);

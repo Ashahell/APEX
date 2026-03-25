@@ -13,6 +13,7 @@ set "LLAMA_SERVER=%LLAMA_DIR%\llama-server.exe"
 set "LLAMA_MODEL=C:\Users\ashah\.ollama\models\Qwen3-4B-Instruct-2507-Q4_K_M.gguf"
 set "EMBED_MODEL=D:\Users\ashah\AppData\Local\Programs\LM Studio\resources\app\.webpack\bin\bundled-models\nomic-ai\nomic-embed-text-v1.5-GGUF\nomic-embed-text-v1.5.Q4_K_M.gguf"
 set "DOCKER Desktop=C:\Program Files\Docker\Docker\Docker Desktop.exe"
+set "ROUTER_EXE=%CORE_DIR%\target\fresh7\release\apex-router.exe"
 
 goto :main
 
@@ -199,8 +200,34 @@ if errorlevel 1 (
     echo Llama-Server is ready!
 )
 start "APEX Router" cmd /c "cd /d "%PROJECT_DIR%" && apex.bat router-llm-no-llama"
-ping -n 4 127.0.0.1 >nul 2>&1
+echo Waiting for router to start...
+set /a attempts=0
+:wait_router1
+ping -n 2 127.0.0.1 >nul 2>&1
+set /a attempts+=1
+netstat -ano | findstr ":%ROUTER_PORT% " | findstr LISTENING >nul
+if errorlevel 1 (
+    if %attempts% LSS 20 (
+        echo Waiting for router... (%attempts%/20)
+        goto wait_router1
+    )
+)
+echo Router is ready!
+echo Starting UI...
 start "APEX UI" cmd /c "cd /d "%PROJECT_DIR%" && apex.bat ui"
+echo Waiting for UI to be ready...
+set /a attempts=0
+:wait_ui1
+ping -n 2 127.0.0.1 >nul 2>&1
+set /a attempts+=1
+netstat -ano | findstr ":%UI_PORT% " | findstr LISTENING >nul
+if errorlevel 1 (
+    if %attempts% LSS 15 (
+        echo Waiting for UI... (%attempts%/15)
+        goto wait_ui1
+    )
+)
+echo UI is ready!
 echo All services started.
 echo   - Llama-Server: http://localhost:%LLAMA_PORT%
 echo   - Router: http://localhost:%ROUTER_PORT%
@@ -236,8 +263,34 @@ if !llama_ready! NEQ 0 (
 if !llama_ready! EQU 0 echo Llama-Server is ready!
 if !embed_ready! EQU 0 echo Embedding server is ready!
 start "APEX Router" cmd /c "cd /d "%PROJECT_DIR%" && apex.bat router-llm-no-llama"
-ping -n 4 127.0.0.1 >nul 2>&1
+echo Waiting for router to start...
+set /a attempts=0
+:wait_router
+ping -n 2 127.0.0.1 >nul 2>&1
+set /a attempts+=1
+netstat -ano | findstr ":%ROUTER_PORT% " | findstr LISTENING >nul
+if errorlevel 1 (
+    if %attempts% LSS 20 (
+        echo Waiting for router... (%attempts%/20)
+        goto wait_router
+    )
+)
+echo Router is ready!
+echo Starting UI...
 start "APEX UI" cmd /c "cd /d "%PROJECT_DIR%" && apex.bat ui"
+echo Waiting for UI to be ready...
+set /a attempts=0
+:wait_ui
+ping -n 2 127.0.0.1 >nul 2>&1
+set /a attempts+=1
+netstat -ano | findstr ":%UI_PORT% " | findstr LISTENING >nul
+if errorlevel 1 (
+    if %attempts% LSS 15 (
+        echo Waiting for UI... (%attempts%/15)
+        goto wait_ui
+    )
+)
+echo UI is ready!
 echo All services started.
 echo   - Llama-Server: http://localhost:%LLAMA_PORT%
 echo   - Embedding Server: http://localhost:%EMBED_PORT%
@@ -293,7 +346,12 @@ exit /b
 :cmd_router
 echo Starting Router (without LLM)...
 cd /d "%CORE_DIR%"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    echo Starting router from fresh7 build: %ROUTER_EXE%
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router_llm
@@ -323,7 +381,11 @@ set "APEX_DOCKER_IMAGE=apex-execution:latest"
 set "LLAMA_SERVER_URL=http://127.0.0.1:%LLAMA_PORT%"
 set "LLAMA_MODEL=%LLAMA_MODEL%"
 set "APEX_MEMORY_EMBEDDING_URL=http://127.0.0.1:%EMBED_PORT%"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router_llm_no_start
@@ -340,7 +402,13 @@ set "APEX_SKILL_POOL_WORKER=%PROJECT_DIR%skills\pool_worker.ts"
 set "LLAMA_SERVER_URL=http://127.0.0.1:%LLAMA_PORT%"
 set "LLAMA_MODEL=%LLAMA_MODEL%"
 set "APEX_MEMORY_EMBEDDING_URL=http://127.0.0.1:%EMBED_PORT%"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    echo Starting router from fresh7 build: %ROUTER_EXE%
+    "%ROUTER_EXE%"
+) else (
+    echo Router not found at %ROUTER_EXE%, building from source...
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router_docker
@@ -349,14 +417,22 @@ cd /d "%CORE_DIR%"
 set "APEX_USE_DOCKER=1"
 set "APEX_EXECUTION_ISOLATION=docker"
 set "APEX_DOCKER_IMAGE=apex-execution:latest"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router2
 echo Starting Router on port 3001 (for testing)...
 cd /d "%CORE_DIR%"
 set "APEX_PORT=3001"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router2_llm
@@ -384,7 +460,11 @@ set "APEX_USE_LLM=1"
 set "LLAMA_SERVER_URL=http://127.0.0.1:%LLAMA_PORT%"
 set "LLAMA_MODEL=%LLAMA_MODEL%"
 set "APEX_MEMORY_EMBEDDING_URL=http://127.0.0.1:%EMBED_PORT%"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_router_gvisor
@@ -411,7 +491,11 @@ echo Starting Router with Mock isolation (no Docker needed)...
 cd /d "%CORE_DIR%"
 set "APEX_EXECUTION_ISOLATION=mock"
 set "APEX_USE_DOCKER=0"
-cargo run --release --bin apex-router
+if exist "%ROUTER_EXE%" (
+    "%ROUTER_EXE%"
+) else (
+    cargo run --release --bin apex-router
+)
 exit /b 0
 
 :cmd_port
@@ -514,10 +598,8 @@ for /f "tokens=5" %%a in ('netstat -ano ^| findstr :%UI_PORT% ^| findstr LISTENI
     taskkill /F /PID %%a 2>nul
 )
 cd /d "%UI_DIR%"
-start "APEX UI Dev" cmd /c "pnpm dev"
-echo Waiting for UI to start...
-timeout /t 5 >nul
-echo UI should be at http://localhost:%UI_PORT%
+start "" npx vite --port %UI_PORT%
+echo UI starting at http://localhost:%UI_PORT%...
 exit /b 0
 
 :cmd_ui_serve

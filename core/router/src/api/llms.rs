@@ -18,13 +18,18 @@ pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/llms", get(list_llms))
         .route("/api/v1/llms", post(add_llm))
-        .route("/api/v1/llms/:id", get(get_llm))
-        .route("/api/v1/llms/:id", put(update_llm))
-        .route("/api/v1/llms/:id", delete(delete_llm))
-        .route("/api/v1/llms/:id/test", post(test_llm))
+        // More specific routes BEFORE parameterized routes
+        .route("/api/v1/llms/list-models", post(list_provider_models_by_config))
+        .route("/api/v1/llms/providers", get(list_providers))
         .route("/api/v1/llms/default", get(get_default_llm))
         .route("/api/v1/llms/default", put(set_default_llm))
-        .route("/api/v1/llms/providers", get(list_providers))
+        .route("/api/v1/llms/fallbacks", get(list_model_fallbacks))
+        .route("/api/v1/llms/fallbacks", post(add_model_fallback))
+        // Parameterized routes AFTER specific routes
+        .route("/api/v1/llms/:id", get(get_llm))
+        .route("/api/v1/llms/:id", put(handle_update_llm))
+        .route("/api/v1/llms/:id", delete(handle_delete_llm))
+        .route("/api/v1/llms/:id/test", post(test_llm))
         // Provider plugins (NEW)
         .route("/api/v1/llms/plugins", get(list_provider_plugins))
         .route("/api/v1/llms/plugins", post(create_provider_plugin))
@@ -37,8 +42,6 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/v1/llms/sessions/:session_id/fast-mode", get(get_session_fast_mode))
         .route("/api/v1/llms/sessions/:session_id/fast-mode", put(set_session_fast_mode))
         // Model fallbacks (NEW)
-        .route("/api/v1/llms/fallbacks", get(list_model_fallbacks))
-        .route("/api/v1/llms/fallbacks", post(add_model_fallback))
         .route("/api/v1/llms/fallbacks/:id", delete(delete_model_fallback))
 }
 
@@ -264,9 +267,9 @@ pub fn get_provider_info() -> Vec<ProviderInfo> {
         },
         ProviderInfo {
             id: "opencode".to_string(),
-            name: "OpenCode".to_string(),
-            default_url: "https://api.opencode.ai/v1".to_string(),
-            default_model: "opencode-3.5".to_string(),
+            name: "OpenCode Zen".to_string(),
+            default_url: "https://opencode.ai/zen".to_string(),
+            default_model: "big-pickle".to_string(),
             requires_api_key: true,
             api_type: "openai".to_string(),
         },
@@ -335,6 +338,7 @@ impl From<LlmConfig> for LlmResponse {
                 LlmProvider::Vertex => "vertex".to_string(),
                 LlmProvider::Xai => "xai".to_string(),
                 LlmProvider::Venice => "venice".to_string(),
+                LlmProvider::OpenCode => "opencode".to_string(),
                 LlmProvider::Custom => "custom".to_string(),
             },
             url: config.url,
@@ -393,7 +397,12 @@ pub struct TestLlmResponse {
 }
 
 async fn list_llms(State(state): State<AppState>) -> Json<Vec<LlmResponse>> {
-    let llms = state.config.agent.llms.clone();
+    // Use GLOBAL_CONFIG which is the source of truth (shared across all requests)
+    let llms = if let Ok(config) = GLOBAL_CONFIG.read() {
+        config.as_ref().map(|c| c.agent.llms.clone()).unwrap_or_default()
+    } else {
+        state.config.agent.llms.clone()
+    };
     Json(llms.into_iter().map(LlmResponse::from).collect())
 }
 
@@ -412,7 +421,7 @@ async fn get_llm(
 }
 
 async fn add_llm(
-    State(state): State<AppState>,
+    State(mut state): State<AppState>,
     Json(payload): Json<CreateLlmRequest>,
 ) -> Result<Json<LlmResponse>, String> {
     let provider = match payload.provider.to_lowercase().as_str() {
@@ -442,6 +451,7 @@ async fn add_llm(
         "vertex" => LlmProvider::Vertex,
         "xai" => LlmProvider::Xai,
         "venice" => LlmProvider::Venice,
+        "opencode" => LlmProvider::OpenCode,
         "custom" => LlmProvider::Custom,
         _ => return Err("Invalid provider type".to_string()),
     };
@@ -466,22 +476,26 @@ async fn add_llm(
     let mut config = state.config.clone();
     config.agent.llms.push(new_llm.clone());
     
+    // Update in-memory state.config (this is what's used for listing!)
+    state.config = config.clone();
+    
     // Update in-memory global config
     if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
         *global_config = Some(config.clone());
     }
-
-    // Persist to database
-    let agent_config = config.agent.clone();
-    if let Err(e) = AppConfig::save_section_to_db(&state.config_repo, "agent", &agent_config).await {
-        tracing::warn!("Failed to persist LLM config to database: {}", e);
+    
+    // Persist entire config to database - MUST succeed or return error
+    if let Err(e) = config.save_to_db(&state.config_repo).await {
+        tracing::error!("Failed to persist LLM config to database: {}", e);
+        return Err(format!("Failed to persist LLM config: {}", e));
     }
-
+    
+    tracing::info!("LLM {} saved to database successfully", new_llm.name);
     Ok(Json(LlmResponse::from(new_llm)))
 }
 
-async fn update_llm(
-    State(state): State<AppState>,
+async fn handle_update_llm(
+    State(mut state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
     Json(payload): Json<UpdateLlmRequest>,
 ) -> Result<Json<LlmResponse>, String> {
@@ -525,6 +539,7 @@ async fn update_llm(
             "vertex" => LlmProvider::Vertex,
             "xai" => LlmProvider::Xai,
             "venice" => LlmProvider::Venice,
+            "opencode" => LlmProvider::OpenCode,
             "custom" => LlmProvider::Custom,
             _ => return Err("Invalid provider type".to_string()),
         };
@@ -541,49 +556,46 @@ async fn update_llm(
 
     let updated = llm.clone();
 
+    // Update in-memory state.config (this is what's used for listing!)
+    state.config = config.clone();
+
     // Update AppConfig global
     if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
         *global_config = Some(config.clone());
     }
 
-    // Persist to database
-    let agent_config = config.agent.clone();
-    if let Err(e) = AppConfig::save_section_to_db(&state.config_repo, "agent", &agent_config).await {
-        tracing::warn!("Failed to persist LLM config to database: {}", e);
+    // Persist entire config to database - MUST succeed or return error
+    if let Err(e) = config.save_to_db(&state.config_repo).await {
+        tracing::error!("Failed to persist LLM config update to database: {}", e);
+        return Err(format!("Failed to persist LLM update: {}", e));
     }
 
+    tracing::info!("LLM {} updated in database successfully", updated.name);
     Ok(Json(LlmResponse::from(updated)))
 }
 
-async fn delete_llm(
-    State(state): State<AppState>,
+async fn handle_delete_llm(
+    State(mut state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
     let mut config = state.config.clone();
-    
-    let initial_len = config.agent.llms.len();
     config.agent.llms.retain(|llm| llm.id != id);
     
-    if config.agent.llms.len() == initial_len {
-        return Err("LLM not found".to_string());
-    }
-
-    // Clear default if deleted
-    if config.agent.default_llm_id.as_ref() == Some(&id) {
-        config.agent.default_llm_id = config.agent.llms.first().map(|l| l.id.clone());
-    }
-
+    // Update in-memory state.config (this is what's used for listing!)
+    state.config = config.clone();
+    
     // Update AppConfig global
     if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
         *global_config = Some(config.clone());
     }
-
-    // Persist to database
-    let agent_config = config.agent.clone();
-    if let Err(e) = AppConfig::save_section_to_db(&state.config_repo, "agent", &agent_config).await {
-        tracing::warn!("Failed to persist LLM config to database: {}", e);
+    
+    // Persist entire config to database - MUST succeed or return error
+    if let Err(e) = config.save_to_db(&state.config_repo).await {
+        tracing::error!("Failed to persist LLM deletion to database: {}", e);
+        return Err(format!("Failed to persist LLM deletion: {}", e));
     }
-
+    
+    tracing::info!("LLM {} deleted from database successfully", id);
     Ok(Json(serde_json::json!({ "success": true, "message": "LLM deleted" })))
 }
 
@@ -591,10 +603,14 @@ async fn test_llm(
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<TestLlmResponse>, String> {
-    let llm = state
-        .config
-        .agent
-        .llms
+    // Use GLOBAL_CONFIG which is the source of truth (shared across all requests)
+    let llms = if let Ok(config) = GLOBAL_CONFIG.read() {
+        config.as_ref().map(|c| c.agent.llms.clone()).unwrap_or_default()
+    } else {
+        state.config.agent.llms.clone()
+    };
+    
+    let llm = llms
         .iter()
         .find(|l| l.id == id)
         .ok_or_else(|| "LLM not found".to_string())?;
@@ -622,6 +638,7 @@ async fn test_llm(
         | LlmProvider::MiniMax
         | LlmProvider::Xai
         | LlmProvider::Venice
+        | LlmProvider::OpenCode
         | LlmProvider::Custom => {
             // Most providers use OpenAI-compatible API
             let url = format!("{}/v1/models", llm.url.trim_end_matches('/'));
@@ -709,6 +726,124 @@ async fn test_llm(
     }
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ListModelsRequest {
+    pub url: String,
+    pub api_key: Option<String>,
+    pub provider: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelInfo {
+    pub id: String,
+    pub name: String,
+}
+
+async fn list_provider_models_by_config(
+    State(_state): State<AppState>,
+    Json(payload): Json<ListModelsRequest>,
+) -> Result<Json<Vec<ModelInfo>>, String> {
+    let client = reqwest::Client::new();
+
+    // Map provider to API type for model listing
+    let model_url = match payload.provider.as_str() {
+        "anthropic" => {
+            // Anthropic doesn't have a list models endpoint, return common models
+            return Ok(Json(vec![
+                ModelInfo { id: "claude-sonnet-4-20250514".to_string(), name: "Claude Sonnet 4".to_string() },
+                ModelInfo { id: "claude-opus-4-5-20250514".to_string(), name: "Claude Opus 4".to_string() },
+                ModelInfo { id: "claude-3-5-sonnet-20240620".to_string(), name: "Claude 3.5 Sonnet".to_string() },
+                ModelInfo { id: "claude-3-opus-20240229".to_string(), name: "Claude 3 Opus".to_string() },
+                ModelInfo { id: "claude-3-haiku-20240307".to_string(), name: "Claude 3 Haiku".to_string() },
+            ]));
+        }
+        "google" | "vertex" => {
+            format!("{}/models?key={}", payload.url.trim_end_matches('/'), payload.api_key.as_deref().unwrap_or(""))
+        }
+        "huggingface" => {
+            format!("{}/models", payload.url.trim_end_matches('/'))
+        }
+        _ => {
+            // Most providers use OpenAI-compatible API
+            format!("{}/v1/models", payload.url.trim_end_matches('/'))
+        }
+    };
+
+    let mut req = client.get(&model_url);
+    
+    // Add appropriate headers based on provider
+    match payload.provider.as_str() {
+        "anthropic" => {
+            // Already handled above
+        }
+        "google" | "vertex" => {
+            // Google uses query param for key
+        }
+        "huggingface" => {
+            if let Some(ref key) = payload.api_key {
+                req = req.header("Authorization", format!("Bearer {}", key));
+            }
+        }
+        _ => {
+            // OpenAI-compatible: Bearer token
+            if let Some(ref key) = payload.api_key {
+                req = req.header("Authorization", format!("Bearer {}", key));
+            }
+        }
+    };
+
+    let response = req.send().await.map_err(|e| format!("Request failed: {}", e))?;
+
+    if !response.status().is_success() {
+        return Err(format!("HTTP error: {}", response.status()));
+    }
+
+    // Parse response based on provider
+    let models: Vec<ModelInfo> = match payload.provider.as_str() {
+        "google" | "vertex" => {
+            // Google's model list format
+            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            body["models"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .map(|m| ModelInfo {
+                    id: m["name"].as_str().unwrap_or("").to_string(),
+                    name: m["displayName"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        }
+        "huggingface" => {
+            // HuggingFace format: array of {id, modelId, ...}
+            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            body.as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .take(50) // Limit to 50 models
+                .map(|m| ModelInfo {
+                    id: m["id"].as_str().unwrap_or("").to_string(),
+                    name: m["id"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        }
+        _ => {
+            // OpenAI-compatible format: {data: [{id: "...", ...}]}
+            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            body["data"]
+                .as_array()
+                .unwrap_or(&vec![])
+                .iter()
+                .map(|m| ModelInfo {
+                    id: m["id"].as_str().unwrap_or("").to_string(),
+                    name: m["id"].as_str().unwrap_or("").to_string(),
+                })
+                .collect()
+        }
+    };
+
+    Ok(Json(models))
+}
+
 async fn get_default_llm(State(state): State<AppState>) -> Json<Option<LlmResponse>> {
     if let Some(id) = &state.config.agent.default_llm_id {
         let llm = state.config.agent.llms.iter().find(|l| &l.id == id);
@@ -719,7 +854,7 @@ async fn get_default_llm(State(state): State<AppState>) -> Json<Option<LlmRespon
 }
 
 async fn set_default_llm(
-    State(state): State<AppState>,
+    State(mut state): State<AppState>,
     Json(payload): Json<serde_json::Value>,
 ) -> Result<Json<LlmResponse>, String> {
     let id = payload["id"]
@@ -741,18 +876,23 @@ async fn set_default_llm(
     config.agent.default_llm_id = Some(id.clone());
     config.agent.llama_url = llm.url.clone();
     config.agent.llama_model = llm.model.clone();
+    config.agent.use_llm = true; // Enable LLM when default is set
+
+    // Update in-memory state.config (this is what's used for listing!)
+    state.config = config.clone();
 
     // Update AppConfig global
     if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
         *global_config = Some(config.clone());
     }
 
-    // Persist to database
-    let agent_config = config.agent.clone();
-    if let Err(e) = AppConfig::save_section_to_db(&state.config_repo, "agent", &agent_config).await {
-        tracing::warn!("Failed to persist LLM config to database: {}", e);
+    // Persist entire config to database - MUST succeed or return error
+    if let Err(e) = config.save_to_db(&state.config_repo).await {
+        tracing::error!("Failed to persist default LLM config to database: {}", e);
+        return Err(format!("Failed to persist default LLM: {}", e));
     }
 
+    tracing::info!("Default LLM set to {} in database successfully", llm.name);
     Ok(Json(LlmResponse::from(llm)))
 }
 

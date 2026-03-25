@@ -36,6 +36,7 @@ use apex_router::webhook::WebhookManager;
 use apex_router::notification::NotificationManager;
 use apex_router::system_health::SystemMonitor;
 use apex_router::websocket::WebSocketManager;
+use apex_router::security::replay_protection;
 use apex_router::mcp::McpServerManager;
 
 #[tokio::main]
@@ -331,6 +332,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         heartbeat_scheduler,
         mcp_manager: std::sync::Arc::new(McpServerManager::new()),
         anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
+        // Feature 5: Plugin Signing
+        signature_store: std::sync::Arc::new(std::sync::Mutex::new(apex_router::skill_signer::SignatureStore::new())),
+        // Feature 7: Story Engine
+        story_engine: std::sync::Arc::new(std::sync::Mutex::new(apex_router::story_engine::StoryEngine::new())),
+        // Feature 4: Continuity Scheduler
+        continuity_state: std::sync::Arc::new(std::sync::Mutex::new(apex_router::api::continuity_api::ContinuityState::default())),
+        // Feature 6: Privacy Guard
+        privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(apex_router::privacy_guard::PrivacyGuard::default_guard())),
+        // Feature 3: Context Scope
+        context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(apex_router::api::context_scope_api::ContextScopeState::default())),
+        // Patch 15: Replay protection (in-memory or Redis based on config)
+        replay_protection: {
+            let backend = match config.streaming.replay_backend {
+                apex_router::unified_config::ReplayBackend::Redis => "redis",
+                apex_router::unified_config::ReplayBackend::Memory => "memory",
+            };
+            let redis_url = config.streaming.redis_url.as_deref();
+            std::sync::Arc::from(replay_protection::from_config(backend, redis_url))
+        },
+        // Patch 16: Streaming analytics
+        streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
     };
     
     let state_arc = std::sync::Arc::new(state);

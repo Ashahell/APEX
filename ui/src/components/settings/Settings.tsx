@@ -11,7 +11,12 @@ import { LiteLlmSettings } from './LiteLlmSettings';
 import { SecretsManager } from './SecretsManager';
 import { SlackBlockManager } from './SlackBlockManager';
 import { RuntimeSettings } from './RuntimeSettings';
+import { ToolValidationSettings } from './ToolValidationSettings';
+import { PersonaEditor } from './PersonaEditor';
 import { UserProfileSettings } from './UserProfileSettings';
+import { PrivacySettings } from './PrivacySettings';
+import { ContinuitySettings } from './ContinuitySettings';
+import { PersonaList } from './PersonaList';
 
 interface VmStats {
   enabled: boolean;
@@ -26,7 +31,7 @@ interface TotpStatus {
   configured: boolean;
 }
 
-type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a';
+type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a' | 'privacy' | 'continuity' | 'stories' | 'personas';
 type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory' | 'profile';
 type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel' | 'slackblocks';
 
@@ -125,6 +130,10 @@ export function Settings() {
     { id: 'backup', label: 'Backup' },
     { id: 'speech', label: 'Speech' },
     { id: 'a2a', label: 'A2A' },
+    { id: 'privacy', label: '🔒 Privacy' },
+    { id: 'continuity', label: '⏰ Continuity' },
+    { id: 'stories', label: '📖 Stories' },
+    { id: 'personas', label: '🎭 Personas' },
     { id: 'about', label: 'About' },
   ];
 
@@ -519,7 +528,13 @@ export function Settings() {
           </>
         )}
 
-        {activeTab === 'runtime' && <RuntimeSettings />}
+        {activeTab === 'runtime' && (
+          <div className="space-y-8">
+            <RuntimeSettings />
+            <ToolValidationSettings />
+            <PersonaEditor />
+          </div>
+        )}
 
         {activeTab === 'mcp' && (
           <McpManager />
@@ -1102,6 +1117,52 @@ export function Settings() {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Privacy Tab - Feature 6 */}
+        {activeTab === 'privacy' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold">🔒 Privacy Mode</h2>
+              <p className="text-muted-foreground">Block cloud connections and use local models only</p>
+            </div>
+            <PrivacySettings />
+          </div>
+        )}
+
+        {/* Continuity Tab - Feature 4 */}
+        {activeTab === 'continuity' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold">⏰ Continuity Scheduler</h2>
+              <p className="text-muted-foreground">Schedule autonomous tasks and check-ins</p>
+            </div>
+            <ContinuitySettings />
+          </div>
+        )}
+
+        {/* Stories Tab - Feature 7 */}
+        {activeTab === 'stories' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold">📖 Story Engine</h2>
+              <p className="text-muted-foreground">Interactive fiction adventures with AI as your dungeon master</p>
+            </div>
+            <div className="border rounded-lg p-6">
+              <p className="text-muted-foreground">Story features coming soon. Create interactive fiction adventures.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Personas Tab - Feature 2 */}
+        {activeTab === 'personas' && (
+          <div className="space-y-6">
+            <div>
+              <h2 className="text-2xl font-semibold">🎭 Personas</h2>
+              <p className="text-muted-foreground">Bundle prompts, tools, and settings into swappable profiles</p>
+            </div>
+            <PersonaList onEdit={(persona) => console.log('Edit persona:', persona)} />
           </div>
         )}
       </div>

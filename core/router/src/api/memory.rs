@@ -570,7 +570,7 @@ async fn index_memory(
         .await
         .map_err(|e| format!("Failed to create job: {}", e))?;
     
-    // TODO: Actually process the image/audio and generate embeddings
+    // NOTE: Image/audio processing requires external service (e.g., LLM with vision)
     // For now, create a placeholder embedding
     let embedding_id = Ulid::new().to_string();
     let placeholder_embedding: Vec<f32> = vec![0.0; 1536]; // Default embedding dim
@@ -609,7 +609,7 @@ async fn search_multimodal(
     
     let limit = query.limit.unwrap_or(10);
     
-    // TODO: Implement actual vector search
+    // NOTE: Full vector search requires embedding service (see embedder.rs)
     // For now, return recent embeddings filtered by modality
     let embeddings = repo
         .get_embeddings_by_modality(

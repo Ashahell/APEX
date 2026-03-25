@@ -3,6 +3,8 @@ import { useAppStore } from '../../stores/appStore';
 import { apiPost, apiGet } from '../../lib/api';
 import { TaskSidebar } from './TaskSidebar';
 import { ConfirmationGate } from './ConfirmationGate';
+import { SSEClient } from '../../lib/sse';
+import { WSClient } from '../../lib/ws';
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -68,6 +70,7 @@ export function Chat() {
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const clientRef = useRef<SSEClient | WSClient | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { 
@@ -143,6 +146,16 @@ export function Chat() {
     };
   }, []);
 
+  // Cleanup SSE connections on unmount
+  useEffect(() => {
+    return () => {
+      if (clientRef.current) {
+        clientRef.current.close('cancelled');
+        clientRef.current = null;
+      }
+    };
+  }, []);
+
   // Toggle speech recording
   const toggleRecording = () => {
     if (!recognition) {
@@ -210,7 +223,7 @@ export function Chat() {
             try { taskConfig = { ...taskConfig, ...JSON.parse(saved) }; } catch {}
           }
 
-          const res = await apiPost('/api/v1/tasks', {
+            const res = await apiPost('/api/v1/tasks', {
             content: nextMessage,
             max_steps: taskConfig.max_steps,
             budget_usd: taskConfig.budget_usd,
@@ -219,7 +232,7 @@ export function Chat() {
 
           if (res.ok) {
             const data = await res.json();
-            const result = await pollTaskResult(data.task_id, taskConfig.max_steps);
+            const result = await streamTaskResult(data.task_id, taskConfig.max_steps, pollTaskResult);
             
             // Update the assistant message
             const msgs = useAppStore.getState().messages;
@@ -255,6 +268,9 @@ export function Chat() {
     processQueue();
   }, [messageQueue, sending, isProcessingQueue]);
 
+  /**
+   * Poll for task result (fallback when SSE streaming is unavailable).
+   */
   const pollTaskResult = async (taskId: string, maxSteps: number = 10): Promise<{observation: string, cost?: number, steps?: number}> => {
     const timeoutSeconds = Math.max(maxSteps * 15, 60);
     for (let i = 0; i < timeoutSeconds; i++) {
@@ -299,6 +315,73 @@ export function Chat() {
     }
     setError('Task timed out');
     return { observation: 'Task timed out - please check Settings for task status' };
+  };
+
+  /**
+   * Stream task result via WebSocket (replaces SSE).
+   * Falls back to polling if WebSocket is unavailable or times out.
+   * Events are dispatched to the Zustand store for live UI updates.
+   */
+  const streamTaskResult = async (
+    taskId: string,
+    maxSteps: number = 10,
+    fallback = pollTaskResult
+  ): Promise<{ observation: string; cost?: number; steps?: number }> => {
+    const timeoutMs = Math.max(maxSteps * 15, 60) * 1000;
+
+    return new Promise((resolve) => {
+      let done = false;
+
+      const cleanup = () => {
+        if (done) return;
+        done = true;
+        clientRef.current?.close('cancelled');
+        clientRef.current = null;
+      };
+
+      // Timeout fallback
+      const timer = setTimeout(() => {
+        cleanup();
+        resolve(fallback(taskId, maxSteps));
+      }, timeoutMs);
+
+      // WebSocket client (Patch 14: replaces SSEClient)
+      const client = new WSClient(taskId, {
+        maxRetries: 3,
+        onDone: (_tid, reason) => {
+          clearTimeout(timer);
+          if (done) return;
+          done = true;
+
+          const store = useAppStore.getState();
+          // Read final output from store
+          const task = store.tasks.find((t) => t.id === _tid);
+          let observation = task?.output || '';
+          if (!observation && reason === 'complete') {
+            observation = 'Task completed';
+          } else if (reason === 'error' || reason === 'failed') {
+            observation = task?.error || 'Task failed';
+          }
+
+          const cost = task?.cost;
+          const steps = store.executionSteps.filter((s) => s.taskId === _tid).length;
+          clientRef.current = null;
+          resolve({ observation, cost, steps });
+        },
+        onError: (_tid, err) => {
+          clearTimeout(timer);
+          cleanup();
+          console.warn('[Chat] WS error, falling back to polling:', err);
+          resolve(fallback(taskId, maxSteps));
+        },
+        onConnect: (_tid) => {
+          console.debug('[Chat] WS connected for task:', _tid);
+        },
+      });
+
+      clientRef.current = client;
+      client.connect();
+    });
   };
 
   // Auto-resize textarea based on content
@@ -386,7 +469,7 @@ export function Chat() {
         
         // Check if task was auto-routed to deep (LLM)
         if (data.status === 'running' || data.tier === 'deep') {
-          const result = await pollTaskResult(data.task_id, taskConfig.max_steps);
+          const result = await streamTaskResult(data.task_id, taskConfig.max_steps, pollTaskResult);
           if (result.cost !== undefined) {
             setLastStats({ steps: result.steps || 0, cost: result.cost });
           }

@@ -5,8 +5,10 @@
 //! - USER.md: User profile (default 1,375 chars)
 //! - Frozen snapshot pattern for system prompt injection
 //! - Character limits with automatic consolidation
+//! - O(1) exact content lookups via HashMap index
 
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::path::PathBuf;
 use ulid::Ulid;
 
@@ -22,6 +24,7 @@ pub enum StoreType {
 }
 
 impl StoreType {
+    #[inline]
     pub fn default_limit(&self) -> usize {
         match self {
             StoreType::Memory => DEFAULT_MEMORY_CHAR_LIMIT,
@@ -29,6 +32,7 @@ impl StoreType {
         }
     }
     
+    #[inline]
     pub fn file_name(&self) -> &'static str {
         match self {
             StoreType::Memory => MEMORY_FILE,
@@ -71,6 +75,9 @@ impl MemoryEntry {
 pub struct MemoryStore {
     /// All entries in the store
     entries: Vec<MemoryEntry>,
+    /// HashSet for O(1) exact content lookups (for duplicate detection)
+    #[serde(skip)]
+    content_index: HashSet<String>,
     /// Maximum character limit
     char_limit: usize,
     /// Current used characters
@@ -84,6 +91,7 @@ impl MemoryStore {
     pub fn new(store_type: StoreType) -> Self {
         Self {
             entries: Vec::new(),
+            content_index: HashSet::new(),
             char_limit: store_type.default_limit(),
             used_chars: 0,
             store_type,
@@ -94,6 +102,7 @@ impl MemoryStore {
     pub fn with_limit(store_type: StoreType, char_limit: usize) -> Self {
         Self {
             entries: Vec::new(),
+            content_index: HashSet::new(),
             char_limit,
             used_chars: 0,
             store_type,
@@ -101,6 +110,7 @@ impl MemoryStore {
     }
     
     /// Get current usage as percentage (0.0 to 1.0)
+    #[inline]
     pub fn usage_percent(&self) -> f32 {
         if self.char_limit == 0 {
             return 0.0;
@@ -109,46 +119,55 @@ impl MemoryStore {
     }
     
     /// Get current usage as percentage string
+    #[inline]
     pub fn usage_display(&self) -> String {
         format!("{}%", (self.usage_percent() * 100.0) as usize)
     }
     
     /// Check if usage is at warning threshold
+    #[inline]
     pub fn is_warning(&self) -> bool {
         self.usage_percent() >= MEMORY_WARNING_THRESHOLD
     }
     
     /// Check if usage is at critical threshold
+    #[inline]
     pub fn is_critical(&self) -> bool {
         self.usage_percent() >= MEMORY_CRITICAL_THRESHOLD
     }
     
     /// Get available characters
+    #[inline]
     pub fn available_chars(&self) -> usize {
         self.char_limit.saturating_sub(self.used_chars)
     }
     
     /// Get current character limit
+    #[inline]
     pub fn char_limit(&self) -> usize {
         self.char_limit
     }
     
     /// Get number of entries
+    #[inline]
     pub fn entry_count(&self) -> usize {
         self.entries.len()
     }
     
     /// Get all entries (immutable)
+    #[inline]
     pub fn entries(&self) -> &[MemoryEntry] {
         &self.entries
     }
     
     /// Check if entry can be added without exceeding limit
+    #[inline]
     pub fn can_add(&self, content: &str) -> bool {
         self.used_chars + content.len() <= self.char_limit
     }
     
     /// Check if content exceeds maximum entry length
+    #[inline]
     pub fn exceeds_max_length(&self, content: &str) -> bool {
         content.len() > MAX_ENTRY_LENGTH
     }
@@ -177,8 +196,8 @@ impl MemoryStore {
             });
         }
         
-        // Check for duplicates
-        if self.entries.iter().any(|e| e.content == content) {
+        // O(1) duplicate check using HashSet index
+        if self.content_index.contains(&content) {
             return Err(MemoryError::DuplicateEntry);
         }
         
@@ -195,6 +214,7 @@ impl MemoryStore {
         let id = entry.id.clone();
         
         self.used_chars += content.len();
+        self.content_index.insert(content);  // Add to O(1) lookup index
         self.entries.push(entry);
         
         Ok(id)
@@ -219,6 +239,7 @@ impl MemoryStore {
             1 => {
                 let entry = self.entries.remove(matches[0]);
                 self.used_chars -= entry.content.len();
+                self.content_index.remove(&entry.content);  // Remove from O(1) index
                 Ok(())
             }
             _ => Err(MemoryError::MultipleMatches {
@@ -268,6 +289,7 @@ impl MemoryStore {
         };
         
         let old_entry = &self.entries[index];
+        let old_content = old_entry.content.clone();
         let char_diff = new_content.len() as i64 - old_entry.content.len() as i64;
         
         // Check if new content would exceed limit
@@ -278,6 +300,10 @@ impl MemoryStore {
                 needed: new_content.len(),
             });
         }
+        
+        // Update index: remove old, add new (only if different)
+        self.content_index.remove(&old_content);
+        self.content_index.insert(new_content.clone());
         
         self.used_chars = (self.used_chars as i64 + char_diff) as usize;
         self.entries[index].content = new_content;
@@ -398,6 +424,11 @@ impl MemoryStore {
                 }
             }
         }
+        
+        // Rebuild index after parsing all entries
+        store.content_index = store.entries.iter()
+            .map(|e| e.content.clone())
+            .collect();
         
         Ok(store)
     }

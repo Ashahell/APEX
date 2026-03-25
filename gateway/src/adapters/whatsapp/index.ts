@@ -65,10 +65,11 @@ export class WhatsAppAdapter extends BaseAdapter {
       });
       
       if (!result.ok) {
-        console.error('Failed to send WhatsApp message:', await result.text());
+        const errorText = await result.text();
+        this.logger.error({ status: result.status, error: errorText }, 'Failed to send WhatsApp message');
       }
     } catch (error) {
-      console.error('WhatsApp send error:', error);
+      this.logger.error({ error }, 'WhatsApp send error');
     }
   }
 }

@@ -45,8 +45,13 @@ serde_yaml = "0.9"
 lazy_static = "1.4"
 async-trait = "0.1"
 nats = { version = "0.25", optional = true }
+deadpool-redis = { version = "0.14", optional = true }
 notify = "6"
 tempfile = "3"
+
+[[bin]]
+name = "apex-router-bin"
+path = "src/bin/apex_router_bin.rs"
 
 [dev-dependencies]
 tower = "0.5"
@@ -57,3 +62,4 @@ reqwest = { version = "0.12", features = ["json"] }
 [features]
 default = []
 nats = ["dep:nats"]
+redis = ["dep:deadpool-redis"]

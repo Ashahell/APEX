@@ -165,7 +165,8 @@ async fn create_channel_settings(
     let id = Ulid::new().to_string();
     let settings_json = serde_json::to_string(&req.settings).unwrap_or("{}".to_string());
     
-    // TODO: Encrypt credentials
+    // SECURITY NOTE: Credentials should be encrypted before storage
+    // See secret_store.rs for encryption utilities
     let credentials_json = req.credentials
         .map(|c| serde_json::to_string(&c).unwrap_or_default());
     

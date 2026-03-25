@@ -231,11 +231,13 @@ pub struct AppConfig {
     pub logging: LoggingConfig,
     pub skills: SkillsConfig,
     pub skill_pool: SkillPoolConfigSection,
+    pub tool_validation_level: Option<String>,  // Feature 1: Tool validation level
     pub soul: SoulConfig,
     pub heartbeat: HeartbeatConfig,
     pub moltbook: MoltbookConfigSection,
     pub memory: MemoryConfig,
     pub hub: HubConfig,
+    pub streaming: StreamingConfig,  // Patch 11: SSE streaming config
     #[serde(skip)]
     pub config_source: ConfigSource,
 }
@@ -821,6 +823,49 @@ impl Default for SkillPoolConfigSection {
     }
 }
 
+/// Replay protection backend type (Patch 15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ReplayBackend {
+    /// In-memory HashSet (default, single-process only).
+    Memory,
+    /// Redis with SETNX + TTL (distributed, multi-instance).
+    Redis,
+}
+
+/// Streaming configuration for SSE/WebSocket endpoints (Patch 11).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingConfig {
+    /// Enable SSE streaming endpoints (Hands, MCP). Defaults to false (MVP safe-by-default).
+    pub enabled: bool,
+    /// Maximum age of a streaming session in seconds before auto-termination.
+    pub max_session_secs: u64,
+    /// Replay protection backend (Patch 15: distributed Redis support).
+    pub replay_backend: ReplayBackend,
+    /// Redis URL for replay protection (only used when replay_backend = Redis).
+    pub redis_url: Option<String>,
+}
+
+impl Default for StreamingConfig {
+    fn default() -> Self {
+        Self {
+            enabled: std::env::var("APEX_STREAMING_ENABLED")
+                .ok()
+                .map(|v| v == "1")
+                .unwrap_or(false),
+            max_session_secs: std::env::var("APEX_STREAMING_MAX_SESSION_SECS")
+                .ok()
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(3600), // 1 hour default
+            replay_backend: std::env::var("APEX_REPLAY_BACKEND")
+                .ok()
+                .map(|v| if v == "redis" { ReplayBackend::Redis } else { ReplayBackend::Memory })
+                .unwrap_or(ReplayBackend::Memory),
+            redis_url: std::env::var("APEX_REDIS_URL").ok(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum ConfigSource {
     #[default]
@@ -842,11 +887,13 @@ impl Default for AppConfig {
             logging: LoggingConfig::default(),
             skills: SkillsConfig::default(),
             skill_pool: SkillPoolConfigSection::default(),
+            tool_validation_level: Some(tool_validation_constants::DEFAULT_VALIDATION_LEVEL.to_string()),
             soul: SoulConfig::default(),
             heartbeat: HeartbeatConfig::default(),
             moltbook: MoltbookConfigSection::default(),
             memory: MemoryConfig::default(),
             hub: HubConfig::default(),
+            streaming: StreamingConfig::default(),
             config_source: ConfigSource::Environment,
         }
     }
@@ -1253,4 +1300,200 @@ mod tests {
         assert!(vars.contains_key("APEX_PORT"));
         assert!(vars.contains_key("APEX_SHARED_SECRET"));
     }
+}
+
+/// Tool validation constants (Feature 1: Tool Maker)
+pub mod tool_validation_constants {
+    /// Strict import allowlist - only safe stdlib modules
+    pub const STRICT_IMPORT_ALLOWLIST: &[&str] = &[
+        "json", "re", "math", "datetime", "collections", "itertools",
+        "random", "uuid", "hashlib", "typing", "os.path", "pathlib",
+    ];
+    
+    /// Moderate import allowlist - includes network and parsing
+    pub const MODERATE_IMPORT_ALLOWLIST: &[&str] = &[
+        // Strict +
+        "urllib", "http.client", "csv", "xml.etree", "base64",
+        "textwrap", "html", "ast", "inspect", "functools",
+    ];
+    
+    /// System killer imports - always blocked
+    pub const SYSTEM_KILLER_IMPORTS: &[&str] = &[
+        "os.system", "subprocess", "pty", "socket", "ctypes",
+        "importlib", "__import__", "eval", "exec", "compile",
+    ];
+    
+    /// Default validation level
+    pub const DEFAULT_VALIDATION_LEVEL: &str = "strict";
+    
+    /// Maximum code length (characters)
+    pub const MAX_CODE_LENGTH: usize = 50000;
+    
+    /// Sandbox timeout (seconds)
+    pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
+    
+    /// Validation levels
+    pub const VALIDATION_LEVELS: [&str; 3] = ["strict", "moderate", "permissive"];
+    
+    /// Maximum blocked imports to report
+    pub const MAX_BLOCKED_REPORT: usize = 10;
+}
+
+/// Persona constants (Feature 2: Persona Assembly)
+pub mod persona_constants {
+    /// Maximum number of personas
+    pub const MAX_PERSONAS: usize = 20;
+    
+    /// Default persona name
+    pub const DEFAULT_PERSONA_NAME: &str = "default";
+    
+    /// Persona file name
+    pub const PERSONA_FILE: &str = "personas.json";
+    
+    /// Maximum prompt pieces per persona
+    pub const MAX_PROMPT_PIECES: usize = 10;
+    
+    /// Maximum tools per persona
+    pub const MAX_TOOLS_PER_PERSONA: usize = 50;
+    
+    /// Maximum persona name length
+    pub const MAX_NAME_LENGTH: usize = 50;
+    
+    /// Maximum description length
+    pub const MAX_DESCRIPTION_LENGTH: usize = 500;
+    
+    /// Valid prompt piece types
+    pub const PROMPT_PIECE_TYPES: [&str; 5] = [
+        "system", "location", "emotion", "context", "custom"
+    ];
+}
+
+/// Privacy constants (Feature 6: Privacy Toggle)
+pub mod privacy_constants {
+    /// Privacy mode config key
+    pub const PRIVACY_MODE_KEY: &str = "privacy_mode_enabled";
+    
+    /// Cloud provider identifiers
+    pub const CLOUD_PROVIDERS: [&str; 8] = [
+        "openai", "anthropic", "google", "cohere", "fireworks",
+        "azure", "aws_bedrock", "huggingface"
+    ];
+    
+    /// Privacy warning threshold (percent)
+    pub const PRIVACY_WARNING_THRESHOLD: usize = 80;
+    
+    /// Maximum audit log entries
+    pub const MAX_AUDIT_ENTRIES: usize = 1000;
+    
+    /// Audit log file name
+    pub const AUDIT_LOG_FILE: &str = "privacy_audit.log";
+}
+
+/// Continuity constants (Feature 4: Continuity Scheduler)
+pub mod continuity_constants {
+    /// Maximum scheduled tasks
+    pub const MAX_SCHEDULED_TASKS: usize = 50;
+    
+    /// Task type identifiers
+    pub const TASK_TYPES: [&str; 7] = [
+        "morning_greeting", "evening_checkin", "weekly_summary",
+        "dream_mode", "alarm", "random_checkin", "custom"
+    ];
+    
+    /// Default morning hour (24h format)
+    pub const DEFAULT_MORNING_HOUR: u32 = 8;
+    
+    /// Default evening hour (24h format)
+    pub const DEFAULT_EVENING_HOUR: u32 = 21;
+    
+    /// Maximum task history entries
+    pub const MAX_TASK_HISTORY: usize = 100;
+    
+    /// Schedule check interval (seconds)
+    pub const CHECK_INTERVAL_SECS: u64 = 60;
+    
+    /// Cron field limits
+    pub const CRON_SECOND_MIN: u32 = 0;
+    pub const CRON_SECOND_MAX: u32 = 59;
+    pub const CRON_MINUTE_MIN: u32 = 0;
+    pub const CRON_MINUTE_MAX: u32 = 59;
+    pub const CRON_HOUR_MIN: u32 = 0;
+    pub const CRON_HOUR_MAX: u32 = 23;
+    pub const CRON_DAY_MIN: u32 = 1;
+    pub const CRON_DAY_MAX: u32 = 31;
+    pub const CRON_MONTH_MIN: u32 = 1;
+    pub const CRON_MONTH_MAX: u32 = 12;
+    pub const CRON_WEEKDAY_MIN: u32 = 0;
+    pub const CRON_WEEKDAY_MAX: u32 = 6;
+}
+
+/// Signing constants (Feature 5: Plugin Signing)
+pub mod signing_constants {
+    /// Signature algorithm
+    pub const SIGNATURE_ALGORITHM: &str = "ed25519";
+    
+    /// Signature expiry days
+    pub const SIGNATURE_EXPIRY_DAYS: i64 = 365;
+    
+    /// Key bits
+    pub const KEY_BITS: usize = 256;
+    
+    /// Maximum signature size (bytes)
+    pub const MAX_SIGNATURE_SIZE: usize = 64;
+    
+    /// Keys directory
+    pub const KEYS_DIR: &str = "keys";
+    
+    /// Signing key file
+    pub const SIGNING_KEY_FILE: &str = "signing_key.pem";
+    
+    /// Verification key file
+    pub const VERIFY_KEY_FILE: &str = "verify_key.pub";
+}
+
+/// Story constants (Feature 7: Story Engine)
+pub mod story_constants {
+    /// Maximum stories
+    pub const MAX_STORIES: usize = 100;
+    
+    /// Maximum story turns
+    pub const MAX_STORY_TURNS: usize = 10000;
+    
+    /// Valid dice types
+    pub const DICE_TYPES: [&str; 7] = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
+    
+    /// Default dice
+    pub const DEFAULT_DICE: &str = "d20";
+    
+    /// Story task type
+    pub const STORY_TASK_TYPE: &str = "story";
+    
+    /// Valid settings
+    pub const STORY_SETTINGS: [&str; 6] = [
+        "fantasy", "scifi", "horror", "mystery", "western", "modern"
+    ];
+    
+    /// Maximum characters per story
+    pub const MAX_CHARACTERS_PER_STORY: usize = 6;
+    
+    /// Maximum inventory items
+    pub const MAX_INVENTORY_ITEMS: usize = 20;
+}
+
+/// Context scope constants (Feature 3: Scope Isolation)
+pub mod scope_constants {
+    /// Scope identifiers
+    pub const SCOPE_GLOBAL: &str = "global";
+    pub const SCOPE_SESSION: &str = "session";
+    pub const SCOPE_CHANNEL: &str = "channel";
+    
+    /// Default scopes per data type
+    pub const MEMORY_SCOPE_DEFAULT: &str = "global";
+    pub const BOUNDED_MEMORY_SCOPE_DEFAULT: &str = "global";
+    pub const KNOWLEDGE_SCOPE_DEFAULT: &str = "global";
+    pub const PREFERENCES_SCOPE_DEFAULT: &str = "session";
+    pub const SKILLS_SCOPE_DEFAULT: &str = "global";
+    
+    /// Valid scope types
+    pub const VALID_SCOPE_TYPES: [&str; 3] = ["global", "session", "channel"];
 }

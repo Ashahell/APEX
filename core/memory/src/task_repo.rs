@@ -31,10 +31,12 @@ impl<'a> TaskRepository<'a> {
         let now = Utc::now();
         let priority = input.priority.as_deref().unwrap_or("medium");
 
-        sqlx::query(
+        // Use INSERT RETURNING to get the created task in a single query
+        sqlx::query_as::<_, Task>(
             r#"
             INSERT INTO tasks (id, status, tier, input_content, channel, thread_id, author, skill_name, project, priority, category, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING *
             "#,
         )
         .bind(id)
@@ -50,10 +52,8 @@ impl<'a> TaskRepository<'a> {
         .bind(&input.category)
         .bind(now)
         .bind(now)
-        .execute(self.pool)
-        .await?;
-
-        self.find_by_id(id).await
+        .fetch_one(self.pool)
+        .await
     }
 
     pub async fn find_by_id(&self, id: &str) -> Result<Task, sqlx::Error> {

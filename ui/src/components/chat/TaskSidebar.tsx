@@ -9,6 +9,7 @@ interface TaskSidebarProps {
 
 export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
   const tasks = useAppStore((s) => s.tasks);
+  const executionSteps = useAppStore((s) => s.executionSteps);
   const [showThoughts, setShowThoughts] = useState(false);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
@@ -89,7 +90,15 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
   return (
     <div className="w-72 border-l border-[var(--color-border)] bg-[var(--color-panel)] flex flex-col h-full">
       <div className="p-4 border-b border-[var(--color-border)]">
-        <h3 className="font-semibold text-[var(--color-text)]">Tasks</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold text-[var(--color-text)]">Tasks</h3>
+          {activeTasks.length > 0 && (
+            <span className="text-xs text-[#4248f1] flex items-center gap-1">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#4248f1] animate-pulse" />
+              SSE live
+            </span>
+          )}
+        </div>
         <p className="text-sm text-[var(--color-text-muted)]">
           {activeTasks.length} active
         </p>
@@ -118,15 +127,23 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
                   <p className="text-sm font-medium truncate text-[var(--color-text)]">
                     {task.skillName || task.input.slice(0, 30)}
                   </p>
-                  <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-[var(--color-text-muted)]">
-                      {formatElapsed(task.createdAt)}
-                    </span>
-                    {task.cost && (
-                      <span className="text-xs text-[var(--color-text-muted)]">
-                        ${task.cost.toFixed(3)}
-                      </span>
-                    )}
+                   <div className="flex items-center justify-between mt-1">
+                     <span className="text-xs text-[var(--color-text-muted)]">
+                       {formatElapsed(task.createdAt)}
+                       {task.status === 'running' && (() => {
+                         const steps = executionSteps.filter(s => s.taskId === task.id);
+                         return steps.length > 0 ? (
+                           <span className="ml-1.5 text-[#4248f1]">
+                             · {steps.length} step{steps.length !== 1 ? 's' : ''}
+                           </span>
+                         ) : null;
+                       })()}
+                     </span>
+                     {task.cost && (
+                       <span className="text-xs text-[var(--color-text-muted)]">
+                         ${task.cost.toFixed(3)}
+                       </span>
+                     )}
                   </div>
                 </motion.button>
               ))}

@@ -29,7 +29,7 @@ APEX is **more secure than both** by design:
 
 ## Status
 
-**Version**: v1.5.0 (Pre-Alpha) - Hermes Agent Integration Complete
+**Version**: v1.6.0 (Pre-Alpha) - Sapphire Features Complete
 
 ## Architecture
 

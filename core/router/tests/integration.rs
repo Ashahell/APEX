@@ -166,6 +166,32 @@ async fn create_test_state() -> AppState {
         ),
         mcp_manager: std::sync::Arc::new(apex_router::mcp::McpServerManager::new()),
         anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
+        // Feature 5: Plugin Signing
+        signature_store: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::skill_signer::SignatureStore::new()
+        )),
+        // Feature 7: Story Engine
+        story_engine: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::story_engine::StoryEngine::new()
+        )),
+        // Feature 4: Continuity Scheduler
+        continuity_state: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::api::continuity_api::ContinuityState::default()
+        )),
+        // Feature 6: Privacy Toggle
+        privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::privacy_guard::PrivacyGuard::default_guard()
+        )),
+        // Feature 3: Context Scope
+        context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::api::context_scope_api::ContextScopeState::default()
+        )),
+        // Patch 15: Distributed Replay Protection
+        replay_protection: std::sync::Arc::new(
+            apex_router::security::replay_protection::InMemoryReplayProtection::default()
+        ),
+        // Patch 16: Streaming Analytics
+        streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
     }
 }
 

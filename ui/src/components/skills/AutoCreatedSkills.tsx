@@ -48,7 +48,7 @@ export function AutoCreatedSkills() {
       const data = await res.json();
       setSkills(Array.isArray(data) ? data : []);
       setError(null);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load skills:', err);
     }
   };
@@ -59,7 +59,7 @@ export function AutoCreatedSkills() {
       const res = await apiFetch('/api/v1/skills/suggestions');
       const data = await res.json();
       setSuggestions(Array.isArray(data) ? data : []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load suggestions:', err);
     } finally {
       setLoading(false);
@@ -91,8 +91,9 @@ export function AutoCreatedSkills() {
         setSelectedSkill(null);
         setSkillContent(null);
       }
-    } catch (err: any) {
-      alert(`Failed to delete skill: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to delete skill: ${message}`);
     }
   };
 
@@ -114,8 +115,9 @@ export function AutoCreatedSkills() {
       
       await loadSkills();
       await loadSuggestions();
-    } catch (err: any) {
-      alert(`Failed to create skill: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to create skill: ${message}`);
     }
   };
 
@@ -125,8 +127,9 @@ export function AutoCreatedSkills() {
     try {
       await apiFetch(`/api/v1/skills/suggestions/${taskId}`, { method: 'DELETE' });
       await loadSuggestions();
-    } catch (err: any) {
-      alert(`Failed to delete suggestion: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to delete suggestion: ${message}`);
     }
   };
 
@@ -147,8 +150,9 @@ export function AutoCreatedSkills() {
       setShowCreateForm(false);
       setNewSkill({ name: '', description: '', content: '' });
       await loadSkills();
-    } catch (err: any) {
-      alert(`Failed to create skill: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      alert(`Failed to create skill: ${message}`);
     } finally {
       setCreating(false);
     }

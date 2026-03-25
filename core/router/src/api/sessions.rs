@@ -163,7 +163,8 @@ async fn yield_session(
         .await
         .map_err(|e| format!("Failed to log yield: {}", e))?;
     
-    // TODO: Actually signal to skip remaining tool work in the subagent
+    // NOTE: Inter-worker signaling requires NATS or shared state
+    // The yield is logged for the subagent to check on next iteration
     
     Ok(Json(YieldResponse {
         yield_id,

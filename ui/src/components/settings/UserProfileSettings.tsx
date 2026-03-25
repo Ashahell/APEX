@@ -13,21 +13,31 @@ interface UserProfile {
   timezone: string;
 }
 
-const COMMUNICATION_STYLES = [
+type CommunicationStyle = 'formal' | 'casual' | 'technical' | 'concise';
+type VerbosityLevel = 'brief' | 'moderate' | 'detailed' | 'comprehensive';
+type ResponseFormat = 'plain' | 'markdown' | 'structured';
+
+interface StyleOption<T> {
+  value: T;
+  label: string;
+  description: string;
+}
+
+const COMMUNICATION_STYLES: StyleOption<CommunicationStyle>[] = [
   { value: 'casual', label: 'Casual', description: 'Conversational and friendly' },
   { value: 'formal', label: 'Formal', description: 'Professional and structured' },
   { value: 'technical', label: 'Technical', description: 'Detailed with code examples' },
   { value: 'concise', label: 'Concise', description: 'Brief and to the point' },
 ];
 
-const VERBOSITY_LEVELS = [
+const VERBOSITY_LEVELS: StyleOption<VerbosityLevel>[] = [
   { value: 'brief', label: 'Brief', description: 'Short answers, minimal explanation' },
   { value: 'moderate', label: 'Moderate', description: 'Balanced detail level' },
   { value: 'detailed', label: 'Detailed', description: 'Thorough explanations' },
   { value: 'comprehensive', label: 'Comprehensive', description: 'Maximum detail with context' },
 ];
 
-const RESPONSE_FORMATS = [
+const RESPONSE_FORMATS: StyleOption<ResponseFormat>[] = [
   { value: 'plain', label: 'Plain Text', description: 'Simple text responses' },
   { value: 'markdown', label: 'Markdown', description: 'Formatted with markdown' },
   { value: 'structured', label: 'Structured', description: 'JSON or structured output' },
@@ -128,7 +138,7 @@ export function UserProfileSettings() {
           {COMMUNICATION_STYLES.map((style) => (
             <button
               key={style.value}
-              onClick={() => updateProfile({ communication_style: style.value as any })}
+              onClick={() => updateProfile({ communication_style: style.value })}
               disabled={saving}
               className={`p-4 rounded-lg border text-left transition-colors ${
                 profile.communication_style === style.value
@@ -150,7 +160,7 @@ export function UserProfileSettings() {
           {VERBOSITY_LEVELS.map((level) => (
             <button
               key={level.value}
-              onClick={() => updateProfile({ verbosity: level.value as any })}
+              onClick={() => updateProfile({ verbosity: level.value })}
               disabled={saving}
               className={`p-4 rounded-lg border text-left transition-colors ${
                 profile.verbosity === level.value
@@ -172,7 +182,7 @@ export function UserProfileSettings() {
           {RESPONSE_FORMATS.map((format) => (
             <button
               key={format.value}
-              onClick={() => updateProfile({ response_format: format.value as any })}
+              onClick={() => updateProfile({ response_format: format.value })}
               disabled={saving}
               className={`p-3 rounded-lg border text-center transition-colors ${
                 profile.response_format === format.value

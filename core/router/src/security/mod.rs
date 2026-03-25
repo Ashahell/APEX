@@ -11,6 +11,7 @@ pub mod content_hash;
 pub mod injection_classifier;
 pub mod anomaly_detector;
 pub mod validators;
+pub mod replay_protection;  // Patch 11: In-memory replay detection for HMAC streaming
 
 pub use content_hash::ContentHash;
 pub use injection_classifier::{InjectionClassifier, InjectionDetectionResult, InjectionType, ThreatLevel};

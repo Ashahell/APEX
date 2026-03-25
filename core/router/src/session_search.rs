@@ -47,7 +47,7 @@ pub struct SessionSearch {
 }
 
 impl SessionSearch {
-    /// Create a new session search engine
+    /// Create a new session search engine (without FTS init)
     pub fn new(pool: Pool<Sqlite>) -> Self {
         Self { 
             pool, 
@@ -55,9 +55,15 @@ impl SessionSearch {
         }
     }
     
+    /// Create and initialize a session search engine with FTS5
+    pub async fn new_initialized(pool: Pool<Sqlite>) -> Result<Self, SessionSearchError> {
+        let mut search = Self::new(pool);
+        search.fts_enabled = search.init_fts().await;
+        Ok(search)
+    }
+    
     /// Initialize FTS5 virtual table (optional - silently fails if not supported)
-    pub async fn initialize(&self) -> Result<(), SessionSearchError> {
-        // Try to create FTS5 virtual table
+    async fn init_fts(&self) -> bool {
         let create_result = sqlx::query(&format!(
             r#"
             CREATE VIRTUAL TABLE IF NOT EXISTS {} USING fts5(
@@ -74,14 +80,13 @@ impl SessionSearch {
         match create_result {
             Ok(_) => {
                 tracing::info!("FTS5 search index initialized");
-                // Note: Can't modify self.fts_enabled in &self context
+                true
             }
             Err(e) => {
                 tracing::warn!("FTS5 not available, falling back to LIKE search: {}", e);
+                false
             }
         }
-        
-        Ok(())
     }
     
     /// Check if FTS is enabled
