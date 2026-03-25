@@ -25,8 +25,9 @@ use apex_router::unified_config::AppConfig;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
+    response::IntoResponse,
 };
-use hmac::{Hmac, Mac};
+use hmac::Hmac;
 use sha2::Sha256;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -291,6 +292,134 @@ async fn streaming_config_respects_env_vars() {
 
     // Max session default is 3600
     assert_eq!(state.config.streaming.max_session_secs, 3600);
+}
+
+// ============================================================================
+// Patch 16: Streaming Analytics Tests
+// ============================================================================
+
+/// Test that the stats endpoint returns a valid JSON response with expected fields.
+/// Note: the stats endpoint is currently unauthenticated — callers can read
+/// connection counts without providing HMAC credentials. Consider adding auth
+/// middleware to this endpoint in production.
+#[tokio::test]
+async fn stream_stats_endpoint_returns_valid_json() {
+    use apex_router::streaming::get_stream_stats;
+    use axum::{extract::State, http::StatusCode};
+
+    let state = make_streaming_test_state(true);
+    let response = get_stream_stats(State(state)).await.into_response();
+    assert_eq!(response.status(), StatusCode::OK, "stats endpoint should return 200 OK");
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let json: serde_json::Value = serde_json::from_slice(&body)
+        .expect("stats endpoint should return valid JSON");
+
+    // Verify required top-level fields
+    assert!(json.get("active_connections").is_some(), "should have active_connections");
+    assert!(json.get("total_connections").is_some(), "should have total_connections");
+    assert!(json.get("events").is_some(), "should have events object");
+    assert!(json.get("errors").is_some(), "should have errors object");
+
+    // Verify events sub-fields
+    let events = json.get("events").unwrap();
+    assert!(events.get("thought").is_some(), "events should have thought");
+    assert!(events.get("tool_call").is_some(), "events should have tool_call");
+    assert!(events.get("tool_result").is_some(), "events should have tool_result");
+    assert!(events.get("complete").is_some(), "events should have complete");
+    assert!(events.get("total").is_some(), "events should have total");
+
+    // Verify errors sub-fields
+    let errors = json.get("errors").unwrap();
+    assert!(errors.get("auth").is_some(), "errors should have auth");
+    assert!(errors.get("replay").is_some(), "errors should have replay");
+    assert!(errors.get("internal").is_some(), "errors should have internal");
+    assert!(errors.get("total").is_some(), "errors should have total");
+
+    // Verify numeric types (all counters should be non-negative integers)
+    for field in ["active_connections", "total_connections"] {
+        let val = json.get(field).unwrap();
+        assert!(
+            val.is_number() && val.as_i64().unwrap_or(-1) >= 0,
+            "{} should be a non-negative integer",
+            field
+        );
+    }
+}
+
+/// Test that StreamingMetrics counters increment correctly when on_connect,
+/// on_event, and on_disconnect are called. Verifies the integration between
+/// StreamingMetrics and the counter wiring in the SSE handler.
+#[tokio::test]
+async fn stream_metrics_counter_increment_integration() {
+    use apex_router::streaming::StreamingMetrics;
+    use apex_router::execution_stream::ExecutionEvent;
+
+    let metrics = StreamingMetrics::default();
+
+    // Baseline: all zeros
+    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
+
+    // on_connect increments both active and total
+    metrics.on_connect();
+    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_event with Thought increments events_thought
+    let thought = ExecutionEvent::Thought { step: 1, content: "thinking".into() };
+    metrics.on_event(&thought);
+    assert_eq!(metrics.events_thought.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_event with ToolCall increments events_tool_call
+    let tool_call = ExecutionEvent::ToolCall {
+        step: 2,
+        tool: "shell".into(),
+        input: serde_json::json!({}),
+    };
+    metrics.on_event(&tool_call);
+    assert_eq!(metrics.events_tool_call.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_event with Complete increments events_complete
+    let complete = ExecutionEvent::Complete {
+        output: "done".into(),
+        steps: 3,
+        tools_used: vec!["shell".into()],
+    };
+    metrics.on_event(&complete);
+    assert_eq!(metrics.events_complete.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_error with "auth" increments errors_auth
+    metrics.on_error("auth");
+    assert_eq!(metrics.errors_auth.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_error with "replay" increments errors_replay
+    metrics.on_error("replay");
+    assert_eq!(metrics.errors_replay.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_error with "internal" increments errors_internal
+    metrics.on_error("internal");
+    assert_eq!(metrics.errors_internal.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // on_disconnect decrements active only (total stays at 1)
+    metrics.on_disconnect();
+    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
+
+    // Verify StreamingStats snapshot aggregation is correct
+    use apex_router::streaming::StreamingStats;
+    let stats = StreamingStats::from(&metrics);
+
+    assert_eq!(stats.active_connections, 0);
+    assert_eq!(stats.total_connections, 1);
+    assert_eq!(stats.events.thought, 1);
+    assert_eq!(stats.events.tool_call, 1);
+    assert_eq!(stats.events.complete, 1);
+    assert_eq!(stats.events.total, 3);
+    assert_eq!(stats.errors.auth, 1);
+    assert_eq!(stats.errors.replay, 1);
+    assert_eq!(stats.errors.internal, 1);
+    assert_eq!(stats.errors.total, 3);
 }
 
 
