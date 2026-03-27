@@ -30,25 +30,28 @@ impl ResponseCache {
     pub async fn get<T: DeserializeOwned>(&self, key: &str) -> Option<T> {
         let cache = self.cache.read().await;
         let entry = cache.get(key)?;
-        
+
         if entry.is_expired() {
             return None;
         }
-        
+
         serde_json::from_slice(&entry.data).ok()
     }
 
     pub async fn set<T: Serialize>(&self, key: &str, value: &T, ttl_secs: Option<u64>) {
         let ttl = self.get_ttl_for_endpoint(key, ttl_secs).await;
         let data = serde_json::to_vec(value).ok();
-        
+
         if let Some(data) = data {
             let mut cache = self.cache.write().await;
-            cache.insert(key.to_string(), CacheEntry {
-                data,
-                cached_at: Instant::now(),
-                ttl,
-            });
+            cache.insert(
+                key.to_string(),
+                CacheEntry {
+                    data,
+                    cached_at: Instant::now(),
+                    ttl,
+                },
+            );
         }
     }
 
@@ -56,14 +59,14 @@ impl ResponseCache {
         if let Some(ttl) = explicit_ttl {
             return Duration::from_secs(ttl);
         }
-        
+
         let ttls = self.endpoint_ttls.read().await;
         for (prefix, ttl_secs) in ttls.iter() {
             if key.starts_with(prefix) {
                 return Duration::from_secs(*ttl_secs);
             }
         }
-        
+
         *self.default_ttl.read().await
     }
 
@@ -100,14 +103,14 @@ impl ResponseCache {
         let cache = self.cache.read().await;
         let mut total_entries = 0;
         let mut expired_entries = 0;
-        
+
         for entry in cache.values() {
             total_entries += 1;
             if entry.is_expired() {
                 expired_entries += 1;
             }
         }
-        
+
         CacheStats {
             total_entries,
             expired_entries,
@@ -149,43 +152,43 @@ mod tests {
     #[tokio::test]
     async fn test_cache_set_and_get() {
         let cache = ResponseCache::new(60);
-        
+
         cache.set("/api/test", &"hello".to_string(), None).await;
         let result: Option<String> = cache.get("/api/test").await;
-        
+
         assert_eq!(result, Some("hello".to_string()));
     }
 
     #[tokio::test]
     async fn test_cache_miss() {
         let cache = ResponseCache::new(60);
-        
+
         let result: Option<String> = cache.get("/nonexistent").await;
-        
+
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn test_cache_invalidate() {
         let cache = ResponseCache::new(60);
-        
+
         cache.set("/api/test", &"hello".to_string(), None).await;
         cache.invalidate("/api/test").await;
-        
+
         let result: Option<String> = cache.get("/api/test").await;
-        
+
         assert_eq!(result, None);
     }
 
     #[tokio::test]
     async fn test_cache_stats() {
         let cache = ResponseCache::new(60);
-        
+
         cache.set("/api/1", &"test1".to_string(), None).await;
         cache.set("/api/2", &"test2".to_string(), None).await;
-        
+
         let stats = cache.stats().await;
-        
+
         assert_eq!(stats.total_entries, 2);
         assert_eq!(stats.active_entries, 2);
     }

@@ -20,7 +20,7 @@ impl SoulLoader {
 
     pub async fn load_identity(&self) -> Result<SoulIdentity, SoulError> {
         let soul_path = self.config.soul_dir.join("SOUL.md");
-        
+
         if !soul_path.exists() {
             tracing::info!("SOUL.md not found, creating default");
             let identity = SoulIdentity::default();
@@ -37,7 +37,7 @@ impl SoulLoader {
 
     pub async fn load_identity_uncached(&self) -> Result<SoulIdentity, SoulError> {
         let soul_path = self.config.soul_dir.join("SOUL.md");
-        
+
         if !soul_path.exists() {
             return Ok(SoulIdentity::default());
         }
@@ -60,7 +60,7 @@ impl SoulLoader {
 
         let content = self.render_soul_md(identity);
         let soul_path = self.config.soul_dir.join("SOUL.md");
-        
+
         tokio::fs::write(&soul_path, content)
             .await
             .map_err(|e| SoulError::IoError(e.to_string()))?;
@@ -201,7 +201,7 @@ impl SoulLoader {
         let line = line.trim_start_matches("- [");
         let status = line.chars().next()?.to_string();
         let rest = line[3..].splitn(2, ']').nth(1)?.trim().to_string();
-        
+
         Some(super::Goal {
             description: rest.to_string(),
             status,
@@ -212,52 +212,60 @@ impl SoulLoader {
 
     pub fn render_soul_md(&self, identity: &SoulIdentity) -> String {
         let mut content = String::new();
-        
+
         content.push_str("# SOUL.md\n");
         content.push_str("# This file defines who I am. I read it every time I wake.\n\n");
-        
+
         content.push_str("## Identity\n");
         content.push_str(&format!("- **Name**: {}\n", identity.name));
         content.push_str(&format!("- **Version**: {}\n", identity.version));
         content.push_str(&format!("- **Created**: {}\n", identity.created));
         content.push_str(&format!("- **Wake Count**: {}\n\n", identity.wake_count));
-        
+
         content.push_str("## Purpose\n");
         content.push_str(&identity.purpose);
         content.push_str("\n\n");
-        
+
         content.push_str("## Values\n");
         for value in &identity.values {
             content.push_str(&format!("- **{}**: {}\n", value.name, value.description));
         }
         content.push('\n');
-        
+
         content.push_str("## Capabilities\n");
         for cap in &identity.capabilities {
             content.push_str(&format!("- {}: {}\n", cap.name, cap.description));
         }
         content.push('\n');
-        
+
         content.push_str("## Current Goals\n");
         for goal in &identity.current_goals {
-            content.push_str(&format!("- [{}] {} (Priority: {})\n", 
-                goal.status, goal.description, goal.priority));
+            content.push_str(&format!(
+                "- [{}] {} (Priority: {})\n",
+                goal.status, goal.description, goal.priority
+            ));
         }
         content.push('\n');
-        
+
         content.push_str("---\n");
         content.push_str("# CONSTITUTION\n");
-        content.push_str("# These values are protected. Modification requires T3 authorization.\n\n");
-        content.push_str(&format!("CONSTITUTION_VERSION: {}\n", identity.constitution.version));
-        content.push_str(&format!("IMMUTABLE_VALUES: {}\n", 
-            identity.constitution.immutable_values.join(", ")));
-        
+        content
+            .push_str("# These values are protected. Modification requires T3 authorization.\n\n");
+        content.push_str(&format!(
+            "CONSTITUTION_VERSION: {}\n",
+            identity.constitution.version
+        ));
+        content.push_str(&format!(
+            "IMMUTABLE_VALUES: {}\n",
+            identity.constitution.immutable_values.join(", ")
+        ));
+
         content
     }
 
     pub async fn load_fragments(&self) -> Result<HashMap<String, String>, SoulError> {
         let mut fragments = HashMap::new();
-        
+
         if !self.config.fragments_dir.exists() {
             return Ok(fragments);
         }
@@ -266,18 +274,23 @@ impl SoulLoader {
             .await
             .map_err(|e| SoulError::IoError(e.to_string()))?;
 
-        while let Some(entry) = entries.next_entry().await.map_err(|e| SoulError::IoError(e.to_string()))? {
+        while let Some(entry) = entries
+            .next_entry()
+            .await
+            .map_err(|e| SoulError::IoError(e.to_string()))?
+        {
             let path = entry.path();
             if path.extension().map(|e| e == "md").unwrap_or(false) {
-                let name = path.file_stem()
+                let name = path
+                    .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or("unknown")
                     .to_string();
-                
+
                 let content = tokio::fs::read_to_string(&path)
                     .await
                     .map_err(|e| SoulError::IoError(e.to_string()))?;
-                
+
                 fragments.insert(name, content);
             }
         }
@@ -290,13 +303,13 @@ impl SoulLoader {
 pub enum SoulError {
     #[error("IO error: {0}")]
     IoError(String),
-    
+
     #[error("Parse error: {0}")]
     ParseError(String),
-    
+
     #[error("Constitution violation: {0}")]
     ConstitutionViolation(String),
-    
+
     #[error("Not found: {0}")]
     NotFound(String),
 }

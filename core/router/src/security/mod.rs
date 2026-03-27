@@ -7,16 +7,20 @@
 //! - EncryptedNarrative: AES-256-GCM encryption for sensitive narrative data
 //! - Validators: MCP server and Cron/Scheduled task validation
 
+pub mod anomaly_detector;
 pub mod content_hash;
 pub mod injection_classifier;
-pub mod anomaly_detector;
-pub mod validators;
-pub mod replay_protection;  // Patch 11: In-memory replay detection for HMAC streaming
+pub mod replay_protection;
+pub mod validators; // Patch 11: In-memory replay detection for HMAC streaming
 
+pub use anomaly_detector::{Anomaly, AnomalyDetector, AnomalySeverity, AnomalyType};
 pub use content_hash::ContentHash;
-pub use injection_classifier::{InjectionClassifier, InjectionDetectionResult, InjectionType, ThreatLevel};
-pub use anomaly_detector::{AnomalyDetector, Anomaly, AnomalySeverity, AnomalyType};
-pub use validators::{ValidationResult, ValidationError, ValidationSeverity};
+pub use injection_classifier::{
+    InjectionClassifier, InjectionDetectionResult, InjectionType, ThreatLevel,
+};
+pub use validators::{ValidationError, ValidationResult, ValidationSeverity};
 
 // Re-export from apex-security
-pub use apex_security::{EncryptedNarrativeEntry, NarrativeKeyManager, NarrativeEncryptionConfig, is_sensitive_field};
+pub use apex_security::{
+    is_sensitive_field, EncryptedNarrativeEntry, NarrativeEncryptionConfig, NarrativeKeyManager,
+};

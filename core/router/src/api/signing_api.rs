@@ -5,14 +5,17 @@
 //! Feature 5: Plugin Signing (ed25519)
 
 use axum::{
-    extract::{State, Path},
+    extract::{Path, State},
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
-use crate::skill_signer::{SkillSigner, SkillSignature, SignatureStatus, SigningKeyPair, VerificationResult, SignatureStore};
+use crate::skill_signer::{
+    SignatureStatus, SignatureStore, SigningKeyPair, SkillSignature, SkillSigner,
+    VerificationResult,
+};
 use crate::unified_config::signing_constants::*;
 
 /// Response for verification key
@@ -64,8 +67,10 @@ pub fn create_signing_router() -> Router<AppState> {
 /// Get verification key
 async fn get_verify_key(State(state): State<AppState>) -> Json<VerifyKeyResponse> {
     let signer = SkillSigner::new(std::path::PathBuf::from(KEYS_DIR));
-    let public_key = signer.get_public_key().unwrap_or_else(|_| "unavailable".to_string());
-    
+    let public_key = signer
+        .get_public_key()
+        .unwrap_or_else(|_| "unavailable".to_string());
+
     Json(VerifyKeyResponse {
         public_key,
         algorithm: SIGNATURE_ALGORITHM.to_string(),
@@ -79,9 +84,10 @@ async fn sign_skill(
     Json(req): Json<SignSkillRequest>,
 ) -> Json<SkillSignature> {
     let signer = SkillSigner::new(std::path::PathBuf::from(KEYS_DIR));
-    
+
     // Sign the skill content
-    let signature = signer.sign_skill(&req.skill_name, &req.content)
+    let signature = signer
+        .sign_skill(&req.skill_name, &req.content)
         .unwrap_or_else(|e| {
             // Return a dummy signature on error
             SkillSignature {
@@ -92,11 +98,11 @@ async fn sign_skill(
                 signer_public_key: "error".to_string(),
             }
         });
-    
+
     // Store the signature
     let mut store = state.signature_store.lock().unwrap();
     store.set_signature(skill_name.clone(), signature.clone());
-    
+
     Json(signature)
 }
 
@@ -107,9 +113,9 @@ async fn verify_skill(
     Json(req): Json<VerifySkillRequest>,
 ) -> Json<VerificationResult> {
     let signer = SkillSigner::new(std::path::PathBuf::from(KEYS_DIR));
-    
+
     let result = signer.verify_signature(&req.skill_name, &req.content, &req.signature);
-    
+
     Json(result)
 }
 
@@ -125,7 +131,7 @@ async fn get_signature(
 /// Get signature statistics
 async fn get_signature_stats(State(state): State<AppState>) -> Json<serde_json::Value> {
     let store = state.signature_store.lock().unwrap();
-    
+
     Json(serde_json::json!({
         "total_signed": store.signed_count(),
         "signed_skills": store.signed_skills(),

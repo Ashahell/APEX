@@ -41,13 +41,14 @@ impl Default for AuthConfig {
 }
 
 pub fn sign_request(secret: &str, method: &str, path: &str, body: &[u8], timestamp: i64) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
-    
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+
     mac.update(timestamp.to_string().as_bytes());
     mac.update(method.as_bytes());
     mac.update(path.as_bytes());
     mac.update(body);
-    
+
     let result = mac.finalize();
     hex::encode(result.into_bytes())
 }
@@ -68,15 +69,15 @@ fn timing_safe_eq(a: &str, b: &str) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    
+
     let a_bytes = a.as_bytes();
     let b_bytes = b.as_bytes();
-    
+
     let mut result = 0u8;
     for i in 0..a_bytes.len() {
         result |= a_bytes[i] ^ b_bytes[i];
     }
-    
+
     result == 0
 }
 
@@ -121,7 +122,9 @@ pub async fn auth_middleware(
             tracing::warn!(path = %path, "Missing authentication headers");
             return Response::builder()
                 .status(401)
-                .body(Body::from("Missing authentication: X-APEX-Signature and X-APEX-Timestamp required"))
+                .body(Body::from(
+                    "Missing authentication: X-APEX-Signature and X-APEX-Timestamp required",
+                ))
                 .unwrap();
         }
     };
@@ -136,7 +139,14 @@ pub async fn auth_middleware(
             .unwrap();
     }
 
-    if !verify_request(&state.secret, &method, &path, &body_bytes, &send_signature, send_timestamp) {
+    if !verify_request(
+        &state.secret,
+        &method,
+        &path,
+        &body_bytes,
+        &send_signature,
+        send_timestamp,
+    ) {
         tracing::warn!(path = %path, "Invalid signature");
         return Response::builder()
             .status(401)
@@ -156,9 +166,9 @@ mod tests {
     fn test_sign_request() {
         let secret = "test-secret";
         let timestamp = 1234567890i64;
-        
+
         let signature = sign_request(secret, "POST", "/api/v1/tasks", b"{}", timestamp);
-        
+
         assert!(!signature.is_empty());
         assert_eq!(signature.len(), 64);
     }
@@ -167,18 +177,32 @@ mod tests {
     fn test_verify_request_valid() {
         let secret = "test-secret";
         let timestamp = chrono::Utc::now().timestamp();
-        
+
         let signature = sign_request(secret, "POST", "/api/v1/tasks", b"{}", timestamp);
-        
-        assert!(verify_request(secret, "POST", "/api/v1/tasks", b"{}", &signature, timestamp));
+
+        assert!(verify_request(
+            secret,
+            "POST",
+            "/api/v1/tasks",
+            b"{}",
+            &signature,
+            timestamp
+        ));
     }
 
     #[test]
     fn test_verify_request_invalid_signature() {
         let secret = "test-secret";
         let timestamp = chrono::Utc::now().timestamp();
-        
-        assert!(!verify_request(secret, "POST", "/api/v1/tasks", b"{}", "invalid-signature", timestamp));
+
+        assert!(!verify_request(
+            secret,
+            "POST",
+            "/api/v1/tasks",
+            b"{}",
+            "invalid-signature",
+            timestamp
+        ));
     }
 
     #[test]
@@ -186,10 +210,17 @@ mod tests {
         let secret = "test-secret";
         let wrong_secret = "wrong-secret";
         let timestamp = chrono::Utc::now().timestamp();
-        
+
         let signature = sign_request(secret, "POST", "/api/v1/tasks", b"{}", timestamp);
-        
-        assert!(!verify_request(wrong_secret, "POST", "/api/v1/tasks", b"{}", &signature, timestamp));
+
+        assert!(!verify_request(
+            wrong_secret,
+            "POST",
+            "/api/v1/tasks",
+            b"{}",
+            &signature,
+            timestamp
+        ));
     }
 
     #[test]
@@ -210,7 +241,7 @@ mod tests {
     #[test]
     fn test_auth_config_from_env() {
         let config = AuthConfig::from_env("test-secret-123".to_string());
-        
+
         assert_eq!(*config.secret, "test-secret-123");
         assert!(!config.disabled);
     }
@@ -219,10 +250,10 @@ mod tests {
     fn test_sign_request_different_methods_different_signatures() {
         let secret = "test-secret";
         let timestamp = 1234567890i64;
-        
+
         let get_sig = sign_request(secret, "GET", "/api/v1/tasks", b"", timestamp);
         let post_sig = sign_request(secret, "POST", "/api/v1/tasks", b"", timestamp);
-        
+
         assert_ne!(get_sig, post_sig);
     }
 
@@ -230,10 +261,10 @@ mod tests {
     fn test_sign_request_different_paths_different_signatures() {
         let secret = "test-secret";
         let timestamp = 1234567890i64;
-        
+
         let tasks_sig = sign_request(secret, "GET", "/api/v1/tasks", b"", timestamp);
         let skills_sig = sign_request(secret, "GET", "/api/v1/skills", b"", timestamp);
-        
+
         assert_ne!(tasks_sig, skills_sig);
     }
 }

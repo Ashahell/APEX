@@ -112,8 +112,11 @@ impl MoltbookClient {
             return Err(MoltbookError::NotEnabled);
         }
 
-        let url = format!("{}/api/v1/agents/{}", self.config.server_url, self.config.agent_id);
-        
+        let url = format!(
+            "{}/api/v1/agents/{}",
+            self.config.server_url, self.config.agent_id
+        );
+
         let http_client = self.http_client.clone();
         let response = http_client
             .get(&url)
@@ -122,23 +125,30 @@ impl MoltbookClient {
             .map_err(|e| MoltbookError::NetworkError(e.to_string()))?;
 
         if response.status().is_success() {
-            let api_response: ApiResponse<AgentProfile> = response.json().await
+            let api_response: ApiResponse<AgentProfile> = response
+                .json()
+                .await
                 .map_err(|e| MoltbookError::ParseError(e.to_string()))?;
-            
+
             if let Some(profile) = api_response.data {
                 let mut profile_lock = self.profile.write().await;
                 *profile_lock = Some(profile);
                 drop(profile_lock);
-                
+
                 let mut connected_lock = self.connected.write().await;
                 *connected_lock = true;
-                
+
                 Ok(())
             } else {
-                Err(MoltbookError::NotFound("Agent profile not found".to_string()))
+                Err(MoltbookError::NotFound(
+                    "Agent profile not found".to_string(),
+                ))
             }
         } else {
-            Err(MoltbookError::ApiError(format!("HTTP {}", response.status())))
+            Err(MoltbookError::ApiError(format!(
+                "HTTP {}",
+                response.status()
+            )))
         }
     }
 
@@ -153,23 +163,24 @@ impl MoltbookClient {
     pub async fn disconnect(&self) -> Result<(), MoltbookError> {
         let mut connected_lock = self.connected.write().await;
         *connected_lock = false;
-        
+
         let mut profile_lock = self.profile.write().await;
         *profile_lock = None;
-        
+
         Ok(())
     }
 
     pub async fn post_update(&self, content: &str) -> Result<Post, MoltbookError> {
         let url = format!("{}/api/v1/posts", self.config.server_url);
-        
+
         #[derive(Serialize)]
         struct CreatePost {
             author_id: String,
             content: String,
         }
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .post(&url)
             .json(&CreatePost {
                 author_id: self.config.agent_id.clone(),
@@ -180,36 +191,47 @@ impl MoltbookClient {
             .map_err(|e| MoltbookError::NetworkError(e.to_string()))?;
 
         if response.status().is_success() {
-            let api_response: ApiResponse<Post> = response.json().await
+            let api_response: ApiResponse<Post> = response
+                .json()
+                .await
                 .map_err(|e| MoltbookError::ParseError(e.to_string()))?;
-            
-            api_response.data
+
+            api_response
+                .data
                 .ok_or_else(|| MoltbookError::ParseError("No post data".to_string()))
         } else {
-            Err(MoltbookError::ApiError(format!("HTTP {}", response.status())))
+            Err(MoltbookError::ApiError(format!(
+                "HTTP {}",
+                response.status()
+            )))
         }
     }
 
     pub async fn check_notifications(&self) -> Result<Vec<Notification>, MoltbookError> {
         let url = format!(
             "{}/api/v1/agents/{}/notifications",
-            self.config.server_url,
-            self.config.agent_id
+            self.config.server_url, self.config.agent_id
         );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
             .map_err(|e| MoltbookError::NetworkError(e.to_string()))?;
 
         if response.status().is_success() {
-            let api_response: ApiResponse<Vec<Notification>> = response.json().await
+            let api_response: ApiResponse<Vec<Notification>> = response
+                .json()
+                .await
                 .map_err(|e| MoltbookError::ParseError(e.to_string()))?;
-            
+
             Ok(api_response.data.unwrap_or_default())
         } else {
-            Err(MoltbookError::ApiError(format!("HTTP {}", response.status())))
+            Err(MoltbookError::ApiError(format!(
+                "HTTP {}",
+                response.status()
+            )))
         }
     }
 
@@ -219,9 +241,9 @@ impl MoltbookClient {
         let institutional_vouch = self.query_institutional_vouch(agent_id).await?;
         let behavioral_score = self.assess_behavior(agent_id).await?;
 
-        let overall_trust = (direct_trust * 0.4) 
-            + (web_of_trust * 0.3) 
-            + (institutional_vouch * 0.15) 
+        let overall_trust = (direct_trust * 0.4)
+            + (web_of_trust * 0.3)
+            + (institutional_vouch * 0.15)
             + (behavioral_score * 0.15);
 
         Ok(TrustAssessment {
@@ -236,7 +258,7 @@ impl MoltbookClient {
 
     async fn calculate_direct_trust(&self, agent_id: &str) -> f64 {
         let experiences = self.experiences.read().await;
-        
+
         if let Some(exp) = experiences.iter().find(|e| e.agent_id == agent_id) {
             if exp.interaction_count == 0 {
                 return 0.5;
@@ -252,11 +274,11 @@ impl MoltbookClient {
     async fn query_web_of_trust(&self, agent_id: &str) -> Result<f64, MoltbookError> {
         let url = format!(
             "{}/api/v1/agents/{}/trust/web",
-            self.config.server_url,
-            agent_id
+            self.config.server_url, agent_id
         );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
@@ -267,23 +289,23 @@ impl MoltbookClient {
             struct WebTrustResponse {
                 score: f64,
             }
-            
+
             if let Ok(api_response) = response.json::<ApiResponse<WebTrustResponse>>().await {
                 return Ok(api_response.data.map(|d| d.score).unwrap_or(0.5));
             }
         }
-        
+
         Ok(0.5)
     }
 
     async fn query_institutional_vouch(&self, agent_id: &str) -> Result<f64, MoltbookError> {
         let url = format!(
             "{}/api/v1/agents/{}/trust/institutional",
-            self.config.server_url,
-            agent_id
+            self.config.server_url, agent_id
         );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
@@ -294,23 +316,23 @@ impl MoltbookClient {
             struct InstitutionalResponse {
                 vouch_score: f64,
             }
-            
+
             if let Ok(api_response) = response.json::<ApiResponse<InstitutionalResponse>>().await {
                 return Ok(api_response.data.map(|d| d.vouch_score).unwrap_or(0.0));
             }
         }
-        
+
         Ok(0.0)
     }
 
     async fn assess_behavior(&self, agent_id: &str) -> Result<f64, MoltbookError> {
         let url = format!(
             "{}/api/v1/agents/{}/trust/behavioral",
-            self.config.server_url,
-            agent_id
+            self.config.server_url, agent_id
         );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
@@ -322,25 +344,20 @@ impl MoltbookClient {
                 consistency: f64,
                 helpfulness: f64,
             }
-            
+
             if let Ok(api_response) = response.json::<ApiResponse<BehavioralResponse>>().await {
                 if let Some(data) = api_response.data {
                     return Ok((data.consistency + data.helpfulness) / 2.0);
                 }
             }
         }
-        
+
         Ok(0.5)
     }
 
-    pub async fn record_interaction(
-        &self,
-        agent_id: &str,
-        success: bool,
-        helpfulness: f64,
-    ) {
+    pub async fn record_interaction(&self, agent_id: &str, success: bool, helpfulness: f64) {
         let mut experiences = self.experiences.write().await;
-        
+
         if let Some(exp) = experiences.iter_mut().find(|e| e.agent_id == agent_id) {
             exp.interaction_count += 1;
             if success {
@@ -369,38 +386,50 @@ impl MoltbookClient {
             urlencoding::encode(query)
         );
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
             .map_err(|e| MoltbookError::NetworkError(e.to_string()))?;
 
         if response.status().is_success() {
-            let api_response: ApiResponse<Vec<AgentProfile>> = response.json().await
+            let api_response: ApiResponse<Vec<AgentProfile>> = response
+                .json()
+                .await
                 .map_err(|e| MoltbookError::ParseError(e.to_string()))?;
-            
+
             Ok(api_response.data.unwrap_or_default())
         } else {
-            Err(MoltbookError::ApiError(format!("HTTP {}", response.status())))
+            Err(MoltbookError::ApiError(format!(
+                "HTTP {}",
+                response.status()
+            )))
         }
     }
 
     pub async fn get_agent_directory(&self) -> Result<Vec<AgentProfile>, MoltbookError> {
         let url = format!("{}/api/v1/agents/directory", self.config.server_url);
 
-        let response = self.http_client
+        let response = self
+            .http_client
             .get(&url)
             .send()
             .await
             .map_err(|e| MoltbookError::NetworkError(e.to_string()))?;
 
         if response.status().is_success() {
-            let api_response: ApiResponse<Vec<AgentProfile>> = response.json().await
+            let api_response: ApiResponse<Vec<AgentProfile>> = response
+                .json()
+                .await
                 .map_err(|e| MoltbookError::ParseError(e.to_string()))?;
-            
+
             Ok(api_response.data.unwrap_or_default())
         } else {
-            Err(MoltbookError::ApiError(format!("HTTP {}", response.status())))
+            Err(MoltbookError::ApiError(format!(
+                "HTTP {}",
+                response.status()
+            )))
         }
     }
 }

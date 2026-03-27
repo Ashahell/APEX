@@ -1,10 +1,10 @@
 use axum::{
     extract::State,
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
     routing::{get, put},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
@@ -126,10 +126,15 @@ pub struct SoulFragmentResponse {
     pub content: String,
 }
 
-async fn get_soul(State(state): State<AppState>) -> Result<AxumJson<Option<SoulIdentityResponse>>, (StatusCode, String)> {
+async fn get_soul(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Option<SoulIdentityResponse>>, (StatusCode, String)> {
     match state.soul_loader.load_identity().await {
         Ok(identity) => Ok(AxumJson(Some(convert_identity(identity)))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to load soul: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to load soul: {}", e),
+        )),
     }
 }
 
@@ -144,25 +149,30 @@ async fn update_soul(
         if let Some(purpose) = payload.purpose {
             identity.purpose = purpose;
         }
-        
+
         let _ = state.soul_loader.save_identity(&identity).await;
-        
+
         return Ok(AxumJson(convert_identity(identity)));
     }
-    
-    Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to update soul".to_string()))
+
+    Err((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "Failed to update soul".to_string(),
+    ))
 }
 
-async fn get_soul_fragments(State(state): State<AppState>) -> Result<AxumJson<SoulFragmentsResponse>, (StatusCode, String)> {
+async fn get_soul_fragments(
+    State(state): State<AppState>,
+) -> Result<AxumJson<SoulFragmentsResponse>, (StatusCode, String)> {
     if let Ok(identity) = state.soul_loader.load_identity().await {
         let mut fragments = vec![];
-        
+
         fragments.push(SoulFragmentResponse {
             fragment_type: "purpose".to_string(),
             title: "Purpose".to_string(),
             content: identity.purpose.clone(),
         });
-        
+
         for value in &identity.values {
             fragments.push(SoulFragmentResponse {
                 fragment_type: "value".to_string(),
@@ -170,7 +180,7 @@ async fn get_soul_fragments(State(state): State<AppState>) -> Result<AxumJson<So
                 content: value.description.clone(),
             });
         }
-        
+
         for goal in &identity.current_goals {
             fragments.push(SoulFragmentResponse {
                 fragment_type: "goal".to_string(),
@@ -178,7 +188,7 @@ async fn get_soul_fragments(State(state): State<AppState>) -> Result<AxumJson<So
                 content: goal.description.clone(),
             });
         }
-        
+
         Ok(AxumJson(SoulFragmentsResponse { fragments }))
     } else {
         Ok(AxumJson(SoulFragmentsResponse { fragments: vec![] }))
@@ -192,16 +202,24 @@ fn convert_identity(identity: crate::soul::SoulIdentity) -> SoulIdentityResponse
         created: identity.created,
         wake_count: identity.wake_count,
         purpose: identity.purpose,
-        values: identity.values.into_iter().map(|v| ValueResponse {
-            name: v.name,
-            description: v.description,
-            priority: v.priority,
-        }).collect(),
-        capabilities: identity.capabilities.into_iter().map(|c| CapabilityResponse {
-            name: c.name,
-            description: c.description,
-            tier: c.tier,
-        }).collect(),
+        values: identity
+            .values
+            .into_iter()
+            .map(|v| ValueResponse {
+                name: v.name,
+                description: v.description,
+                priority: v.priority,
+            })
+            .collect(),
+        capabilities: identity
+            .capabilities
+            .into_iter()
+            .map(|c| CapabilityResponse {
+                name: c.name,
+                description: c.description,
+                tier: c.tier,
+            })
+            .collect(),
         autonomy_config: AutonomyConfigResponse {
             heartbeat_interval_minutes: identity.autonomy_config.heartbeat_interval_minutes,
             max_actions_per_wake: identity.autonomy_config.max_actions_per_wake,
@@ -213,27 +231,43 @@ fn convert_identity(identity: crate::soul::SoulIdentity) -> SoulIdentityResponse
             forgetting_threshold_days: identity.memory_strategy.forgetting_threshold_days,
             emphasis_patterns: identity.memory_strategy.emphasis_patterns,
         },
-        relationships: identity.relationships.into_iter().map(|r| RelationshipResponse {
-            agent_id: r.agent_id,
-            relationship_type: r.relationship_type,
-            trust_level: r.trust_level,
-            last_contact: r.last_contact,
-        }).collect(),
-        affiliations: identity.affiliations.into_iter().map(|a| AffiliationResponse {
-            name: a.name,
-            role: a.role,
-            since: Some(a.joined),
-        }).collect(),
-        current_goals: identity.current_goals.into_iter().map(|g| GoalResponse {
-            description: g.description,
-            status: g.status,
-            priority: g.priority,
-            deadline: g.deadline,
-        }).collect(),
-        reflections: identity.reflections.into_iter().map(|r| ReflectionResponse {
-            timestamp: r.timestamp,
-            content: r.content,
-        }).collect(),
+        relationships: identity
+            .relationships
+            .into_iter()
+            .map(|r| RelationshipResponse {
+                agent_id: r.agent_id,
+                relationship_type: r.relationship_type,
+                trust_level: r.trust_level,
+                last_contact: r.last_contact,
+            })
+            .collect(),
+        affiliations: identity
+            .affiliations
+            .into_iter()
+            .map(|a| AffiliationResponse {
+                name: a.name,
+                role: a.role,
+                since: Some(a.joined),
+            })
+            .collect(),
+        current_goals: identity
+            .current_goals
+            .into_iter()
+            .map(|g| GoalResponse {
+                description: g.description,
+                status: g.status,
+                priority: g.priority,
+                deadline: g.deadline,
+            })
+            .collect(),
+        reflections: identity
+            .reflections
+            .into_iter()
+            .map(|r| ReflectionResponse {
+                timestamp: r.timestamp,
+                content: r.content,
+            })
+            .collect(),
         constitution: ConstitutionResponse {
             preamble: identity.constitution.version,
             principles: vec![],

@@ -24,12 +24,14 @@ async fn search_sessions(
         include_context: params.include_context,
     };
 
-    let results = state.session_search
+    let results = state
+        .session_search
         .search(&query)
         .await
         .map_err(|e| ApiError::internal(format!("Search failed: {}", e)))?;
 
-    let total = state.session_search
+    let total = state
+        .session_search
         .get_stats()
         .await
         .map_err(|e| ApiError::internal(format!("Failed to get stats: {}", e)))?
@@ -42,7 +44,8 @@ async fn search_sessions(
 async fn get_search_stats(
     State(state): State<crate::api::AppState>,
 ) -> Result<Json<SearchStats>, (axum::http::StatusCode, String)> {
-    state.session_search
+    state
+        .session_search
         .get_stats()
         .await
         .map(Json)
@@ -53,7 +56,8 @@ async fn get_search_stats(
 async fn reindex_sessions(
     State(state): State<crate::api::AppState>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    let count = state.session_search
+    let count = state
+        .session_search
         .rebuild_index()
         .await
         .map_err(|e| ApiError::internal(format!("Reindex failed: {}", e)))?;

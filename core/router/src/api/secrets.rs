@@ -1,14 +1,14 @@
 use axum::{
-    extract::{State, Path, Query},
-    routing::{get, post, put, delete},
+    extract::{Path, Query, State},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use apex_memory::secrets_repo::{
-    SecretsRepository, SecretRef, SecretRotationLog, SecretAccessLog,
-    get_category_info, get_predefined_secret_ids, is_predefined_secret,
+    get_category_info, get_predefined_secret_ids, is_predefined_secret, SecretAccessLog, SecretRef,
+    SecretRotationLog, SecretsRepository,
 };
 
 use crate::api::AppState;
@@ -24,16 +24,19 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/secrets/:id", put(update_secret))
         .route("/api/v1/secrets/:id", delete(delete_secret))
         .route("/api/v1/secrets/category/:category", get(get_by_category))
-        
         // Rotation logs
-        .route("/api/v1/secrets/rotation/:secret_name", get(get_rotation_history))
+        .route(
+            "/api/v1/secrets/rotation/:secret_name",
+            get(get_rotation_history),
+        )
         .route("/api/v1/secrets/rotation/recent", get(get_recent_rotations))
-        
         // Access logs
-        .route("/api/v1/secrets/access/:secret_ref_id", get(get_access_history))
+        .route(
+            "/api/v1/secrets/access/:secret_ref_id",
+            get(get_access_history),
+        )
         .route("/api/v1/secrets/access/recent", get(get_recent_accesses))
         .route("/api/v1/secrets/access/failed", get(get_failed_accesses))
-        
         // Utility
         .route("/api/v1/secrets/predefined", get(list_predefined))
 }
@@ -91,7 +94,7 @@ impl From<SecretRef> for SecretResponse {
         let category_for_info = category.clone();
         let (label, icon) = get_category_info(&category_for_info);
         let is_predefined = is_predefined_secret(&s.id);
-        
+
         Self {
             id: s.id,
             ref_key: s.ref_key,
@@ -112,16 +115,14 @@ impl From<SecretRef> for SecretResponse {
 // ============ Handlers ============
 
 // List all secrets
-async fn list_secrets(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<SecretResponse>>, String> {
+async fn list_secrets(State(state): State<AppState>) -> Result<Json<Vec<SecretResponse>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let secrets = repo
         .list_secrets()
         .await
         .map_err(|e| format!("Failed to list secrets: {}", e))?;
-    
+
     Ok(Json(secrets.into_iter().map(|s| s.into()).collect()))
 }
 
@@ -131,12 +132,12 @@ async fn get_secret(
     Path(id): Path<String>,
 ) -> Result<Json<SecretResponse>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let secret = repo
         .get_secret(&id)
         .await
         .map_err(|e| format!("Secret not found: {}", e))?;
-    
+
     Ok(Json(secret.into()))
 }
 
@@ -147,17 +148,17 @@ async fn update_secret(
     Json(req): Json<UpdateSecretRequest>,
 ) -> Result<Json<SecretResponse>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     // Check if it's predefined - only allow updating description
     if is_predefined_secret(&id) && req.description.is_some() {
         // Predefined secrets can have descriptions updated
     }
-    
+
     let secret = repo
         .update_description(&id, req.description.as_deref().unwrap_or(""))
         .await
         .map_err(|e| format!("Failed to update secret: {}", e))?;
-    
+
     Ok(Json(secret.into()))
 }
 
@@ -170,28 +171,25 @@ async fn delete_secret(
     if is_predefined_secret(&id) {
         return Err("Cannot delete predefined secrets".to_string());
     }
-    
+
     let repo = SecretsRepository::new(&state.pool);
-    
-    repo
-        .delete_secret(&id)
+
+    repo.delete_secret(&id)
         .await
         .map_err(|e| format!("Failed to delete secret: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
 // List categories
-async fn list_categories(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<String>>, String> {
+async fn list_categories(State(state): State<AppState>) -> Result<Json<Vec<String>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let categories = repo
         .list_categories()
         .await
         .map_err(|e| format!("Failed to list categories: {}", e))?;
-    
+
     Ok(Json(categories))
 }
 
@@ -201,12 +199,12 @@ async fn get_by_category(
     Path(category): Path<String>,
 ) -> Result<Json<Vec<SecretResponse>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let secrets = repo
         .get_by_category(&category)
         .await
         .map_err(|e| format!("Failed to get secrets: {}", e))?;
-    
+
     Ok(Json(secrets.into_iter().map(|s| s.into()).collect()))
 }
 
@@ -219,12 +217,12 @@ async fn get_rotation_history(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SecretRotationLog>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let history = repo
         .get_rotation_history(&secret_name, query.limit)
         .await
         .map_err(|e| format!("Failed to get rotation history: {}", e))?;
-    
+
     Ok(Json(history))
 }
 
@@ -234,12 +232,12 @@ async fn get_recent_rotations(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SecretRotationLog>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let rotations = repo
         .get_recent_rotations(query.limit.unwrap_or(20))
         .await
         .map_err(|e| format!("Failed to get rotations: {}", e))?;
-    
+
     Ok(Json(rotations))
 }
 
@@ -252,12 +250,12 @@ async fn get_access_history(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SecretAccessLog>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let history = repo
         .get_access_history(&secret_ref_id, query.limit)
         .await
         .map_err(|e| format!("Failed to get access history: {}", e))?;
-    
+
     Ok(Json(history))
 }
 
@@ -267,12 +265,12 @@ async fn get_recent_accesses(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SecretAccessLog>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let accesses = repo
         .get_recent_accesses(query.limit.unwrap_or(20))
         .await
         .map_err(|e| format!("Failed to get accesses: {}", e))?;
-    
+
     Ok(Json(accesses))
 }
 
@@ -282,12 +280,12 @@ async fn get_failed_accesses(
     Query(query): Query<ListQuery>,
 ) -> Result<Json<Vec<SecretAccessLog>>, String> {
     let repo = SecretsRepository::new(&state.pool);
-    
+
     let accesses = repo
         .get_failed_accesses(query.limit.unwrap_or(20))
         .await
         .map_err(|e| format!("Failed to get failed accesses: {}", e))?;
-    
+
     Ok(Json(accesses))
 }
 
@@ -295,5 +293,10 @@ async fn get_failed_accesses(
 
 // List predefined secret IDs
 async fn list_predefined() -> Json<Vec<String>> {
-    Json(get_predefined_secret_ids().into_iter().map(String::from).collect())
+    Json(
+        get_predefined_secret_ids()
+            .into_iter()
+            .map(String::from)
+            .collect(),
+    )
 }

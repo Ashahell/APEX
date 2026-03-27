@@ -1,6 +1,6 @@
 use axum::{
-    extract::{State, Path},
-    routing::{get, post, put, delete},
+    extract::{Path, State},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -76,12 +76,12 @@ async fn list_templates(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<TemplateResponse>>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
+
     let templates = repo
         .list_templates()
         .await
         .map_err(|e| format!("Failed to list templates: {}", e))?;
-    
+
     Ok(Json(templates.into_iter().map(|t| t.into()).collect()))
 }
 
@@ -91,12 +91,12 @@ async fn get_template(
     Path(id): Path<String>,
 ) -> Result<Json<TemplateResponse>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
+
     let template = repo
         .get_template(&id)
         .await
         .map_err(|e| format!("Template not found: {}", e))?;
-    
+
     Ok(Json(template.into()))
 }
 
@@ -106,14 +106,14 @@ async fn create_template(
     Json(req): Json<CreateTemplateRequest>,
 ) -> Result<Json<TemplateResponse>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
+
     let id = Ulid::new().to_string();
-    
+
     let template = repo
         .create_template(&id, &req.name, &req.template, req.description.as_deref())
         .await
         .map_err(|e| format!("Failed to create template: {}", e))?;
-    
+
     Ok(Json(template.into()))
 }
 
@@ -124,12 +124,17 @@ async fn update_template(
     Json(req): Json<UpdateTemplateRequest>,
 ) -> Result<Json<TemplateResponse>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
+
     let template = repo
-        .update_template(&id, req.name.as_deref(), req.template.as_deref(), req.description.as_deref())
+        .update_template(
+            &id,
+            req.name.as_deref(),
+            req.template.as_deref(),
+            req.description.as_deref(),
+        )
         .await
         .map_err(|e| format!("Failed to update template: {}", e))?;
-    
+
     Ok(Json(template.into()))
 }
 
@@ -139,12 +144,11 @@ async fn delete_template(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
-    repo
-        .delete_template(&id)
+
+    repo.delete_template(&id)
         .await
         .map_err(|e| format!("Failed to delete template: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -155,15 +159,15 @@ async fn render_template(
     Json(req): Json<RenderTemplateRequest>,
 ) -> Result<Json<RenderResponse>, String> {
     let repo = SlackBlockRepository::new(&state.pool);
-    
+
     let template = repo
         .get_template(&id)
         .await
         .map_err(|e| format!("Template not found: {}", e))?;
-    
+
     let rendered = repo
         .render_template(&template.template, &req.variables)
         .map_err(|e| format!("Failed to render template: {}", e))?;
-    
+
     Ok(Json(RenderResponse { rendered }))
 }

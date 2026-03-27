@@ -53,8 +53,10 @@ impl WorkingMemory {
         .await?;
 
         if let Some((task_id, scratchpad, entities_json, causal_links_json)) = row {
-            let active_entities: HashMap<String, Entity> = serde_json::from_str(&entities_json).unwrap_or_default();
-            let causal_links: Vec<CausalLink> = serde_json::from_str(&causal_links_json).unwrap_or_default();
+            let active_entities: HashMap<String, Entity> =
+                serde_json::from_str(&entities_json).unwrap_or_default();
+            let causal_links: Vec<CausalLink> =
+                serde_json::from_str(&causal_links_json).unwrap_or_default();
 
             Ok(Some(Self {
                 task_id,
@@ -115,7 +117,7 @@ impl WorkingMemory {
         sqlx::query(
             "INSERT OR REPLACE INTO working_memory
              (task_id, scratchpad, entities_json, causal_links_json, created_at, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?)"
+             VALUES (?, ?, ?, ?, ?, ?)",
         )
         .bind(&self.task_id)
         .bind(&self.scratchpad)
@@ -138,7 +140,10 @@ impl WorkingMemory {
         let mut narrative = String::new();
 
         narrative.push_str(&format!("# Task Working Memory: {}\n\n", self.task_id));
-        narrative.push_str(&format!("**Created**: {}\n\n", self.created_at.format("%Y-%m-%d %H:%M UTC")));
+        narrative.push_str(&format!(
+            "**Created**: {}\n\n",
+            self.created_at.format("%Y-%m-%d %H:%M UTC")
+        ));
 
         narrative.push_str("## Scratchpad\n\n");
         if self.scratchpad.is_empty() {
@@ -162,10 +167,7 @@ impl WorkingMemory {
         if !self.causal_links.is_empty() {
             narrative.push_str("## Causal Links\n\n");
             for link in &self.causal_links {
-                narrative.push_str(&format!(
-                    "- {} → {}\n",
-                    link.cause, link.effect
-                ));
+                narrative.push_str(&format!("- {} → {}\n", link.cause, link.effect));
             }
             narrative.push_str("\n");
         }

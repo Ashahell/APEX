@@ -34,7 +34,11 @@ impl DecisionJournalRepository {
         Self { pool: pool.clone() }
     }
 
-    pub async fn find_all(&self, limit: i64, offset: i64) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
+    pub async fn find_all(
+        &self,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
         sqlx::query_as::<_, DecisionJournalEntry>(
             "SELECT id, task_id, title, context, decision, rationale, outcome, tags, created_at, updated_at 
              FROM decision_journal ORDER BY created_at DESC LIMIT ? OFFSET ?"
@@ -55,7 +59,10 @@ impl DecisionJournalRepository {
         .await
     }
 
-    pub async fn find_by_task(&self, task_id: &str) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
+    pub async fn find_by_task(
+        &self,
+        task_id: &str,
+    ) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
         sqlx::query_as::<_, DecisionJournalEntry>(
             "SELECT id, task_id, title, context, decision, rationale, outcome, tags, created_at, updated_at 
              FROM decision_journal WHERE task_id = ? ORDER BY created_at DESC"
@@ -88,7 +95,7 @@ impl DecisionJournalRepository {
         let tags_json = entry.tags.as_ref().map(|t| t.join(","));
         sqlx::query(
             "UPDATE decision_journal SET task_id = ?, title = ?, context = ?, decision = ?, 
-             rationale = ?, outcome = ?, tags = ?, updated_at = datetime('now') WHERE id = ?"
+             rationale = ?, outcome = ?, tags = ?, updated_at = datetime('now') WHERE id = ?",
         )
         .bind(&entry.task_id)
         .bind(&entry.title)
@@ -111,7 +118,11 @@ impl DecisionJournalRepository {
         Ok(())
     }
 
-    pub async fn search(&self, query: &str, limit: i64) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
+    pub async fn search(
+        &self,
+        query: &str,
+        limit: i64,
+    ) -> Result<Vec<DecisionJournalEntry>, sqlx::Error> {
         let search_pattern = format!("%{}%", query);
         sqlx::query_as::<_, DecisionJournalEntry>(
             "SELECT id, task_id, title, context, decision, rationale, outcome, tags, created_at, updated_at 
@@ -152,7 +163,7 @@ mod tests {
             outcome: None,
             tags: Some(vec!["test".to_string(), "quality".to_string()]),
         };
-        
+
         repo.create("entry-1", entry).await.unwrap();
 
         let entries = repo.find_all(10, 0).await.unwrap();
@@ -178,7 +189,7 @@ mod tests {
             outcome: None,
             tags: None,
         };
-        
+
         repo.create("entry-1", entry).await.unwrap();
 
         let results = repo.search("PostgreSQL", 10).await.unwrap();
@@ -203,7 +214,7 @@ mod tests {
             outcome: None,
             tags: None,
         };
-        
+
         repo.create("entry-1", entry).await.unwrap();
 
         let update_entry = CreateDecisionEntry {
@@ -215,7 +226,7 @@ mod tests {
             outcome: Some("Worked well".to_string()),
             tags: None,
         };
-        
+
         repo.update("entry-1", update_entry).await.unwrap();
 
         let result = repo.find_by_id("entry-1").await.unwrap().unwrap();

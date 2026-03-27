@@ -189,18 +189,21 @@ async fn confirm_task(
     Path(task_id): Path<String>,
 ) -> Result<Json<TaskStatusResponse>, String> {
     let repo = TaskRepository::new(&state.pool);
-    
+
     let task = match repo.find_by_id(&task_id).await {
         Ok(t) => t,
         Err(_) => {
             return Err(format!("Task not found: {}", task_id));
         }
     };
-    
+
     if task.status != "pending" {
-        return Err(format!("Task {} is not pending, current status: {}", task_id, task.status));
+        return Err(format!(
+            "Task {} is not pending, current status: {}",
+            task_id, task.status
+        ));
     }
-    
+
     match repo.update_status(&task_id, TaskStatus::Running).await {
         Ok(_) => {
             state.metrics.record_task("unknown", "running").await;

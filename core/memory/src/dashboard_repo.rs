@@ -194,23 +194,26 @@ impl<'a> DashboardRepository<'a> {
             .await
     }
 
-    pub async fn find_pinned_by_message(&self, message_id: &str) -> Result<Option<PinnedMessage>, sqlx::Error> {
-        sqlx::query_as::<_, PinnedMessage>(
-            "SELECT * FROM pinned_messages WHERE message_id = ?",
-        )
-        .bind(message_id)
-        .fetch_optional(self.pool)
-        .await
+    pub async fn find_pinned_by_message(
+        &self,
+        message_id: &str,
+    ) -> Result<Option<PinnedMessage>, sqlx::Error> {
+        sqlx::query_as::<_, PinnedMessage>("SELECT * FROM pinned_messages WHERE message_id = ?")
+            .bind(message_id)
+            .fetch_optional(self.pool)
+            .await
     }
 
-    pub async fn list_pinned(&self, channel: Option<&str>, limit: i64) -> Result<Vec<PinnedMessage>, sqlx::Error> {
+    pub async fn list_pinned(
+        &self,
+        channel: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<PinnedMessage>, sqlx::Error> {
         let query = match channel {
             Some(_) => {
                 "SELECT * FROM pinned_messages WHERE channel = ? ORDER BY pinned_at DESC LIMIT ?"
             }
-            None => {
-                "SELECT * FROM pinned_messages ORDER BY pinned_at DESC LIMIT ?"
-            }
+            None => "SELECT * FROM pinned_messages ORDER BY pinned_at DESC LIMIT ?",
         };
 
         match channel {
@@ -364,16 +367,20 @@ impl<'a> DashboardRepository<'a> {
         self.find_session_metadata(session_id).await
     }
 
-    pub async fn find_session_metadata(&self, session_id: &str) -> Result<SessionMetadata, sqlx::Error> {
-        sqlx::query_as::<_, SessionMetadata>(
-            "SELECT * FROM session_metadata WHERE session_id = ?",
-        )
-        .bind(session_id)
-        .fetch_one(self.pool)
-        .await
+    pub async fn find_session_metadata(
+        &self,
+        session_id: &str,
+    ) -> Result<SessionMetadata, sqlx::Error> {
+        sqlx::query_as::<_, SessionMetadata>("SELECT * FROM session_metadata WHERE session_id = ?")
+            .bind(session_id)
+            .fetch_one(self.pool)
+            .await
     }
 
-    pub async fn list_sessions_metadata(&self, limit: i64) -> Result<Vec<SessionMetadata>, sqlx::Error> {
+    pub async fn list_sessions_metadata(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<SessionMetadata>, sqlx::Error> {
         sqlx::query_as::<_, SessionMetadata>(
             "SELECT * FROM session_metadata ORDER BY updated_at DESC LIMIT ?",
         )
@@ -437,7 +444,7 @@ impl<'a> DashboardRepository<'a> {
         offset: i64,
     ) -> Result<Vec<DashboardChatHistory>, sqlx::Error> {
         let search_pattern = format!("%{}%", query);
-        
+
         let sql = match channel {
             Some(_) => {
                 "SELECT * FROM dashboard_chat_history WHERE content LIKE ? AND channel = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
@@ -536,7 +543,11 @@ impl<'a> DashboardRepository<'a> {
         .await
     }
 
-    pub async fn list_commands(&self, command_type: Option<&str>, limit: i64) -> Result<Vec<CommandPaletteHistory>, sqlx::Error> {
+    pub async fn list_commands(
+        &self,
+        command_type: Option<&str>,
+        limit: i64,
+    ) -> Result<Vec<CommandPaletteHistory>, sqlx::Error> {
         match command_type {
             Some(t) => {
                 sqlx::query_as::<_, CommandPaletteHistory>(
@@ -624,7 +635,11 @@ impl<'a> DashboardRepository<'a> {
         Ok(())
     }
 
-    pub async fn list_exports(&self, session_id: &str, limit: i64) -> Result<Vec<DashboardExport>, sqlx::Error> {
+    pub async fn list_exports(
+        &self,
+        session_id: &str,
+        limit: i64,
+    ) -> Result<Vec<DashboardExport>, sqlx::Error> {
         sqlx::query_as::<_, DashboardExport>(
             "SELECT * FROM dashboard_exports WHERE session_id = ? ORDER BY created_at DESC LIMIT ?",
         )

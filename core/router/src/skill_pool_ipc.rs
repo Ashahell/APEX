@@ -13,7 +13,7 @@ pub struct IpcRequest {
     pub skill: String,
     pub input: serde_json::Value,
     pub timeout_ms: u64,
-    pub permitted_tier: Option<String>,  // B1: tier passed from Router
+    pub permitted_tier: Option<String>, // B1: tier passed from Router
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -135,13 +135,16 @@ mod tests {
 
     #[test]
     fn test_ipc_response_deserialization_success() {
-        let resp: IpcResponse = serde_json::from_str(r#"{
+        let resp: IpcResponse = serde_json::from_str(
+            r#"{
             "id": "test-123",
             "ok": true,
             "output": "success",
             "error": null,
             "duration_ms": 15
-        }"#).unwrap();
+        }"#,
+        )
+        .unwrap();
         assert_eq!(resp.id, "test-123");
         assert!(resp.ok);
         assert_eq!(resp.output, Some("success".to_string()));
@@ -150,13 +153,16 @@ mod tests {
 
     #[test]
     fn test_ipc_response_deserialization_error() {
-        let resp: IpcResponse = serde_json::from_str(r#"{
+        let resp: IpcResponse = serde_json::from_str(
+            r#"{
             "id": "test-456",
             "ok": false,
             "output": null,
             "error": "skill not found",
             "duration_ms": 5
-        }"#).unwrap();
+        }"#,
+        )
+        .unwrap();
         assert_eq!(resp.id, "test-456");
         assert!(!resp.ok);
         assert_eq!(resp.error, Some("skill not found".to_string()));
@@ -164,8 +170,17 @@ mod tests {
 
     #[test]
     fn test_skill_pool_error_display() {
-        assert_eq!(SkillPoolError::Timeout.to_string(), "skill pool: timeout waiting for Bun response");
-        assert_eq!(SkillPoolError::ChannelClosed.to_string(), "skill pool: IPC channel closed");
-        assert_eq!(SkillPoolError::NoSlots.to_string(), "skill pool: no slots available");
+        assert_eq!(
+            SkillPoolError::Timeout.to_string(),
+            "skill pool: timeout waiting for Bun response"
+        );
+        assert_eq!(
+            SkillPoolError::ChannelClosed.to_string(),
+            "skill pool: IPC channel closed"
+        );
+        assert_eq!(
+            SkillPoolError::NoSlots.to_string(),
+            "skill pool: no slots available"
+        );
     }
 }

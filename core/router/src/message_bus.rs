@@ -66,10 +66,7 @@ pub enum McpMessage {
     },
     /// Server connection error
     #[serde(rename = "server_error")]
-    ServerError {
-        server_id: String,
-        error: String,
-    },
+    ServerError { server_id: String, error: String },
     /// Tool execution started
     #[serde(rename = "tool_started")]
     ToolStarted {
@@ -179,14 +176,14 @@ mod tests {
     async fn test_publish_and_subscribe() {
         let bus = MessageBus::new(10);
         let mut receiver = bus.subscribe();
-        
+
         bus.publish(TaskMessage {
             task_id: "test-1".to_string(),
             tier: "deep".to_string(),
             content: "test task".to_string(),
             channel: Some("default".to_string()),
         });
-        
+
         let received = receiver.recv().await.unwrap();
         assert_eq!(received.task_id, "test-1");
     }
@@ -195,14 +192,14 @@ mod tests {
     async fn test_publish_skill_message() {
         let bus = MessageBus::new(10);
         let mut receiver = bus.subscribe_skills();
-        
+
         bus.publish_skill(SkillExecutionMessage {
             task_id: "test-1".to_string(),
             skill_name: "shell.execute".to_string(),
             input: serde_json::json!({"command": "ls"}),
             permission_tier: "T3".to_string(),
         });
-        
+
         let received = receiver.recv().await.unwrap();
         assert_eq!(received.skill_name, "shell.execute");
     }
@@ -211,7 +208,7 @@ mod tests {
     async fn test_publish_deep_task_message() {
         let bus = MessageBus::new(10);
         let mut receiver = bus.subscribe_deep_tasks();
-        
+
         bus.publish_deep_task(DeepTaskMessage {
             task_id: "test-1".to_string(),
             content: "build a website".to_string(),
@@ -222,7 +219,7 @@ mod tests {
             use_tir: false,
             enable_subagents: true,
         });
-        
+
         let received = receiver.recv().await.unwrap();
         assert_eq!(received.max_steps, 10);
     }
@@ -231,7 +228,7 @@ mod tests {
     async fn test_publish_confirmation_message() {
         let bus = MessageBus::new(10);
         let mut receiver = bus.subscribe_confirmations();
-        
+
         bus.publish_confirmation(ConfirmationMessage {
             task_id: "test-1".to_string(),
             tier: "T2".to_string(),
@@ -240,7 +237,7 @@ mod tests {
             confirmed: false,
             permission_tier: "T2".to_string(),
         });
-        
+
         let received = receiver.recv().await.unwrap();
         assert_eq!(received.action, "delete file");
     }

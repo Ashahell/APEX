@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite, FromRow};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Pool, Sqlite};
 
 /// Execution pattern detected (Death Spiral Detection)
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -71,7 +71,7 @@ impl ExecutionPatternRepository {
     /// Get patterns by task ID
     pub async fn get_by_task(&self, task_id: &str) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
         sqlx::query_as::<_, ExecutionPattern>(
-            "SELECT * FROM execution_patterns WHERE task_id = ? ORDER BY detected_at DESC"
+            "SELECT * FROM execution_patterns WHERE task_id = ? ORDER BY detected_at DESC",
         )
         .bind(task_id)
         .fetch_all(&self.pool)
@@ -79,9 +79,12 @@ impl ExecutionPatternRepository {
     }
 
     /// Get patterns by type
-    pub async fn get_by_type(&self, pattern_type: &str) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
+    pub async fn get_by_type(
+        &self,
+        pattern_type: &str,
+    ) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
         sqlx::query_as::<_, ExecutionPattern>(
-            "SELECT * FROM execution_patterns WHERE pattern_type = ? ORDER BY detected_at DESC"
+            "SELECT * FROM execution_patterns WHERE pattern_type = ? ORDER BY detected_at DESC",
         )
         .bind(pattern_type)
         .fetch_all(&self.pool)
@@ -89,9 +92,12 @@ impl ExecutionPatternRepository {
     }
 
     /// Get patterns by severity
-    pub async fn get_by_severity(&self, severity: &str) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
+    pub async fn get_by_severity(
+        &self,
+        severity: &str,
+    ) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
         sqlx::query_as::<_, ExecutionPattern>(
-            "SELECT * FROM execution_patterns WHERE severity = ? ORDER BY detected_at DESC"
+            "SELECT * FROM execution_patterns WHERE severity = ? ORDER BY detected_at DESC",
         )
         .bind(severity)
         .fetch_all(&self.pool)
@@ -101,7 +107,7 @@ impl ExecutionPatternRepository {
     /// Get recent patterns
     pub async fn get_recent(&self, limit: i64) -> Result<Vec<ExecutionPattern>, sqlx::Error> {
         sqlx::query_as::<_, ExecutionPattern>(
-            "SELECT * FROM execution_patterns ORDER BY detected_at DESC LIMIT ?"
+            "SELECT * FROM execution_patterns ORDER BY detected_at DESC LIMIT ?",
         )
         .bind(limit)
         .fetch_all(&self.pool)
@@ -142,16 +148,19 @@ impl ExecutionPatternRepository {
     /// Get all alert templates
     pub async fn list_templates(&self) -> Result<Vec<PatternAlertTemplate>, sqlx::Error> {
         sqlx::query_as::<_, PatternAlertTemplate>(
-            "SELECT * FROM pattern_alert_templates ORDER BY severity, pattern_type"
+            "SELECT * FROM pattern_alert_templates ORDER BY severity, pattern_type",
         )
         .fetch_all(&self.pool)
         .await
     }
 
     /// Get template by pattern type
-    pub async fn get_template(&self, pattern_type: &str) -> Result<PatternAlertTemplate, sqlx::Error> {
+    pub async fn get_template(
+        &self,
+        pattern_type: &str,
+    ) -> Result<PatternAlertTemplate, sqlx::Error> {
         sqlx::query_as::<_, PatternAlertTemplate>(
-            "SELECT * FROM pattern_alert_templates WHERE pattern_type = ?"
+            "SELECT * FROM pattern_alert_templates WHERE pattern_type = ?",
         )
         .bind(pattern_type)
         .fetch_one(&self.pool)
@@ -165,7 +174,8 @@ mod tests {
     use sqlx::SqlitePool;
 
     async fn create_tables(pool: &SqlitePool) {
-        sqlx::query("CREATE TABLE IF NOT EXISTS execution_patterns (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS execution_patterns (
             id TEXT PRIMARY KEY,
             task_id TEXT NOT NULL,
             pattern_type TEXT NOT NULL,
@@ -175,9 +185,14 @@ mod tests {
             error_count INTEGER DEFAULT 0,
             details TEXT,
             detected_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
 
-        sqlx::query("CREATE TABLE IF NOT EXISTS pattern_alert_templates (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS pattern_alert_templates (
             id TEXT PRIMARY KEY,
             pattern_type TEXT NOT NULL UNIQUE,
             title TEXT NOT NULL,
@@ -185,7 +200,11 @@ mod tests {
             severity TEXT NOT NULL,
             remediation TEXT,
             created_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -194,16 +213,19 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = ExecutionPatternRepository::new(&pool);
-        let pattern = repo.record_pattern(
-            "pat-1",
-            "task-1",
-            "tool_call_loop",
-            "critical",
-            Some(r#"["tool.read", "tool.read", "tool.read"]"#),
-            None,
-            5,
-            Some(r#"{"consecutive": 5}"#),
-        ).await.unwrap();
+        let pattern = repo
+            .record_pattern(
+                "pat-1",
+                "task-1",
+                "tool_call_loop",
+                "critical",
+                Some(r#"["tool.read", "tool.read", "tool.read"]"#),
+                None,
+                5,
+                Some(r#"{"consecutive": 5}"#),
+            )
+            .await
+            .unwrap();
 
         assert_eq!(pattern.pattern_type, "tool_call_loop");
         assert_eq!(pattern.severity, "critical");
@@ -215,8 +237,30 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = ExecutionPatternRepository::new(&pool);
-        repo.record_pattern("pat-1", "task-1", "tool_call_loop", "critical", None, None, 0, None).await.unwrap();
-        repo.record_pattern("pat-2", "task-1", "error_cascade", "high", None, None, 3, None).await.unwrap();
+        repo.record_pattern(
+            "pat-1",
+            "task-1",
+            "tool_call_loop",
+            "critical",
+            None,
+            None,
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.record_pattern(
+            "pat-2",
+            "task-1",
+            "error_cascade",
+            "high",
+            None,
+            None,
+            3,
+            None,
+        )
+        .await
+        .unwrap();
 
         let patterns = repo.get_by_task("task-1").await.unwrap();
         assert_eq!(patterns.len(), 2);
@@ -228,9 +272,42 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = ExecutionPatternRepository::new(&pool);
-        repo.record_pattern("pat-1", "task-1", "tool_call_loop", "critical", None, None, 0, None).await.unwrap();
-        repo.record_pattern("pat-2", "task-2", "error_cascade", "high", None, None, 0, None).await.unwrap();
-        repo.record_pattern("pat-3", "task-3", "file_creation_burst", "high", None, None, 0, None).await.unwrap();
+        repo.record_pattern(
+            "pat-1",
+            "task-1",
+            "tool_call_loop",
+            "critical",
+            None,
+            None,
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.record_pattern(
+            "pat-2",
+            "task-2",
+            "error_cascade",
+            "high",
+            None,
+            None,
+            0,
+            None,
+        )
+        .await
+        .unwrap();
+        repo.record_pattern(
+            "pat-3",
+            "task-3",
+            "file_creation_burst",
+            "high",
+            None,
+            None,
+            0,
+            None,
+        )
+        .await
+        .unwrap();
 
         let counts = repo.count_by_severity().await.unwrap();
         assert_eq!(counts.len(), 2);

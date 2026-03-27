@@ -80,7 +80,11 @@ impl<'a> ProviderRepository<'a> {
 
     // ============ Provider Plugins ============
 
-    pub async fn list_providers(&self, provider_type: Option<&str>, enabled_only: bool) -> Result<Vec<ProviderPlugin>, sqlx::Error> {
+    pub async fn list_providers(
+        &self,
+        provider_type: Option<&str>,
+        enabled_only: bool,
+    ) -> Result<Vec<ProviderPlugin>, sqlx::Error> {
         let sql = match (provider_type, enabled_only) {
             (Some(pt), true) => {
                 "SELECT * FROM provider_plugins WHERE provider_type = ? AND enabled = 1 ORDER BY priority DESC"
@@ -200,13 +204,14 @@ impl<'a> ProviderRepository<'a> {
 
     // ============ Session Fast Mode ============
 
-    pub async fn get_session_fast_mode(&self, session_id: &str) -> Result<Option<SessionFastMode>, sqlx::Error> {
-        sqlx::query_as::<_, SessionFastMode>(
-            "SELECT * FROM session_fast_mode WHERE session_id = ?",
-        )
-        .bind(session_id)
-        .fetch_optional(self.pool)
-        .await
+    pub async fn get_session_fast_mode(
+        &self,
+        session_id: &str,
+    ) -> Result<Option<SessionFastMode>, sqlx::Error> {
+        sqlx::query_as::<_, SessionFastMode>("SELECT * FROM session_fast_mode WHERE session_id = ?")
+            .bind(session_id)
+            .fetch_optional(self.pool)
+            .await
     }
 
     pub async fn upsert_session_fast_mode(
@@ -243,13 +248,17 @@ impl<'a> ProviderRepository<'a> {
         .execute(self.pool)
         .await?;
 
-        self.get_session_fast_mode(session_id).await?
+        self.get_session_fast_mode(session_id)
+            .await?
             .ok_or_else(|| sqlx::Error::RowNotFound)
     }
 
     // ============ Model Fallbacks ============
 
-    pub async fn list_fallbacks(&self, primary_model: Option<&str>) -> Result<Vec<ModelFallback>, sqlx::Error> {
+    pub async fn list_fallbacks(
+        &self,
+        primary_model: Option<&str>,
+    ) -> Result<Vec<ModelFallback>, sqlx::Error> {
         match primary_model {
             Some(model) => {
                 sqlx::query_as::<_, ModelFallback>(
@@ -310,7 +319,10 @@ impl<'a> ProviderRepository<'a> {
 
     // ============ Provider Models ============
 
-    pub async fn list_provider_models(&self, provider_id: &str) -> Result<Vec<ProviderModel>, sqlx::Error> {
+    pub async fn list_provider_models(
+        &self,
+        provider_id: &str,
+    ) -> Result<Vec<ProviderModel>, sqlx::Error> {
         sqlx::query_as::<_, ProviderModel>(
             "SELECT * FROM provider_models WHERE provider_id = ? ORDER BY model_name",
         )
@@ -352,13 +364,14 @@ impl<'a> ProviderRepository<'a> {
 
     // ============ Provider Health ============
 
-    pub async fn get_provider_health(&self, provider_id: &str) -> Result<Option<ProviderHealth>, sqlx::Error> {
-        sqlx::query_as::<_, ProviderHealth>(
-            "SELECT * FROM provider_health WHERE provider_id = ?",
-        )
-        .bind(provider_id)
-        .fetch_optional(self.pool)
-        .await
+    pub async fn get_provider_health(
+        &self,
+        provider_id: &str,
+    ) -> Result<Option<ProviderHealth>, sqlx::Error> {
+        sqlx::query_as::<_, ProviderHealth>("SELECT * FROM provider_health WHERE provider_id = ?")
+            .bind(provider_id)
+            .fetch_optional(self.pool)
+            .await
     }
 
     pub async fn update_provider_health(
@@ -406,7 +419,8 @@ impl<'a> ProviderRepository<'a> {
         .execute(self.pool)
         .await?;
 
-        self.get_provider_health(provider_id).await?
+        self.get_provider_health(provider_id)
+            .await?
             .ok_or_else(|| sqlx::Error::RowNotFound)
     }
 }

@@ -13,7 +13,7 @@ use tokio::fs;
 use tokio::sync::RwLock;
 use tokio::time::{interval, Duration};
 
-use crate::narrative::{NarrativeMemory, NarrativeConfig};
+use crate::narrative::{NarrativeConfig, NarrativeMemory};
 
 /// Memory configuration for consolidation
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,7 +57,7 @@ pub struct ConsolidationResult {
 }
 
 /// Unified memory consolidation service
-/// 
+///
 /// Provides automatic memory consolidation based on configurable retention policies.
 /// Works with NarrativeMemory to manage file-based memory cleanup.
 pub struct MemoryConsolidator {
@@ -106,30 +106,41 @@ impl MemoryConsolidator {
             errors: vec![],
         };
 
-        let retention_threshold = Utc::now() - chrono::Duration::days(self.config.retention_days as i64);
+        let retention_threshold =
+            Utc::now() - chrono::Duration::days(self.config.retention_days as i64);
 
         // Consolidate journal
-        if let Err(e) = self.consolidate_directory(
-            &self.base_path.join("journal"),
-            &retention_threshold,
-            &mut result.journal_entries_kept,
-            &mut result.journal_entries_removed,
-            &mut result.total_space_freed_bytes,
-            &mut result.errors,
-        ).await {
-            result.errors.push(format!("Journal consolidation error: {}", e));
+        if let Err(e) = self
+            .consolidate_directory(
+                &self.base_path.join("journal"),
+                &retention_threshold,
+                &mut result.journal_entries_kept,
+                &mut result.journal_entries_removed,
+                &mut result.total_space_freed_bytes,
+                &mut result.errors,
+            )
+            .await
+        {
+            result
+                .errors
+                .push(format!("Journal consolidation error: {}", e));
         }
 
         // Consolidate reflections
-        if let Err(e) = self.consolidate_directory(
-            &self.base_path.join("reflections"),
-            &retention_threshold,
-            &mut result.reflections_kept,
-            &mut result.reflections_removed,
-            &mut result.total_space_freed_bytes,
-            &mut result.errors,
-        ).await {
-            result.errors.push(format!("Reflections consolidation error: {}", e));
+        if let Err(e) = self
+            .consolidate_directory(
+                &self.base_path.join("reflections"),
+                &retention_threshold,
+                &mut result.reflections_kept,
+                &mut result.reflections_removed,
+                &mut result.total_space_freed_bytes,
+                &mut result.errors,
+            )
+            .await
+        {
+            result
+                .errors
+                .push(format!("Reflections consolidation error: {}", e));
         }
 
         // Entities and knowledge - just count
@@ -203,7 +214,7 @@ impl MemoryConsolidator {
 
     async fn count_files(&self, dir: &Path) -> u32 {
         let mut count = 0u32;
-        
+
         if !dir.exists() {
             return 0;
         }
@@ -229,9 +240,10 @@ impl MemoryConsolidator {
     /// Check if content matches emphasis patterns
     pub fn matches_emphasis(&self, content: &str) -> bool {
         let content_lower = content.to_lowercase();
-        self.config.emphasis_patterns.iter().any(|pattern| {
-            content_lower.contains(&pattern.to_lowercase())
-        })
+        self.config
+            .emphasis_patterns
+            .iter()
+            .any(|pattern| content_lower.contains(&pattern.to_lowercase()))
     }
 
     /// Score content based on emphasis patterns
@@ -250,7 +262,8 @@ impl MemoryConsolidator {
 
     /// Initialize the consolidator
     pub async fn initialize(&self) -> Result<(), String> {
-        self.narrative.initialize()
+        self.narrative
+            .initialize()
             .await
             .map_err(|e| format!("Failed to initialize narrative: {}", e))
     }

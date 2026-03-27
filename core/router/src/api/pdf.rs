@@ -1,12 +1,12 @@
 use axum::{
-    extract::{State, Path, Multipart},
     extract::Query,
-    routing::{get, post, delete},
+    extract::{Multipart, Path, State},
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use ulid::Ulid;
 use std::sync::Arc;
+use ulid::Ulid;
 
 use apex_memory::pdf_repo::{PdfDocument, PdfExtractionJob, PdfRepository};
 
@@ -21,13 +21,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/pdf/upload", post(upload_pdf))
         .route("/api/v1/pdf/:id", get(get_pdf))
         .route("/api/v1/pdf/:id", delete(delete_pdf))
-        
         // Text extraction
         .route("/api/v1/pdf/:id/extract", post(extract_text))
-        
         // Analysis
         .route("/api/v1/pdf/:id/analyze", post(analyze_pdf))
-        
         // Jobs
         .route("/api/v1/pdf/jobs/:job_id", get(get_job_status))
 }
@@ -42,7 +39,7 @@ pub struct ListDocumentsQuery {
 
 #[derive(Debug, Deserialize)]
 pub struct ExtractTextRequest {
-    pub provider: Option<String>,  // 'anthropic', 'google', 'fallback'
+    pub provider: Option<String>, // 'anthropic', 'google', 'fallback'
 }
 
 #[derive(Debug, Deserialize)]
@@ -68,10 +65,11 @@ pub struct PdfDocumentResponse {
 
 impl From<PdfDocument> for PdfDocumentResponse {
     fn from(doc: PdfDocument) -> Self {
-        let metadata: Option<serde_json::Value> = doc.metadata
+        let metadata: Option<serde_json::Value> = doc
+            .metadata
             .as_ref()
             .and_then(|m| serde_json::from_str(m).ok());
-        
+
         Self {
             id: doc.id,
             file_name: doc.file_name,
@@ -131,7 +129,7 @@ impl From<PdfExtractionJob> for JobStatusResponse {
 #[derive(Debug, Serialize)]
 pub struct UploadResponse {
     pub document: PdfDocumentResponse,
-    pub cached: bool,  // True if document was retrieved from cache
+    pub cached: bool, // True if document was retrieved from cache
 }
 
 #[derive(Debug, Serialize)]
@@ -147,12 +145,12 @@ async fn list_documents(
     Query(query): Query<ListDocumentsQuery>,
 ) -> Result<Json<Vec<PdfDocumentResponse>>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     let docs = repo
         .list_documents(query.limit, query.offset)
         .await
         .map_err(|e| format!("Failed to list documents: {}", e))?;
-    
+
     Ok(Json(docs.into_iter().map(|d| d.into()).collect()))
 }
 
@@ -162,56 +160,53 @@ async fn upload_pdf(
     mut multipart: Multipart,
 ) -> Result<Json<UploadResponse>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     // Get the file from multipart
     let field = multipart
         .next_field()
         .await
         .map_err(|e| format!("Failed to read multipart: {}", e))?
         .ok_or("No file in request")?;
-    
-    let file_name = field
-        .file_name()
-        .ok_or("Missing file name")?
-        .to_string();
-    
+
+    let file_name = field.file_name().ok_or("Missing file name")?.to_string();
+
     let data = field
         .bytes()
         .await
         .map_err(|e| format!("Failed to read file data: {}", e))?;
-    
+
     let file_size = data.len() as i64;
-    
+
     // Calculate SHA256 hash
     use std::collections::hash_map::DefaultHasher;
     use std::hash::{Hash, Hasher};
     let mut hasher = DefaultHasher::new();
     data.hash(&mut hasher);
     let file_hash = format!("{:x}", hasher.finish());
-    
+
     // Check for cached document
     let cached = repo
         .get_document_by_hash(&file_hash)
         .await
         .map_err(|e| format!("Failed to check cache: {}", e))?;
-    
+
     if let Some(cached_doc) = cached {
         return Ok(Json(UploadResponse {
             document: cached_doc.into(),
             cached: true,
         }));
     }
-    
+
     // Create new document
     let id = Ulid::new().to_string();
     let document = repo
         .create_document(&id, &file_name, &file_hash, file_size, "fallback")
         .await
         .map_err(|e| format!("Failed to create document: {}", e))?;
-    
+
     // NOTE: Async text extraction would be handled by background job queue
     // For now, text extraction happens on-demand in get_pdf
-    
+
     Ok(Json(UploadResponse {
         document: document.into(),
         cached: false,
@@ -224,12 +219,12 @@ async fn get_pdf(
     Path(id): Path<String>,
 ) -> Result<Json<PdfDocumentResponse>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     let doc = repo
         .get_document(&id)
         .await
         .map_err(|e| format!("Failed to get document: {}", e))?;
-    
+
     Ok(Json(doc.into()))
 }
 
@@ -239,12 +234,11 @@ async fn delete_pdf(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
-    repo
-        .delete_document(&id)
+
+    repo.delete_document(&id)
         .await
         .map_err(|e| format!("Failed to delete document: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -255,13 +249,13 @@ async fn extract_text(
     Json(req): Json<ExtractTextRequest>,
 ) -> Result<Json<PdfExtractResponse>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     // Get the document
     let doc = repo
         .get_document(&id)
         .await
         .map_err(|e| format!("Failed to get document: {}", e))?;
-    
+
     // If already extracted, return cached
     if let Some(text) = &doc.extracted_text {
         return Ok(Json(PdfExtractResponse {
@@ -272,18 +266,24 @@ async fn extract_text(
             model: doc.model_used,
         }));
     }
-    
+
     // NOTE: Full PDF text extraction requires external OCR/service integration
     // For now, return placeholder
     let extracted_text = "PDF text extraction not yet implemented".to_string();
     let page_count = 0;
-    
+
     // Update document with extracted text
     let _updated = repo
-        .update_extracted_text(&id, Some(page_count), &extracted_text, None, Some("fallback"))
+        .update_extracted_text(
+            &id,
+            Some(page_count),
+            &extracted_text,
+            None,
+            Some("fallback"),
+        )
         .await
         .map_err(|e| format!("Failed to update document: {}", e))?;
-    
+
     Ok(Json(PdfExtractResponse {
         document_id: id,
         text: extracted_text,
@@ -300,17 +300,18 @@ async fn analyze_pdf(
     Json(req): Json<AnalyzePdfRequest>,
 ) -> Result<Json<PdfAnalyzeResponse>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     // Get the document
     let doc = repo
         .get_document(&id)
         .await
         .map_err(|e| format!("Failed to get document: {}", e))?;
-    
+
     // Get extracted text
-    let text = doc.extracted_text
+    let text = doc
+        .extracted_text
         .ok_or("PDF text not extracted yet. Call /extract first.")?;
-    
+
     // NOTE: Full LLM analysis requires llama.rs integration
     // For now, return placeholder
     let analysis = format!(
@@ -319,9 +320,9 @@ async fn analyze_pdf(
         doc.page_count.unwrap_or(0),
         text.len()
     );
-    
+
     let tokens_used = (analysis.len() / 4) as i32;
-    
+
     Ok(Json(PdfAnalyzeResponse {
         analysis,
         provider: req.provider.unwrap_or_else(|| "fallback".to_string()),
@@ -336,11 +337,11 @@ async fn get_job_status(
     Path(job_id): Path<String>,
 ) -> Result<Json<JobStatusResponse>, String> {
     let repo = PdfRepository::new(&state.pool);
-    
+
     let job = repo
         .get_job(&job_id)
         .await
         .map_err(|e| format!("Failed to get job: {}", e))?;
-    
+
     Ok(Json(job.into()))
 }

@@ -98,10 +98,10 @@ impl McpMetrics {
             let mut count = self.tools_failed.write().await;
             *count += 1;
         }
-        
+
         let mut times = self.tool_execution_times_ms.write().await;
         times.push(duration_ms);
-        
+
         // Keep only last 1000 entries
         if times.len() > 1000 {
             times.remove(0);
@@ -126,7 +126,7 @@ impl McpMetrics {
         let connections_failed = *self.connections_failed.read().await;
         let reconnections = *self.reconnections.read().await;
         let tool_execution_times = self.tool_execution_times_ms.read().await.clone();
-        
+
         let avg_execution_time = if tool_execution_times.is_empty() {
             0.0
         } else {
@@ -175,7 +175,7 @@ mod tests {
     async fn test_metrics_new() {
         let metrics = RouterMetrics::new();
         let snapshot = metrics.get_metrics().await;
-        
+
         assert_eq!(snapshot.tasks_total.get("total"), None);
         assert!(snapshot.total_cost == 0.0);
     }
@@ -184,9 +184,9 @@ mod tests {
     async fn test_record_task() {
         let metrics = RouterMetrics::new();
         metrics.record_task("deep", "completed").await;
-        
+
         let snapshot = metrics.get_metrics().await;
-        
+
         assert_eq!(snapshot.tasks_total.get("total"), Some(&1u64));
         assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&1u64));
         assert_eq!(snapshot.tasks_by_status.get("completed"), Some(&1u64));
@@ -195,13 +195,13 @@ mod tests {
     #[tokio::test]
     async fn test_record_multiple_tasks() {
         let metrics = RouterMetrics::new();
-        
+
         metrics.record_task("deep", "completed").await;
         metrics.record_task("instant", "completed").await;
         metrics.record_task("deep", "failed").await;
-        
+
         let snapshot = metrics.get_metrics().await;
-        
+
         assert_eq!(snapshot.tasks_total.get("total"), Some(&3u64));
         assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&2u64));
         assert_eq!(snapshot.tasks_by_tier.get("instant"), Some(&1u64));
@@ -212,24 +212,24 @@ mod tests {
     #[tokio::test]
     async fn test_record_cost() {
         let metrics = RouterMetrics::new();
-        
+
         metrics.record_cost(0.50).await;
         metrics.record_cost(1.25).await;
-        
+
         let snapshot = metrics.get_metrics().await;
-        
+
         assert_eq!(snapshot.total_cost, 1.75);
     }
 
     #[tokio::test]
     async fn test_metrics_combined() {
         let metrics = RouterMetrics::new();
-        
+
         metrics.record_task("deep", "completed").await;
         metrics.record_cost(0.75).await;
-        
+
         let snapshot = metrics.get_metrics().await;
-        
+
         assert_eq!(snapshot.tasks_total.get("total"), Some(&1u64));
         assert_eq!(snapshot.tasks_by_tier.get("deep"), Some(&1u64));
         assert_eq!(snapshot.tasks_by_status.get("completed"), Some(&1u64));

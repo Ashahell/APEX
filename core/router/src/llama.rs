@@ -52,7 +52,10 @@ impl LlamaClient {
     pub fn from_env() -> Self {
         let config = AppConfig::global();
         // Get the API key from the default LLM if available
-        let api_key = config.agent.llms.iter()
+        let api_key = config
+            .agent
+            .llms
+            .iter()
             .find(|l| l.id == config.agent.default_llm_id.as_deref().unwrap_or("default"))
             .and_then(|l| l.api_key.clone());
         Self::new(config.agent.llama_url, config.agent.llama_model, api_key)
@@ -82,24 +85,32 @@ impl LlamaClient {
         // Retry logic for rate limits (429)
         let max_retries = 3;
         let mut last_error = String::new();
-        
+
         for attempt in 0..max_retries {
             if attempt > 0 {
                 let delay = tokio::time::Duration::from_secs(2_u64.pow(attempt));
-                tracing::info!(attempt = attempt + 1, delay_secs = delay.as_secs(), "Retrying LLM request after rate limit");
+                tracing::info!(
+                    attempt = attempt + 1,
+                    delay_secs = delay.as_secs(),
+                    "Retrying LLM request after rate limit"
+                );
                 tokio::time::sleep(delay).await;
             }
 
             let mut req = self.client.post(&url).json(&request);
-            
+
             // Add API key if available
             if let Some(ref key) = self.api_key {
-                tracing::debug!(has_api_key = true, key_length = key.len(), "Sending request with API key");
+                tracing::debug!(
+                    has_api_key = true,
+                    key_length = key.len(),
+                    "Sending request with API key"
+                );
                 req = req.header("Authorization", format!("Bearer {}", key));
             } else {
                 tracing::warn!("No API key available for LLM request");
             }
-            
+
             let response = req
                 .send()
                 .await
@@ -108,14 +119,14 @@ impl LlamaClient {
             if !response.status().is_success() {
                 let status = response.status();
                 let body = response.text().await.unwrap_or_default();
-                
+
                 // Check for rate limit (429)
                 if status.as_u16() == 429 && attempt < max_retries - 1 {
                     tracing::warn!(status = %status, attempt = attempt + 1, "Rate limited, will retry");
                     last_error = format!("{} - {}", status, body);
                     continue;
                 }
-                
+
                 tracing::error!(status = %status, body = %body, "LLM request failed");
                 return Err(format!("LLM request failed: {} - {}", status, body));
             }
@@ -131,8 +142,11 @@ impl LlamaClient {
                 .map(|c| c.message.content.clone())
                 .ok_or_else(|| "No response from LLM".to_string());
         }
-        
-        Err(format!("LLM rate limit exceeded after {} retries: {}", max_retries, last_error))
+
+        Err(format!(
+            "LLM rate limit exceeded after {} retries: {}",
+            max_retries, last_error
+        ))
     }
 
     pub async fn generate(&self, prompt: &str) -> Result<String, String> {
@@ -197,28 +211,46 @@ mod tests {
     #[tokio::test]
     async fn test_llama_server_connectivity() {
         use std::net::TcpStream;
-        
+
         // Check if llama-server is running on the expected port
         let config = AppConfig::global();
-        let host = config.agent.llama_url.trim_start_matches("http://").trim_start_matches("https://");
+        let host = config
+            .agent
+            .llama_url
+            .trim_start_matches("http://")
+            .trim_start_matches("https://");
         let port = host.split(':').nth(1).unwrap_or("80");
-        
-        if TcpStream::connect(format!("{}:{}", host.split(':').next().unwrap_or("localhost"), port)).is_err() {
-            eprintln!("llama-server not running on {} - skipping test. Start llama-server and try again.", config.agent.llama_url);
+
+        if TcpStream::connect(format!(
+            "{}:{}",
+            host.split(':').next().unwrap_or("localhost"),
+            port
+        ))
+        .is_err()
+        {
+            eprintln!(
+                "llama-server not running on {} - skipping test. Start llama-server and try again.",
+                config.agent.llama_url
+            );
             return;
         }
 
         let client = LlamaClient::new(config.agent.llama_url, config.agent.llama_model, None);
 
-        let result = client.chat("You are a helpful assistant.", "Say 'hello' in one word.").await;
-        
+        let result = client
+            .chat("You are a helpful assistant.", "Say 'hello' in one word.")
+            .await;
+
         match result {
             Ok(response) => {
                 println!("LLM response: {}", response);
                 assert!(!response.is_empty(), "Response should not be empty");
             }
             Err(e) => {
-                eprintln!("LLM test failed: {}. Make sure llama-server is running on port 8080", e);
+                eprintln!(
+                    "LLM test failed: {}. Make sure llama-server is running on port 8080",
+                    e
+                );
             }
         }
     }

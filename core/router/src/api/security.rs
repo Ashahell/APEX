@@ -14,18 +14,26 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 
-use crate::security::{Anomaly, AnomalyDetector, AnomalySeverity, AnomalyType, InjectionClassifier};
 use super::AppState;
+use crate::security::{
+    Anomaly, AnomalyDetector, AnomalySeverity, AnomalyType, InjectionClassifier,
+};
 
 /// Create security router
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/security/anomalies", get(get_anomalies))
         .route("/api/v1/security/anomalies/count", get(get_anomaly_count))
-        .route("/api/v1/security/anomalies/:severity", get(get_anomalies_by_severity))
+        .route(
+            "/api/v1/security/anomalies/:severity",
+            get(get_anomalies_by_severity),
+        )
         .route("/api/v1/security/stats", get(get_security_stats))
         .route("/api/v1/security/injection/analyze", post(analyze_input))
-        .route("/api/v1/security/injection/patterns", get(get_injection_patterns))
+        .route(
+            "/api/v1/security/injection/patterns",
+            get(get_injection_patterns),
+        )
         .route("/api/v1/security/health", get(security_health))
 }
 
@@ -65,29 +73,45 @@ impl From<Anomaly> for AnomalyResponse {
 /// Get all anomalies
 async fn get_anomalies(State(state): State<AppState>) -> Json<AnomaliesResponse> {
     let detector = state.anomaly_detector.as_ref();
-    
+
     if let Some(detector) = detector {
         let anomalies = detector.get_anomalies().await;
         let total = anomalies.len();
-        let anomalies: Vec<AnomalyResponse> = anomalies.into_iter().map(AnomalyResponse::from).collect();
-        
+        let anomalies: Vec<AnomalyResponse> =
+            anomalies.into_iter().map(AnomalyResponse::from).collect();
+
         Json(AnomaliesResponse { anomalies, total })
     } else {
-        Json(AnomaliesResponse { anomalies: vec![], total: 0 })
+        Json(AnomaliesResponse {
+            anomalies: vec![],
+            total: 0,
+        })
     }
 }
 
 /// Get anomaly count
 async fn get_anomaly_count(State(state): State<AppState>) -> Json<serde_json::Value> {
     let detector = state.anomaly_detector.as_ref();
-    
+
     if let Some(detector) = detector {
         let anomalies = detector.get_anomalies().await;
-        let critical = anomalies.iter().filter(|a| a.severity == AnomalySeverity::Critical).count();
-        let high = anomalies.iter().filter(|a| a.severity == AnomalySeverity::High).count();
-        let medium = anomalies.iter().filter(|a| a.severity == AnomalySeverity::Medium).count();
-        let low = anomalies.iter().filter(|a| a.severity == AnomalySeverity::Low).count();
-        
+        let critical = anomalies
+            .iter()
+            .filter(|a| a.severity == AnomalySeverity::Critical)
+            .count();
+        let high = anomalies
+            .iter()
+            .filter(|a| a.severity == AnomalySeverity::High)
+            .count();
+        let medium = anomalies
+            .iter()
+            .filter(|a| a.severity == AnomalySeverity::Medium)
+            .count();
+        let low = anomalies
+            .iter()
+            .filter(|a| a.severity == AnomalySeverity::Low)
+            .count();
+
         Json(serde_json::json!({
             "total": anomalies.len(),
             "critical": critical,
@@ -116,19 +140,28 @@ async fn get_anomalies_by_severity(
         "high" => AnomalySeverity::High,
         "medium" => AnomalySeverity::Medium,
         "low" => AnomalySeverity::Low,
-        _ => return Json(AnomaliesResponse { anomalies: vec![], total: 0 }),
+        _ => {
+            return Json(AnomaliesResponse {
+                anomalies: vec![],
+                total: 0,
+            })
+        }
     };
-    
+
     let detector = state.anomaly_detector.as_ref();
-    
+
     if let Some(detector) = detector {
         let anomalies = detector.get_anomalies_by_severity(severity).await;
         let total = anomalies.len();
-        let anomalies: Vec<AnomalyResponse> = anomalies.into_iter().map(AnomalyResponse::from).collect();
-        
+        let anomalies: Vec<AnomalyResponse> =
+            anomalies.into_iter().map(AnomalyResponse::from).collect();
+
         Json(AnomaliesResponse { anomalies, total })
     } else {
-        Json(AnomaliesResponse { anomalies: vec![], total: 0 })
+        Json(AnomaliesResponse {
+            anomalies: vec![],
+            total: 0,
+        })
     }
 }
 
@@ -144,14 +177,18 @@ pub struct SecurityStatsResponse {
 /// Get security statistics
 async fn get_security_stats(State(state): State<AppState>) -> Json<SecurityStatsResponse> {
     let detector = state.anomaly_detector.as_ref();
-    
+
     let (healthy, skills_tracked, recent_executions) = if let Some(detector) = detector {
         let health = detector.health_status().await;
-        (health.status == "healthy", health.skills_tracked, health.recent_executions)
+        (
+            health.status == "healthy",
+            health.skills_tracked,
+            health.recent_executions,
+        )
     } else {
         (false, 0, 0)
     };
-    
+
     Json(SecurityStatsResponse {
         anomaly_detector_healthy: healthy,
         skills_tracked,
@@ -188,7 +225,7 @@ async fn analyze_input(
     } else {
         InjectionClassifier::analyze(&payload.input)
     };
-    
+
     Json(AnalyzeInputResponse {
         is_safe: result.is_safe,
         threat_level: result.threat_level.as_str().to_string(),
@@ -210,7 +247,7 @@ pub struct InjectionPatternInfo {
 /// Get registered injection patterns
 async fn get_injection_patterns() -> Json<Vec<InjectionPatternInfo>> {
     let patterns = InjectionClassifier::get_patterns();
-    
+
     let infos: Vec<InjectionPatternInfo> = patterns
         .into_iter()
         .map(|(desc, ptype, sev)| InjectionPatternInfo {
@@ -219,7 +256,7 @@ async fn get_injection_patterns() -> Json<Vec<InjectionPatternInfo>> {
             severity: sev.to_string(),
         })
         .collect();
-    
+
     Json(infos)
 }
 
@@ -244,9 +281,9 @@ async fn security_health(State(state): State<AppState>) -> Json<SecurityHealthRe
         injection_classifier: "healthy".to_string(),
         content_hash: "healthy".to_string(),
     };
-    
+
     let mut all_healthy = true;
-    
+
     // Check anomaly detector
     if let Some(detector) = state.anomaly_detector.as_ref() {
         let health = detector.health_status().await;
@@ -260,9 +297,9 @@ async fn security_health(State(state): State<AppState>) -> Json<SecurityHealthRe
         components.anomaly_detector = "not_initialized".to_string();
         all_healthy = false;
     }
-    
+
     let status = if all_healthy { "healthy" } else { "degraded" };
-    
+
     Json(SecurityHealthResponse {
         status: status.to_string(),
         components,

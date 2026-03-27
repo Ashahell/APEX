@@ -1,15 +1,17 @@
+use async_trait::async_trait;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicU8, Ordering};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::AsyncBufReadExt;
 use tokio::process::Command;
 use tokio::sync::{mpsc, Mutex};
-use async_trait::async_trait;
 use tracing::{error, info, warn};
 
 use crate::skill_pool_ipc::{IpcChannel, IpcResponse, SkillPoolError};
-use crate::system_component::{ComponentError, ComponentInfo, ComponentState, HealthStatus, SystemComponent};
+use crate::system_component::{
+    ComponentError, ComponentInfo, ComponentState, HealthStatus, SystemComponent,
+};
 
 /// Configuration constants for skill pool
 mod config_constants {
@@ -88,17 +90,23 @@ impl SkillPool {
         if config.worker_script.is_relative() {
             if let Ok(cwd) = std::env::current_dir() {
                 config.worker_script = cwd.join(&config.worker_script);
-                info!("Resolved worker_script to absolute path: {:?}", config.worker_script);
+                info!(
+                    "Resolved worker_script to absolute path: {:?}",
+                    config.worker_script
+                );
             }
         }
-        
+
         if config.skills_dir.is_relative() {
             if let Ok(cwd) = std::env::current_dir() {
                 config.skills_dir = cwd.join(&config.skills_dir);
-                info!("Resolved skills_dir to absolute path: {:?}", config.skills_dir);
+                info!(
+                    "Resolved skills_dir to absolute path: {:?}",
+                    config.skills_dir
+                );
             }
         }
-        
+
         let (free_tx, free_rx) = mpsc::channel(config.pool_size);
         let mut slots = Vec::with_capacity(config.pool_size);
 
@@ -169,16 +177,23 @@ impl SkillPool {
         let mut stdout_reader = tokio::io::BufReader::new(stdout);
         let mut ready_line = String::new();
 
-        tokio::time::timeout::<_>(Duration::from_secs(10), stdout_reader.read_line(&mut ready_line))
-            .await
-            .map_err(|_| SkillPoolError::SpawnError("Timed out waiting for READY".into()))?
-            .map_err(SkillPoolError::Io)?;
+        tokio::time::timeout::<_>(
+            Duration::from_secs(10),
+            stdout_reader.read_line(&mut ready_line),
+        )
+        .await
+        .map_err(|_| SkillPoolError::SpawnError("Timed out waiting for READY".into()))?
+        .map_err(SkillPoolError::Io)?;
 
-        let ready: serde_json::Value = serde_json::from_str(ready_line.trim())
-            .map_err(|_| SkillPoolError::SpawnError(format!("Unexpected READY: {}", ready_line.trim())))?;
+        let ready: serde_json::Value = serde_json::from_str(ready_line.trim()).map_err(|_| {
+            SkillPoolError::SpawnError(format!("Unexpected READY: {}", ready_line.trim()))
+        })?;
 
         if ready.get("ready").and_then(|v| v.as_bool()) != Some(true) {
-            return Err(SkillPoolError::SpawnError(format!("Expected ready:true, got: {}", ready_line.trim())));
+            return Err(SkillPoolError::SpawnError(format!(
+                "Expected ready:true, got: {}",
+                ready_line.trim()
+            )));
         }
 
         let stdout_inner = stdout_reader.into_inner();
@@ -196,10 +211,9 @@ impl SkillPool {
         let start = std::time::Instant::now();
         let acquire_timeout = Duration::from_millis(self.config.acquire_timeout_ms);
 
-        let slot_index = tokio::time::timeout(
-            acquire_timeout,
-            async { self.free_rx.lock().await.recv().await }
-        )
+        let slot_index = tokio::time::timeout(acquire_timeout, async {
+            self.free_rx.lock().await.recv().await
+        })
         .await
         .map_err(|_| {
             self.total_errors.fetch_add(1, Ordering::Relaxed);
@@ -212,7 +226,9 @@ impl SkillPool {
 
         let result = {
             let slot = self.slots[slot_index].lock().await;
-            slot.channel.send(skill, input, self.config.request_timeout_ms, tier).await
+            slot.channel
+                .send(skill, input, self.config.request_timeout_ms, tier)
+                .await
         };
 
         let _ = self.free_tx.send(slot_index).await;
@@ -232,10 +248,9 @@ impl SkillPool {
     pub async fn invalidate_cache(&self, skill_name: Option<&str>) -> Result<(), SkillPoolError> {
         let acquire_timeout = Duration::from_millis(self.config.acquire_timeout_ms);
 
-        let slot_index = tokio::time::timeout(
-            acquire_timeout,
-            async { self.free_rx.lock().await.recv().await }
-        )
+        let slot_index = tokio::time::timeout(acquire_timeout, async {
+            self.free_rx.lock().await.recv().await
+        })
         .await
         .map_err(|_| SkillPoolError::NoSlots)?
         .ok_or(SkillPoolError::ChannelClosed)?;
@@ -247,7 +262,15 @@ impl SkillPool {
 
         {
             let slot = self.slots[slot_index].lock().await;
-            let _ = slot.channel.send("__cache_bust__", input, self.config.request_timeout_ms, None).await;
+            let _ = slot
+                .channel
+                .send(
+                    "__cache_bust__",
+                    input,
+                    self.config.request_timeout_ms,
+                    None,
+                )
+                .await;
         }
 
         let _ = self.free_tx.send(slot_index).await;
@@ -282,8 +305,11 @@ impl SkillPool {
                     let slot = self.slots[i].lock().await;
                     match tokio::time::timeout(
                         Duration::from_secs(2),
-                        slot.channel.send("__ping__", serde_json::json!({}), 2000, None)
-                    ).await {
+                        slot.channel
+                            .send("__ping__", serde_json::json!({}), 2000, None),
+                    )
+                    .await
+                    {
                         Ok(Ok(resp)) => resp.ok,
                         _ => false,
                     }
@@ -323,24 +349,28 @@ impl SystemComponent for SkillPool {
         if self.is_initialized() {
             return Ok(());
         }
-        self.state.store(ComponentState::Initialized as u8, Ordering::SeqCst);
+        self.state
+            .store(ComponentState::Initialized as u8, Ordering::SeqCst);
         Ok(())
     }
 
     async fn start(&self) -> Result<(), ComponentError> {
-        self.state.store(ComponentState::Running as u8, Ordering::SeqCst);
+        self.state
+            .store(ComponentState::Running as u8, Ordering::SeqCst);
         info!("SkillPool started");
         Ok(())
     }
 
     async fn stop(&self) -> Result<(), ComponentError> {
-        self.state.store(ComponentState::Stopping as u8, Ordering::SeqCst);
-        
+        self.state
+            .store(ComponentState::Stopping as u8, Ordering::SeqCst);
+
         // Drop the sender to signal workers to stop
         // This will cause the receiver to return None
         std::mem::drop(&self.free_tx);
-        
-        self.state.store(ComponentState::Stopped as u8, Ordering::SeqCst);
+
+        self.state
+            .store(ComponentState::Stopped as u8, Ordering::SeqCst);
         info!("SkillPool stopped");
         Ok(())
     }
@@ -348,7 +378,7 @@ impl SystemComponent for SkillPool {
     async fn health(&self) -> HealthStatus {
         let total_errors = self.total_errors.load(Ordering::Relaxed);
         let total_requests = self.total_requests.load(Ordering::Relaxed);
-        
+
         if total_requests > 0 {
             let error_rate = total_errors as f64 / total_requests as f64;
             if error_rate > 0.1 {
@@ -361,7 +391,7 @@ impl SystemComponent for SkillPool {
                 };
             }
         }
-        
+
         HealthStatus::Healthy
     }
 

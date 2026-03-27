@@ -3,14 +3,16 @@
 //! Feature 2: Persona Assembly
 
 use axum::{
-    extract::{State, Path},
-    routing::{get, post, put, delete},
+    extract::{Path, State},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
-use crate::persona::{Persona, PersonaManager, PromptPiece, PromptPieceType, VoiceConfig, ModelConfig};
+use crate::persona::{
+    ModelConfig, Persona, PersonaManager, PromptPiece, PromptPieceType, VoiceConfig,
+};
 use crate::unified_config::persona_constants::*;
 
 /// Create persona request
@@ -63,9 +65,7 @@ impl From<Persona> for PersonaResponse {
 }
 
 /// List personas
-pub async fn list_personas(
-    State(_state): State<AppState>,
-) -> Json<Vec<PersonaResponse>> {
+pub async fn list_personas(State(_state): State<AppState>) -> Json<Vec<PersonaResponse>> {
     // For now, return default persona (DB storage later)
     let default = PersonaManager::create_default();
     Json(vec![default.into()])
@@ -94,12 +94,12 @@ pub async fn create_persona(
     if !PersonaManager::is_valid_name(&payload.name) {
         return Err("Invalid persona name".to_string());
     }
-    
+
     let mut persona = Persona::new(payload.name);
     persona.description = payload.description;
-    
+
     persona.validate().map_err(|e| e.to_string())?;
-    
+
     Ok(Json(persona.into()))
 }
 
@@ -112,9 +112,9 @@ pub async fn update_persona(
     if id != "default" {
         return Err("Only default persona can be updated".to_string());
     }
-    
+
     let mut persona = PersonaManager::create_default();
-    
+
     if let Some(name) = payload.name {
         persona.name = name;
     }
@@ -133,9 +133,9 @@ pub async fn update_persona(
     if let Some(mc) = payload.model_config {
         persona.model_config = mc;
     }
-    
+
     persona.validate().map_err(|e| e.to_string())?;
-    
+
     Ok(Json(persona.into()))
 }
 
@@ -147,7 +147,7 @@ pub async fn delete_persona(
     if id == "default" {
         return Err("Cannot delete default persona".to_string());
     }
-    
+
     Ok(Json(serde_json::json!({ "deleted": id })))
 }
 
@@ -167,16 +167,19 @@ pub async fn activate_persona(
 }
 
 /// Get active persona
-pub async fn get_active_persona(
-    State(_state): State<AppState>,
-) -> Json<PersonaResponse> {
+pub async fn get_active_persona(State(_state): State<AppState>) -> Json<PersonaResponse> {
     let default = PersonaManager::create_default();
     Json(default.into())
 }
 
 /// Get available prompt piece types
 pub async fn get_piece_types() -> Json<Vec<String>> {
-    Json(PersonaManager::get_piece_types().iter().map(|s| s.to_string()).collect())
+    Json(
+        PersonaManager::get_piece_types()
+            .iter()
+            .map(|s| s.to_string())
+            .collect(),
+    )
 }
 
 /// Create router

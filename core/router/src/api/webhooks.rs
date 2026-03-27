@@ -13,11 +13,16 @@ use super::{AppState, CreateWebhookRequest, WebhookResponse};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/webhooks", get(list_webhooks).post(create_webhook))
-        .route("/api/v1/webhooks/:id", get(get_webhook).delete(delete_webhook))
+        .route(
+            "/api/v1/webhooks/:id",
+            get(get_webhook).delete(delete_webhook),
+        )
         .route("/api/v1/webhooks/:id/toggle", post(toggle_webhook))
 }
 
-async fn list_webhooks(State(state): State<AppState>) -> Result<Json<Vec<WebhookResponse>>, String> {
+async fn list_webhooks(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<WebhookResponse>>, String> {
     let webhooks = state.webhook_manager.list_webhooks().await;
     let responses: Vec<WebhookResponse> = webhooks
         .into_iter()

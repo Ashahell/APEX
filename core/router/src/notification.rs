@@ -1,7 +1,7 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use chrono::Utc;
 
 /// External notification configuration (webhooks)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -66,9 +66,13 @@ impl NotificationManager {
     }
 
     /// Send external notification (Discord/Telegram webhook)
-    pub async fn send_external_notification(&self, title: &str, message: &str) -> Result<(), String> {
+    pub async fn send_external_notification(
+        &self,
+        title: &str,
+        message: &str,
+    ) -> Result<(), String> {
         let config = self.external_config.read().await.clone();
-        
+
         if !config.enabled {
             return Ok(());
         }
@@ -78,9 +82,10 @@ impl NotificationManager {
             let payload = serde_json::json!({
                 "content": format!("**{}**\n{}", title, message)
             });
-            
+
             let client = reqwest::Client::new();
-            if let Err(e) = client.post(discord_url)
+            if let Err(e) = client
+                .post(discord_url)
                 .header("Content-Type", "application/json")
                 .json(&payload)
                 .send()
@@ -91,16 +96,18 @@ impl NotificationManager {
         }
 
         // Send to Telegram if configured
-        if let (Some(token), Some(chat_id)) = (&config.telegram_bot_token, &config.telegram_chat_id) {
+        if let (Some(token), Some(chat_id)) = (&config.telegram_bot_token, &config.telegram_chat_id)
+        {
             let telegram_url = format!("https://api.telegram.org/bot{}/sendMessage", token);
             let payload = serde_json::json!({
                 "chat_id": chat_id,
                 "text": format!("*{}*\n{}", title, message),
                 "parse_mode": "Markdown"
             });
-            
+
             let client = reqwest::Client::new();
-            if let Err(e) = client.post(&telegram_url)
+            if let Err(e) = client
+                .post(&telegram_url)
                 .header("Content-Type", "application/json")
                 .json(&payload)
                 .send()
@@ -123,7 +130,12 @@ impl NotificationManager {
     }
 
     pub async fn get(&self, id: &str) -> Option<Notification> {
-        self.notifications.read().await.iter().find(|n| n.id == id).cloned()
+        self.notifications
+            .read()
+            .await
+            .iter()
+            .find(|n| n.id == id)
+            .cloned()
     }
 
     pub async fn create(&self, create: CreateNotification) -> Notification {
@@ -137,14 +149,14 @@ impl NotificationManager {
             created_at_ms: Utc::now().timestamp_millis(),
             data: create.data,
         };
-        
+
         let mut notifications = self.notifications.write().await;
         notifications.insert(0, notification.clone());
-        
+
         if notifications.len() > self.max_notifications {
             notifications.pop();
         }
-        
+
         notification
     }
 
@@ -176,7 +188,12 @@ impl NotificationManager {
     }
 
     pub async fn unread_count(&self) -> usize {
-        self.notifications.read().await.iter().filter(|n| !n.read).count()
+        self.notifications
+            .read()
+            .await
+            .iter()
+            .filter(|n| !n.read)
+            .count()
     }
 
     pub async fn notify_task_complete(&self, task_id: &str, message: &str) {
@@ -187,13 +204,13 @@ impl NotificationManager {
             message: message.to_string(),
             severity: "info".to_string(),
             data: Some(serde_json::json!({ "task_id": task_id })),
-        }).await;
+        })
+        .await;
 
         // Send external notification
-        let _ = self.send_external_notification(
-            &format!("Task Completed: {}", task_id),
-            message,
-        ).await;
+        let _ = self
+            .send_external_notification(&format!("Task Completed: {}", task_id), message)
+            .await;
     }
 
     pub async fn notify_task_failed(&self, task_id: &str, message: &str) {
@@ -204,13 +221,13 @@ impl NotificationManager {
             message: message.to_string(),
             severity: "error".to_string(),
             data: Some(serde_json::json!({ "task_id": task_id })),
-        }).await;
+        })
+        .await;
 
         // Send external notification (always send failures)
-        let _ = self.send_external_notification(
-            &format!("Task Failed: {}", task_id),
-            message,
-        ).await;
+        let _ = self
+            .send_external_notification(&format!("Task Failed: {}", task_id), message)
+            .await;
     }
 
     pub async fn notify_confirmation(&self, task_id: &str, action: &str) {
@@ -220,7 +237,8 @@ impl NotificationManager {
             message: format!("Action '{}' requires confirmation", action),
             severity: "warning".to_string(),
             data: Some(serde_json::json!({ "task_id": task_id, "action": action })),
-        }).await;
+        })
+        .await;
     }
 
     pub async fn notify_system(&self, title: &str, message: &str, severity: &str) {
@@ -230,6 +248,7 @@ impl NotificationManager {
             message: message.to_string(),
             severity: severity.to_string(),
             data: None,
-        }).await;
+        })
+        .await;
     }
 }

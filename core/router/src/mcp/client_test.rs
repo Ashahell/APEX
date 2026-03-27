@@ -14,20 +14,18 @@ mod tests {
     #[test]
     fn test_mcp_client_set_tools() {
         let mut client = McpClient::new("test-server".to_string());
-        
-        let tools = vec![
-            McpToolDefinition {
-                name: "test_tool".to_string(),
-                description: Some("A test tool".to_string()),
-                input_schema: serde_json::json!({
-                    "type": "object",
-                    "properties": {
-                        "input": { "type": "string" }
-                    }
-                }),
-            },
-        ];
-        
+
+        let tools = vec![McpToolDefinition {
+            name: "test_tool".to_string(),
+            description: Some("A test tool".to_string()),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "input": { "type": "string" }
+                }
+            }),
+        }];
+
         client.set_tools(tools.clone());
         assert_eq!(client.get_tools().len(), 1);
         assert_eq!(client.get_tools()[0].name, "test_tool");
@@ -42,7 +40,7 @@ mod tests {
             "method": "tools/list",
             "params": {}
         });
-        
+
         let serialized = request.to_string();
         assert!(serialized.contains("\"jsonrpc\":\"2.0\""));
         assert!(serialized.contains("\"method\":\"tools/list\""));
@@ -61,7 +59,7 @@ mod tests {
                 "required": ["message"]
             }),
         };
-        
+
         assert_eq!(tool.name, "echo");
         assert!(tool.description.is_some());
         assert!(tool.input_schema.is_object());
@@ -74,7 +72,7 @@ mod tests {
             content: "Hello, world!".to_string(),
             error: None,
         };
-        
+
         assert!(result.success);
         assert_eq!(result.content, "Hello, world!");
         assert!(result.error.is_none());
@@ -87,7 +85,7 @@ mod tests {
             content: String::new(),
             error: Some("Tool execution failed".to_string()),
         };
-        
+
         assert!(!result.success);
         assert!(result.error.is_some());
         assert_eq!(result.error.as_ref().unwrap(), "Tool execution failed");
@@ -96,14 +94,12 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_client_connect_no_server() {
         let mut client = McpClient::new("test-server".to_string());
-        
+
         // Try to connect to a non-existent command - should fail
-        let result = client.connect(
-            "nonexistent-command-xyz",
-            vec![],
-            HashMap::new(),
-        ).await;
-        
+        let result = client
+            .connect("nonexistent-command-xyz", vec![], HashMap::new())
+            .await;
+
         // Connection should fail with error
         assert!(result.is_err());
     }
@@ -111,7 +107,7 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_client_initialize_without_connection() {
         let mut client = McpClient::new("test-server".to_string());
-        
+
         // Try to initialize without connecting - should fail
         let result = client.initialize().await;
         assert!(result.is_err());
@@ -121,7 +117,7 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_client_list_tools_without_init() {
         let mut client = McpClient::new("test-server".to_string());
-        
+
         // Try to list tools without initialization - should fail
         let result = client.list_tools().await;
         assert!(result.is_err());
@@ -131,12 +127,11 @@ mod tests {
     #[tokio::test]
     async fn test_mcp_client_call_tool_without_init() {
         let mut client = McpClient::new("test-server".to_string());
-        
+
         // Try to call tool without initialization - should fail
-        let result = client.call_tool(
-            "test_tool",
-            serde_json::json!({"input": "test"})
-        ).await;
+        let result = client
+            .call_tool("test_tool", serde_json::json!({"input": "test"}))
+            .await;
         assert!(result.is_err());
         assert!(result.unwrap_err().contains("Not initialized"));
     }
@@ -147,7 +142,7 @@ mod tests {
             name: "test-mcp-server".to_string(),
             version: "1.0.0".to_string(),
         };
-        
+
         assert_eq!(info.name, "test-mcp-server");
         assert_eq!(info.version, "1.0.0");
     }
@@ -159,7 +154,7 @@ mod tests {
             resources: Some(serde_json::json!({})),
             prompts: None,
         };
-        
+
         assert!(capabilities.tools.is_some());
         assert!(capabilities.resources.is_some());
         assert!(capabilities.prompts.is_none());

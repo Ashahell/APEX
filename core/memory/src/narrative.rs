@@ -49,7 +49,10 @@ impl NarrativeMemory {
             self.config.base_path.join("entities").join("agents"),
             self.config.base_path.join("knowledge"),
             self.config.base_path.join("knowledge").join("technical"),
-            self.config.base_path.join("knowledge").join("institutional"),
+            self.config
+                .base_path
+                .join("knowledge")
+                .join("institutional"),
             self.config.base_path.join("reflections"),
         ];
 
@@ -74,7 +77,11 @@ impl NarrativeMemory {
         let journal_dir = self.config.base_path.join("journal").join(&date_path);
         fs::create_dir_all(&journal_dir).await?;
 
-        let file_name = format!("{}-{}.md", now.format("%d-%H%M%S"), &task_id[..8.min(task_id.len())]);
+        let file_name = format!(
+            "{}-{}.md",
+            now.format("%d-%H%M%S"),
+            &task_id[..8.min(task_id.len())]
+        );
         let file_path = journal_dir.join(&file_name);
 
         let summary = self.generate_summary(input_content, status);
@@ -130,11 +137,14 @@ impl NarrativeMemory {
         timestamp: DateTime<Utc>,
     ) -> String {
         let mut narrative = String::new();
-        
+
         narrative.push_str(&format!("# Task Narrative: {}\n\n", task_id));
-        narrative.push_str(&format!("**Date**: {}\n", timestamp.format("%Y-%m-%d %H:%M UTC")));
+        narrative.push_str(&format!(
+            "**Date**: {}\n",
+            timestamp.format("%Y-%m-%d %H:%M UTC")
+        ));
         narrative.push_str(&format!("**Status**: {}\n\n", status));
-        
+
         narrative.push_str("## Context\n\n");
         narrative.push_str(input_content);
         narrative.push_str("\n\n");
@@ -173,7 +183,12 @@ impl NarrativeMemory {
         narrative
     }
 
-    fn generate_reflection(&self, status: &str, tools_used: &[String], lessons: &[String]) -> String {
+    fn generate_reflection(
+        &self,
+        status: &str,
+        tools_used: &[String],
+        lessons: &[String],
+    ) -> String {
         let mut reflection = String::new();
 
         match status {
@@ -188,7 +203,8 @@ impl NarrativeMemory {
             }
             "failed" => {
                 reflection.push_str("This task encountered difficulties. ");
-                reflection.push_str("Consider reviewing the error messages and adjusting the approach. ");
+                reflection
+                    .push_str("Consider reviewing the error messages and adjusting the approach. ");
             }
             "cancelled" => {
                 reflection.push_str("This task was cancelled before completion. ");
@@ -216,10 +232,15 @@ impl NarrativeMemory {
             title.to_lowercase().replace(' ', "-")
         );
         let file_path = reflections_dir.join(&file_name);
-        
+
         // Atomic write
         let tmp_path = file_path.with_extension("tmp");
-        let file_content = format!("# {}\n\n**Date**: {}\n\n{}\n", title, now.format("%Y-%m-%d %H:%M UTC"), content);
+        let file_content = format!(
+            "# {}\n\n**Date**: {}\n\n{}\n",
+            title,
+            now.format("%Y-%m-%d %H:%M UTC"),
+            content
+        );
         {
             let mut file = fs::File::create(&tmp_path).await?;
             file.write_all(file_content.as_bytes()).await?;
@@ -231,7 +252,12 @@ impl NarrativeMemory {
         Ok(file_path)
     }
 
-    pub async fn add_entity(&self, entity_type: &str, name: &str, content: &str) -> std::io::Result<PathBuf> {
+    pub async fn add_entity(
+        &self,
+        entity_type: &str,
+        name: &str,
+        content: &str,
+    ) -> std::io::Result<PathBuf> {
         let entity_dir = self.config.base_path.join("entities").join(entity_type);
         fs::create_dir_all(&entity_dir).await?;
 
@@ -251,7 +277,12 @@ impl NarrativeMemory {
         Ok(file_path)
     }
 
-    pub async fn add_knowledge(&self, category: &str, title: &str, content: &str) -> std::io::Result<PathBuf> {
+    pub async fn add_knowledge(
+        &self,
+        category: &str,
+        title: &str,
+        content: &str,
+    ) -> std::io::Result<PathBuf> {
         let knowledge_dir = self.config.base_path.join("knowledge").join(category);
         fs::create_dir_all(&knowledge_dir).await?;
 
@@ -273,9 +304,10 @@ impl NarrativeMemory {
 
     pub async fn read_journal(&self, date: Option<DateTime<Utc>>) -> std::io::Result<Vec<PathBuf>> {
         let journal_dir = self.config.base_path.join("journal");
-        
+
         let target_date = date.unwrap_or_else(Utc::now);
-        let date_path = journal_dir.join(target_date.format("%Y").to_string())
+        let date_path = journal_dir
+            .join(target_date.format("%Y").to_string())
             .join(target_date.format("%m").to_string());
 
         if !date_path.exists() {
@@ -284,7 +316,7 @@ impl NarrativeMemory {
 
         let mut entries = Vec::new();
         let mut dir = fs::read_dir(&date_path).await?;
-        
+
         while let Some(entry) = dir.next_entry().await? {
             let path = entry.path();
             if path.extension().is_some_and(|ext| ext == "md") {
@@ -297,10 +329,18 @@ impl NarrativeMemory {
     }
 
     pub async fn get_memory_stats(&self) -> std::io::Result<MemoryStats> {
-        let journal_count = self.count_files_in(&self.config.base_path.join("journal")).await?;
-        let entities_count = self.count_files_in(&self.config.base_path.join("entities")).await?;
-        let knowledge_count = self.count_files_in(&self.config.base_path.join("knowledge")).await?;
-        let reflections_count = self.count_files_in(&self.config.base_path.join("reflections")).await?;
+        let journal_count = self
+            .count_files_in(&self.config.base_path.join("journal"))
+            .await?;
+        let entities_count = self
+            .count_files_in(&self.config.base_path.join("entities"))
+            .await?;
+        let knowledge_count = self
+            .count_files_in(&self.config.base_path.join("knowledge"))
+            .await?;
+        let reflections_count = self
+            .count_files_in(&self.config.base_path.join("reflections"))
+            .await?;
 
         Ok(MemoryStats {
             journal_entries: journal_count,
@@ -313,16 +353,16 @@ impl NarrativeMemory {
 
     async fn count_files_in(&self, dir: &Path) -> std::io::Result<u32> {
         let mut count = 0_u32;
-        
+
         if !dir.exists() {
             return Ok(0);
         }
 
         let mut stack = vec![dir.to_path_buf()];
-        
+
         while let Some(current_dir) = stack.pop() {
             let mut entries = fs::read_dir(&current_dir).await?;
-            
+
             while let Some(entry) = entries.next_entry().await? {
                 let path = entry.path();
                 if path.is_dir() {
@@ -359,10 +399,10 @@ mod tests {
             retention_days: 90,
             forgetting_threshold_days: 30,
         };
-        
+
         let memory = NarrativeMemory::new(config);
         memory.initialize().await.unwrap();
-        
+
         assert!(temp_dir.join("journal").exists());
         assert!(temp_dir.join("entities").exists());
         assert!(temp_dir.join("knowledge").exists());
@@ -376,19 +416,22 @@ mod tests {
             base_path: temp_dir.clone(),
             ..Default::default()
         };
-        
+
         let memory = NarrativeMemory::new(config);
         memory.initialize().await.unwrap();
 
-        let entry = memory.narrativize_task(
-            "task-123",
-            "Test task input",
-            Some("Test task output"),
-            "completed",
-            &["tool1".to_string(), "tool2".to_string()],
-            &["lesson1".to_string()],
-        ).await.unwrap();
-        
+        let entry = memory
+            .narrativize_task(
+                "task-123",
+                "Test task input",
+                Some("Test task output"),
+                "completed",
+                &["tool1".to_string(), "tool2".to_string()],
+                &["lesson1".to_string()],
+            )
+            .await
+            .unwrap();
+
         assert!(entry.path.exists());
         assert_eq!(entry.task_id, "task-123");
     }
@@ -436,7 +479,7 @@ impl NarrativeMemory {
 
     async fn export_directory(&self, dir: &Path) -> Result<Vec<ExportEntry>, std::io::Error> {
         let mut entries = Vec::new();
-        
+
         let mut stack = vec![dir.to_path_buf()];
         while let Some(current) = stack.pop() {
             let mut read_dir = fs::read_dir(&current).await?;
@@ -446,11 +489,12 @@ impl NarrativeMemory {
                     stack.push(path.clone());
                 } else {
                     let content = fs::read_to_string(&path).await?;
-                    let relative = path.strip_prefix(dir)
+                    let relative = path
+                        .strip_prefix(dir)
                         .unwrap_or(&path)
                         .to_string_lossy()
                         .to_string();
-                    
+
                     entries.push(ExportEntry {
                         path: relative,
                         content,
@@ -458,7 +502,7 @@ impl NarrativeMemory {
                 }
             }
         }
-        
+
         Ok(entries)
     }
 

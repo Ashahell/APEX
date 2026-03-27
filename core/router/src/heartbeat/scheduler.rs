@@ -5,7 +5,9 @@ use tokio::time::interval;
 
 use super::{AutonomyAction, HeartbeatConfig, WakeCycle};
 
-pub type WakeCallback = Box<dyn Fn() -> Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static> + Send + Sync>;
+pub type WakeCallback = Box<
+    dyn Fn() -> Box<dyn std::future::Future<Output = ()> + Send + Sync + 'static> + Send + Sync,
+>;
 
 #[derive(Clone)]
 pub struct HeartbeatScheduler {
@@ -42,9 +44,7 @@ impl HeartbeatScheduler {
             "Starting heartbeat scheduler"
         );
 
-        let mut ticker = interval(Duration::from_secs(
-            self.config.interval_minutes * 60
-        ));
+        let mut ticker = interval(Duration::from_secs(self.config.interval_minutes * 60));
 
         loop {
             ticker.tick().await;
@@ -70,7 +70,7 @@ impl HeartbeatScheduler {
 
     async fn trigger_wake(&self) {
         let wake_id = ulid::Ulid::new().to_string();
-        
+
         {
             let mut count = self.wake_count.write().await;
             *count += 1;
@@ -101,7 +101,7 @@ impl HeartbeatScheduler {
             }
 
             let requires_approval = action.requires_approval(&self.config);
-            
+
             if requires_approval {
                 tracing::info!(action = ?action, "Action requires approval, queuing");
             } else {
@@ -111,7 +111,7 @@ impl HeartbeatScheduler {
         }
 
         cycle.complete(true);
-        
+
         tracing::info!(
             wake_id = %cycle.wake_id,
             actions_executed = cycle.actions_executed,
@@ -144,18 +144,27 @@ impl HeartbeatScheduler {
 
     async fn execute_action(&self, action: &AutonomyAction) {
         tracing::info!(action = ?action, "Executing autonomous action");
-        
+
         match action {
-            AutonomyAction::SelfMaintenance { action_type, description } => {
+            AutonomyAction::SelfMaintenance {
+                action_type,
+                description,
+            } => {
                 tracing::info!(action_type = %action_type, description = %description, "Running self-maintenance");
             }
-            AutonomyAction::GoalAdvancement { goal_id, description } => {
+            AutonomyAction::GoalAdvancement {
+                goal_id,
+                description,
+            } => {
                 tracing::info!(goal_id = %goal_id, description = %description, "Advancing goal");
             }
             AutonomyAction::SocialCoordination { agent_id, action } => {
                 tracing::info!(agent_id = %agent_id, action = %action, "Social coordination");
             }
-            AutonomyAction::Learning { capability, description } => {
+            AutonomyAction::Learning {
+                capability,
+                description,
+            } => {
                 tracing::info!(capability = %capability, description = %description, "Learning new capability");
             }
             AutonomyAction::IdentityModification { field, reason } => {
@@ -240,8 +249,7 @@ impl AutonomyDecisionEngine {
             return None;
         }
 
-        let high_priority = context.active_goals.iter()
-            .find(|g| g.priority >= 8);
+        let high_priority = context.active_goals.iter().find(|g| g.priority >= 8);
 
         if let Some(goal) = high_priority {
             Some(AutonomyAction::GoalAdvancement {
@@ -269,7 +277,8 @@ impl AutonomyDecisionEngine {
         let minute = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
-            .as_secs() / 60;
+            .as_secs()
+            / 60;
         minute % 30 == 0
     }
 }
@@ -296,7 +305,7 @@ mod tests {
     async fn test_scheduler_status() {
         let config = HeartbeatConfig::default();
         let scheduler = HeartbeatScheduler::new(config);
-        
+
         let status = scheduler.get_status().await;
         assert!(!status.running);
         assert_eq!(status.wake_count, 0);
@@ -304,11 +313,11 @@ mod tests {
 
     #[test]
     fn test_decision_engine() {
-        use super::{GoalContext, HeartbeatConfig, AutonomyDecisionEngine, DecisionContext};
-        
+        use super::{AutonomyDecisionEngine, DecisionContext, GoalContext, HeartbeatConfig};
+
         let config = HeartbeatConfig::default();
         let engine = AutonomyDecisionEngine::new(config);
-        
+
         let context = DecisionContext {
             active_goals: vec![GoalContext {
                 id: "test-goal".to_string(),
@@ -318,7 +327,7 @@ mod tests {
             pending_notifications: 0,
             last_activity: None,
         };
-        
+
         let actions = futures::executor::block_on(engine.decide(&context));
         assert!(actions.len() >= 1); // Should have goal advancement
     }

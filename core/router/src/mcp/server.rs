@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::{RwLock, Mutex};
+use tokio::sync::{Mutex, RwLock};
 
-use crate::mcp::client::{McpClient, McpClientHandle, McpClientConfig, ConnectionState};
+use crate::mcp::client::{ConnectionState, McpClient, McpClientConfig, McpClientHandle};
 use crate::mcp::types::*;
 
 /// Pool configuration for MCP server connections
@@ -101,7 +101,7 @@ impl McpServerManager {
             env: env.clone(),
             client_config: McpClientConfig::default(),
         };
-        
+
         {
             let mut configs = self.server_configs.write().await;
             configs.insert(server_id.clone(), server_config.clone());
@@ -109,11 +109,17 @@ impl McpServerManager {
 
         // Create new client and connect
         let mut client = McpClient::new(server_id.clone());
-        
+
         // Store connection details for auto-reconnect
         client.store_connection_details(command, args, env);
-        
-        client.connect(&server_config.command, server_config.args.clone(), server_config.env.clone()).await?;
+
+        client
+            .connect(
+                &server_config.command,
+                server_config.args.clone(),
+                server_config.env.clone(),
+            )
+            .await?;
         client.initialize().await?;
 
         // Add to pool
@@ -125,9 +131,12 @@ impl McpServerManager {
             server_id: server_id.clone(),
             server_config,
         };
-        
-        pools.entry(server_id.clone()).or_insert_with(Vec::new).push(entry);
-        
+
+        pools
+            .entry(server_id.clone())
+            .or_insert_with(Vec::new)
+            .push(entry);
+
         tracing::info!("MCP server '{}' connected and added to pool", server_id);
         Ok(())
     }
@@ -135,7 +144,7 @@ impl McpServerManager {
     /// Get a client from the pool (reuse if available)
     pub async fn acquire_client(&self, server_id: &str) -> Result<McpClientHandle, String> {
         let mut pools = self.pools.write().await;
-        
+
         if let Some(entries) = pools.get_mut(server_id) {
             // Try to find an available connection
             for entry in entries.iter_mut() {
@@ -146,7 +155,7 @@ impl McpServerManager {
                     return Ok(entry.client.clone());
                 }
             }
-            
+
             // All connections busy, create new if under max
             if entries.len() < self.config.max_connections {
                 let _ = entries; // Release write lock by shadowing
@@ -155,21 +164,28 @@ impl McpServerManager {
                 return Err(format!("Pool exhausted for server '{}'", server_id));
             }
         }
-        
+
         Err(format!("Server '{}' not found in pool", server_id))
     }
 
     /// Create a new connection for a server
     async fn create_new_connection(&self, server_id: &str) -> Result<McpClientHandle, String> {
         let configs = self.server_configs.read().await;
-        let config = configs.get(server_id)
+        let config = configs
+            .get(server_id)
             .ok_or_else(|| format!("No configuration found for server '{}'", server_id))?
             .clone();
         drop(configs);
 
         let mut client = McpClient::new(server_id.to_string());
-        client.store_connection_details(config.command.clone(), config.args.clone(), config.env.clone());
-        client.connect(&config.command, config.args.clone(), config.env.clone()).await?;
+        client.store_connection_details(
+            config.command.clone(),
+            config.args.clone(),
+            config.env.clone(),
+        );
+        client
+            .connect(&config.command, config.args.clone(), config.env.clone())
+            .await?;
         client.initialize().await?;
 
         let entry = PoolEntry {
@@ -181,10 +197,13 @@ impl McpServerManager {
         };
 
         let mut pools = self.pools.write().await;
-        pools.entry(server_id.to_string()).or_insert_with(Vec::new).push(entry);
-        
+        pools
+            .entry(server_id.to_string())
+            .or_insert_with(Vec::new)
+            .push(entry);
+
         tracing::info!("Created new pooled connection for server '{}'", server_id);
-        
+
         let pool_entry = pools.get(server_id).unwrap().last().unwrap();
         Ok(pool_entry.client.clone())
     }
@@ -213,13 +232,16 @@ impl McpServerManager {
                 client.disconnect();
             }
         }
-        
+
         // Remove config
         drop(pools);
         let mut configs = self.server_configs.write().await;
         configs.remove(server_id);
-        
-        tracing::info!("MCP server '{}' disconnected and removed from pool", server_id);
+
+        tracing::info!(
+            "MCP server '{}' disconnected and removed from pool",
+            server_id
+        );
         Ok(())
     }
 
@@ -227,11 +249,12 @@ impl McpServerManager {
     pub async fn is_connected(&self, server_id: &str) -> bool {
         let pools = self.pools.read().await;
         if let Some(entries) = pools.get(server_id) {
-            !entries.is_empty() && entries.iter().any(|_e| {
-                // We need to check the client state
-                // For now, return true if there are entries
-                true
-            })
+            !entries.is_empty()
+                && entries.iter().any(|_e| {
+                    // We need to check the client state
+                    // For now, return true if there are entries
+                    true
+                })
         } else {
             false
         }
@@ -243,10 +266,10 @@ impl McpServerManager {
         let mut client_guard = client.lock().await;
         let tools = client_guard.list_tools().await?;
         drop(client_guard);
-        
+
         // Release back to pool
         self.release_client(server_id, client).await;
-        
+
         Ok(tools)
     }
 
@@ -261,10 +284,10 @@ impl McpServerManager {
         let mut client_guard = client.lock().await;
         let result = client_guard.call_tool(tool_name, arguments).await;
         drop(client_guard);
-        
+
         // Release back to pool
         self.release_client(server_id, client).await;
-        
+
         result
     }
 
@@ -272,7 +295,7 @@ impl McpServerManager {
     pub async fn get_all_tools(&self) -> Vec<(String, McpToolDefinition)> {
         let pools = self.pools.read().await;
         let mut all_tools = Vec::new();
-        
+
         for (server_id, entries) in pools.iter() {
             if let Some(first) = entries.first() {
                 let client = first.client.lock().await;
@@ -281,17 +304,17 @@ impl McpServerManager {
                 }
             }
         }
-        
+
         all_tools
     }
 
     /// Get pool statistics
     pub async fn get_stats(&self) -> PoolStats {
         let pools = self.pools.read().await;
-        
+
         let mut total = 0;
         let mut active = 0;
-        
+
         for entries in pools.values() {
             total += entries.len();
             for entry in entries {
@@ -301,7 +324,7 @@ impl McpServerManager {
                 }
             }
         }
-        
+
         PoolStats {
             total_connections: total,
             active_connections: active,
@@ -313,15 +336,18 @@ impl McpServerManager {
     /// Health check - attempt to reconnect failed servers
     pub async fn health_check(&self) {
         let pools = self.pools.read().await;
-        
+
         for (server_id, entries) in pools.iter() {
             for entry in entries {
                 let mut client = entry.client.lock().await;
                 let state = client.get_connection_state();
-                
+
                 if state != &ConnectionState::Connected {
                     if entry.server_config.client_config.auto_reconnect {
-                        tracing::warn!("Server '{}' disconnected, attempting auto-reconnect", server_id);
+                        tracing::warn!(
+                            "Server '{}' disconnected, attempting auto-reconnect",
+                            server_id
+                        );
                         if let Err(e) = client.auto_reconnect().await {
                             tracing::error!("Auto-reconnect failed for '{}': {}", server_id, e);
                         }
@@ -334,7 +360,7 @@ impl McpServerManager {
     /// Disconnect all servers
     pub async fn disconnect_all(&self) {
         let mut pools = self.pools.write().await;
-        
+
         for (server_id, entries) in pools.drain() {
             for entry in entries {
                 let mut client = entry.client.lock().await;
@@ -342,7 +368,7 @@ impl McpServerManager {
                 tracing::info!("MCP server '{}' disconnected", server_id);
             }
         }
-        
+
         let mut configs = self.server_configs.write().await;
         configs.clear();
     }
@@ -350,7 +376,7 @@ impl McpServerManager {
     /// Get server status
     pub async fn get_server_status(&self, server_id: &str) -> Option<ConnectionState> {
         let pools = self.pools.read().await;
-        
+
         if let Some(entries) = pools.get(server_id) {
             if let Some(entry) = entries.first() {
                 let client = entry.client.lock().await;

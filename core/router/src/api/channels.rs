@@ -1,10 +1,10 @@
 use axum::{
     extract::{Path, State},
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -14,7 +14,10 @@ use apex_memory::ChannelRepository;
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/channels", get(list_channels).post(create_channel))
-        .route("/api/v1/channels/:id", get(get_channel).put(update_channel).delete(delete_channel))
+        .route(
+            "/api/v1/channels/:id",
+            get(get_channel).put(update_channel).delete(delete_channel),
+        )
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -38,21 +41,34 @@ pub struct UpdateChannelRequest {
     pub description: Option<String>,
 }
 
-async fn list_channels(State(state): State<AppState>) -> Result<AxumJson<Vec<ChannelResponse>>, (StatusCode, String)> {
+async fn list_channels(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Vec<ChannelResponse>>, (StatusCode, String)> {
     let repo = ChannelRepository::new(&state.pool);
     match repo.find_all().await {
-        Ok(channels) => Ok(AxumJson(channels.into_iter().map(|c| ChannelResponse {
-            id: c.id,
-            name: c.name,
-            description: c.description,
-            created_at: c.created_at,
-            updated_at: c.updated_at,
-        }).collect())),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list channels: {}", e))),
+        Ok(channels) => Ok(AxumJson(
+            channels
+                .into_iter()
+                .map(|c| ChannelResponse {
+                    id: c.id,
+                    name: c.name,
+                    description: c.description,
+                    created_at: c.created_at,
+                    updated_at: c.updated_at,
+                })
+                .collect(),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list channels: {}", e),
+        )),
     }
 }
 
-async fn get_channel(Path(id): Path<String>, State(state): State<AppState>) -> Result<AxumJson<Option<ChannelResponse>>, (StatusCode, String)> {
+async fn get_channel(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<AxumJson<Option<ChannelResponse>>, (StatusCode, String)> {
     let repo = ChannelRepository::new(&state.pool);
     match repo.find_by_id(&id).await {
         Ok(c) => Ok(AxumJson(c.map(|c| ChannelResponse {
@@ -62,7 +78,10 @@ async fn get_channel(Path(id): Path<String>, State(state): State<AppState>) -> R
             created_at: c.created_at,
             updated_at: c.updated_at,
         }))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get channel: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get channel: {}", e),
+        )),
     }
 }
 
@@ -76,22 +95,31 @@ async fn create_channel(
         description: payload.description,
     };
     let repo = ChannelRepository::new(&state.pool);
-    
+
     match repo.create(&id, create).await {
         Ok(_) => {
             if let Ok(Some(c)) = repo.find_by_id(&id).await {
-                Ok((StatusCode::CREATED, AxumJson(ChannelResponse {
-                    id: c.id,
-                    name: c.name,
-                    description: c.description,
-                    created_at: c.created_at,
-                    updated_at: c.updated_at,
-                })))
+                Ok((
+                    StatusCode::CREATED,
+                    AxumJson(ChannelResponse {
+                        id: c.id,
+                        name: c.name,
+                        description: c.description,
+                        created_at: c.created_at,
+                        updated_at: c.updated_at,
+                    }),
+                ))
             } else {
-                Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to find created channel".to_string()))
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to find created channel".to_string(),
+                ))
             }
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create channel: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create channel: {}", e),
+        )),
     }
 }
 
@@ -105,7 +133,7 @@ async fn update_channel(
         description: payload.description,
     };
     let repo = ChannelRepository::new(&state.pool);
-    
+
     match repo.update(&id, update).await {
         Ok(_) => {
             if let Ok(Some(c)) = repo.find_by_id(&id).await {
@@ -120,14 +148,23 @@ async fn update_channel(
                 Ok(AxumJson(None))
             }
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update channel: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update channel: {}", e),
+        )),
     }
 }
 
-async fn delete_channel(Path(id): Path<String>, State(state): State<AppState>) -> Result<AxumJson<bool>, (StatusCode, String)> {
+async fn delete_channel(
+    Path(id): Path<String>,
+    State(state): State<AppState>,
+) -> Result<AxumJson<bool>, (StatusCode, String)> {
     let repo = ChannelRepository::new(&state.pool);
     match repo.delete(&id).await {
         Ok(_) => Ok(AxumJson(true)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete channel: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete channel: {}", e),
+        )),
     }
 }

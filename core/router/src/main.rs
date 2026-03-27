@@ -3,60 +3,57 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
+use apex_memory::background_indexer::{BackgroundIndexer, IndexerConfig};
 use apex_memory::db::Database;
 use apex_memory::embedder::{Embedder, EmbeddingProvider};
-use apex_memory::background_indexer::{BackgroundIndexer, IndexerConfig};
 use apex_memory::narrative::NarrativeMemory;
-use apex_router::api::{create_router, AppState};
 use apex_router::api::bounded_memory::BoundedMemoryState;
-use apex_router::skill_manager::SkillManager;
+use apex_router::api::{create_router, AppState};
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
 use apex_router::deep_task_worker::DeepTaskWorker;
+use apex_router::dynamic_tools::ToolRegistry;
 use apex_router::execution_stream::ExecutionStreamManager;
 use apex_router::governance::GovernanceEngine;
 use apex_router::heartbeat::HeartbeatScheduler;
+use apex_router::hub_client::HubClient;
+use apex_router::mcp::McpServerManager;
 use apex_router::message_bus::MessageBus;
 use apex_router::metrics::RouterMetrics;
 use apex_router::moltbook::MoltbookClient;
-use apex_router::skill_worker::SkillWorker;
+use apex_router::notification::NotificationManager;
+use apex_router::rate_limiter::RateLimiter;
+use apex_router::response_cache::ResponseCache;
+use apex_router::security::replay_protection;
+use apex_router::session_search::SessionSearch;
+use apex_router::skill_manager::SkillManager;
 use apex_router::skill_pool::SkillPool;
-use apex_router::subagent::SubAgentPool;
-use apex_router::dynamic_tools::ToolRegistry;
+use apex_router::skill_worker::SkillWorker;
 use apex_router::soul::loader::SoulLoader;
 use apex_router::soul::SoulConfig;
+use apex_router::subagent::SubAgentPool;
+use apex_router::system_health::SystemMonitor;
 use apex_router::totp::TotpManager;
 use apex_router::unified_config::AppConfig;
 use apex_router::user_profile::UserProfileManager;
-use apex_router::session_search::SessionSearch;
-use apex_router::hub_client::HubClient;
 use apex_router::vm_pool::{VmConfig, VmPool};
-use apex_router::rate_limiter::RateLimiter;
-use apex_router::response_cache::ResponseCache;
 use apex_router::webhook::WebhookManager;
-use apex_router::notification::NotificationManager;
-use apex_router::system_health::SystemMonitor;
 use apex_router::websocket::WebSocketManager;
-use apex_router::security::replay_protection;
-use apex_router::mcp::McpServerManager;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let json_logs = std::env::var("APEX_JSON_LOGS").is_ok();
-    
-    let subscriber = tracing_subscriber::registry()
-        .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "apex_router=info,tower_http=debug".into()),
-        );
-    
+
+    let subscriber = tracing_subscriber::registry().with(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| "apex_router=info,tower_http=debug".into()),
+    );
+
     if json_logs {
         subscriber
             .with(tracing_subscriber::fmt::layer().json())
             .init();
     } else {
-        subscriber
-            .with(tracing_subscriber::fmt::layer())
-            .init();
+        subscriber.with(tracing_subscriber::fmt::layer()).init();
     }
 
     let use_llm = std::env::var("APEX_USE_LLM").is_ok();
@@ -81,7 +78,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let message_bus = MessageBus::new(100);
     let circuit_breakers = CircuitBreakerRegistry::new();
-    
+
     // Initialize security components
     let _anomaly_detector = apex_router::skill_worker::init_anomaly_detector();
     tracing::info!("Anomaly detector initialized");
@@ -89,7 +86,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // C4: Load config first, before creating components
     let config = {
         // Try to load from database first
-        let db_config_result = AppConfig::load_from_db(&apex_memory::ConfigRepository::new(&pool)).await;
+        let db_config_result =
+            AppConfig::load_from_db(&apex_memory::ConfigRepository::new(&pool)).await;
         match db_config_result {
             Ok(config) => {
                 tracing::info!("Loaded configuration from database");
@@ -103,10 +101,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
     };
-    
+
     let validation_errors = config.validate();
     if !validation_errors.is_empty() {
-        tracing::warn!("Configuration validation found {} issues:", validation_errors.len());
+        tracing::warn!(
+            "Configuration validation found {} issues:",
+            validation_errors.len()
+        );
         for error in &validation_errors {
             tracing::warn!("  - {}", error.message);
         }
@@ -117,7 +118,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Now create components WITH config instead of using AppConfig::global()
     let vm_config = VmConfig::from_config(&config);
     tracing::info!(vm_config = ?vm_config, "VM Configuration");
-    
+
     let vm_pool = VmPool::new(vm_config, 3, 1);
     if let Err(e) = vm_pool.initialize().await {
         tracing::warn!("Failed to initialize VM pool: {}", e);
@@ -138,11 +139,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         match SkillPool::new(pool_config).await {
             Ok(pool) => {
-                tracing::info!("SkillPool initialized with {} workers", pool.config().pool_size);
+                tracing::info!(
+                    "SkillPool initialized with {} workers",
+                    pool.config().pool_size
+                );
                 Some(pool)
             }
             Err(e) => {
-                tracing::warn!("Failed to initialize SkillPool: {}, falling back to spawn", e);
+                tracing::warn!(
+                    "Failed to initialize SkillPool: {}, falling back to spawn",
+                    e
+                );
                 None
             }
         }
@@ -150,7 +157,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::info!("SkillPool disabled via config");
         None
     };
-    
+
     let moltbook = if config.moltbook.enabled {
         let moltbook_config = apex_router::moltbook::MoltbookConfig {
             enabled: config.moltbook.enabled,
@@ -207,7 +214,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let embedding_url = config.memory.embedding_url.clone();
         let embedding_model = config.memory.embedding_model.clone();
         let embedding_dim = config.memory.embedding_dim;
-        
+
         let provider = if config.memory.embedding_provider == "openai" {
             EmbeddingProvider::OpenAI {
                 api_key: std::env::var("OPENAI_API_KEY").unwrap_or_default(),
@@ -219,7 +226,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 model: embedding_model,
             }
         };
-        
+
         std::sync::Arc::new(Embedder::new(provider, embedding_dim))
     };
     tracing::info!("Embedder initialized with provider: {:?}", embedder);
@@ -257,7 +264,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = narrative_memory.initialize().await {
         tracing::warn!("Failed to initialize NarrativeMemory: {}", e);
     }
-    tracing::info!("NarrativeMemory initialized at {:?}", narrative_config.base_path);
+    tracing::info!(
+        "NarrativeMemory initialized at {:?}",
+        narrative_config.base_path
+    );
 
     // Start initial memory scan
     let indexer_for_scan = background_indexer.clone();
@@ -267,7 +277,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     });
 
     let state = AppState {
-        config: config.clone(),  // C4 Step 2: Add config to AppState
+        config: config.clone(), // C4 Step 2: Add config to AppState
         pool: pool_for_workers.clone(),
         metrics: RouterMetrics::new(),
         message_bus: message_bus.clone(),
@@ -324,24 +334,34 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             let search = SessionSearch::new(pool.clone());
             std::sync::Arc::new(search)
         },
-        hub_client: {
-            std::sync::Arc::new(HubClient::new(config.hub.base_url.clone()))
-        },
+        hub_client: { std::sync::Arc::new(HubClient::new(config.hub.base_url.clone())) },
         totp_manager,
         soul_loader,
         heartbeat_scheduler,
         mcp_manager: std::sync::Arc::new(McpServerManager::new()),
-        anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
+        anomaly_detector: Some(std::sync::Arc::new(
+            apex_router::security::AnomalyDetector::new(),
+        )),
         // Feature 5: Plugin Signing
-        signature_store: std::sync::Arc::new(std::sync::Mutex::new(apex_router::skill_signer::SignatureStore::new())),
+        signature_store: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::skill_signer::SignatureStore::new(),
+        )),
         // Feature 7: Story Engine
-        story_engine: std::sync::Arc::new(std::sync::Mutex::new(apex_router::story_engine::StoryEngine::new())),
+        story_engine: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::story_engine::StoryEngine::new(),
+        )),
         // Feature 4: Continuity Scheduler
-        continuity_state: std::sync::Arc::new(std::sync::Mutex::new(apex_router::api::continuity_api::ContinuityState::default())),
+        continuity_state: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::api::continuity_api::ContinuityState::default(),
+        )),
         // Feature 6: Privacy Guard
-        privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(apex_router::privacy_guard::PrivacyGuard::default_guard())),
+        privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::privacy_guard::PrivacyGuard::default_guard(),
+        )),
         // Feature 3: Context Scope
-        context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(apex_router::api::context_scope_api::ContextScopeState::default())),
+        context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(
+            apex_router::api::context_scope_api::ContextScopeState::default(),
+        )),
         // Patch 15: Replay protection (in-memory or Redis based on config)
         replay_protection: {
             let backend = match config.streaming.replay_backend {
@@ -354,16 +374,30 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // Patch 16: Streaming analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
     };
-    
+
     let state_arc = std::sync::Arc::new(state);
     let state_for_router = state_arc.as_ref().clone();
     let state_for_deep_worker = state_arc.as_ref().clone();
 
-    let worker = SkillWorker::new(pool_for_workers.clone(), skill_pool.clone(), Some(Arc::new(vm_pool.clone())), message_bus.clone(), circuit_breakers.clone());
+    let worker = SkillWorker::new(
+        pool_for_workers.clone(),
+        skill_pool.clone(),
+        Some(Arc::new(vm_pool.clone())),
+        message_bus.clone(),
+        circuit_breakers.clone(),
+    );
     tokio::spawn(worker.run());
 
-    let deep_worker =
-        DeepTaskWorker::new(pool_for_workers.clone(), message_bus.clone(), vm_pool, circuit_breakers.clone(), state_for_deep_worker.execution_streams.clone(), state_for_deep_worker.ws_manager.clone(), state_for_deep_worker.narrative_memory.clone(), state_for_deep_worker.skill_manager.clone());
+    let deep_worker = DeepTaskWorker::new(
+        pool_for_workers.clone(),
+        message_bus.clone(),
+        vm_pool,
+        circuit_breakers.clone(),
+        state_for_deep_worker.execution_streams.clone(),
+        state_for_deep_worker.ws_manager.clone(),
+        state_for_deep_worker.narrative_memory.clone(),
+        state_for_deep_worker.skill_manager.clone(),
+    );
     tokio::spawn(deep_worker.run());
 
     let cleanup_pool = pool_for_workers.clone();
@@ -384,8 +418,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
     });
 
-    let app = create_router(state_for_router)
-        .merge(apex_router::websocket::create_ws_router(state_arc));
+    let app =
+        create_router(state_for_router).merge(apex_router::websocket::create_ws_router(state_arc));
 
     let port: u16 = std::env::var("APEX_PORT")
         .ok()
@@ -395,7 +429,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing::info!("Starting router on {}", addr);
 
     let listener = tokio::net::TcpListener::bind(addr).await?;
-    
+
     axum::serve(listener, app)
         .with_graceful_shutdown(async move {
             let _ = tokio::signal::ctrl_c().await;

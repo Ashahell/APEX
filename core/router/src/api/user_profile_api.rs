@@ -45,7 +45,9 @@ async fn update_user_profile(
         profile.language = language;
     }
 
-    state.user_profile.set_profile(profile.clone())
+    state
+        .user_profile
+        .set_profile(profile.clone())
         .await
         .map_err(|e| ApiError::internal(format!("Failed to save profile: {}", e)))?;
 

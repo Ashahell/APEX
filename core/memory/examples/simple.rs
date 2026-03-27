@@ -70,7 +70,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         "test-001",
         TaskStatus::Completed,
         Some("Done!".to_string()),
-        Some(5),  // 5 cents
+        Some(5), // 5 cents
     )
     .await?;
 

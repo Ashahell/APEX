@@ -5,8 +5,8 @@
 //! Feature 1: Tool Maker Runtime Validation
 
 use axum::{
-    extract::{State, Query},
-    routing::{get, put, post},
+    extract::{Query, State},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -51,17 +51,18 @@ impl From<ValidationResult> for ValidationResponse {
 }
 
 /// Get current validation level
-pub async fn get_validation_level(
-    State(state): State<AppState>,
-) -> Json<ValidationResponse> {
-    let level = state.config.tool_validation_level.clone()
+pub async fn get_validation_level(State(state): State<AppState>) -> Json<ValidationResponse> {
+    let level = state
+        .config
+        .tool_validation_level
+        .clone()
         .unwrap_or_else(|| DEFAULT_VALIDATION_LEVEL.to_string());
-    
+
     let allowlist = match ValidationLevel::from_str(&level) {
         Ok(l) => ToolValidator::get_allowlist(l),
         Err(_) => vec![],
     };
-    
+
     Json(ValidationResponse {
         allowed: true,
         blocked_imports: allowlist.iter().map(|s| s.to_string()).collect(),
@@ -75,8 +76,10 @@ pub async fn set_validation_level(
     State(mut state): State<AppState>,
     Json(payload): Json<ValidateCodeRequest>,
 ) -> Result<Json<ValidationResponse>, String> {
-    let level = payload.level.unwrap_or_else(|| DEFAULT_VALIDATION_LEVEL.to_string());
-    
+    let level = payload
+        .level
+        .unwrap_or_else(|| DEFAULT_VALIDATION_LEVEL.to_string());
+
     // Validate the level string
     match ValidationLevel::from_str(&level) {
         Ok(_) => {
@@ -84,15 +87,15 @@ pub async fn set_validation_level(
             let mut config = state.config.clone();
             config.tool_validation_level = Some(level.clone());
             state.config = config.clone();
-            
+
             // Also save to DB if config_repo exists
             if let Err(e) = config.save_to_db(&state.config_repo).await {
                 tracing::warn!("Failed to save config: {}", e);
             }
-            
+
             let parsed_level = ValidationLevel::from_str(&level).unwrap();
             let allowlist = ToolValidator::get_allowlist(parsed_level);
-            
+
             Ok(Json(ValidationResponse {
                 allowed: true,
                 blocked_imports: allowlist.iter().map(|s| s.to_string()).collect(),
@@ -114,11 +117,12 @@ pub async fn validate_code(
     State(_state): State<AppState>,
     Json(payload): Json<ValidateCodeRequest>,
 ) -> Json<ValidationResponse> {
-    let level = payload.level
+    let level = payload
+        .level
         .as_ref()
         .and_then(|l| ValidationLevel::from_str(l).ok())
         .unwrap_or(ValidationLevel::Strict);
-    
+
     let result = ToolValidator::validate(&payload.code, level);
     Json(result.into())
 }

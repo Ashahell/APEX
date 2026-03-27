@@ -22,9 +22,18 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/skills", get(list_skills).post(register_skill))
         .route("/api/v1/skills/marketplace", get(list_marketplace_skills))
-        .route("/api/v1/skills/marketplace/:name", get(get_marketplace_skill))
-        .route("/api/v1/skills/marketplace/:name/install", post(install_marketplace_skill))
-        .route("/api/v1/skills/marketplace/:name/uninstall", post(uninstall_marketplace_skill))
+        .route(
+            "/api/v1/skills/marketplace/:name",
+            get(get_marketplace_skill),
+        )
+        .route(
+            "/api/v1/skills/marketplace/:name/install",
+            post(install_marketplace_skill),
+        )
+        .route(
+            "/api/v1/skills/marketplace/:name/uninstall",
+            post(uninstall_marketplace_skill),
+        )
         .route("/api/v1/skills/marketplace/search", get(search_marketplace))
         .route("/api/v1/skills/:name", get(get_skill).delete(delete_skill))
         .route("/api/v1/skills/:name/health", put(update_skill_health))
@@ -209,10 +218,7 @@ async fn execute_skill(
 
     Ok(Json(ExecuteSkillResponse {
         success: true,
-        output: Some(format!(
-            "Skill {} queued for execution",
-            payload.skill_name
-        )),
+        output: Some(format!("Skill {} queued for execution", payload.skill_name)),
         error: None,
     }))
 }
@@ -316,21 +322,20 @@ async fn list_marketplace_skills() -> Json<Vec<MarketplaceSkill>> {
 }
 
 async fn get_marketplace_skill(Path(name): Path<String>) -> Result<Json<MarketplaceSkill>, String> {
-    let skills = vec![
-        MarketplaceSkill {
-            name: "code.analyze".to_string(),
-            version: "1.0.0".to_string(),
-            description: "Analyze code for patterns and issues".to_string(),
-            author: "apex".to_string(),
-            tier: "T0".to_string(),
-            category: "development".to_string(),
-            downloads: 1250,
-            rating: 4.5,
-            tags: vec!["code".to_string(), "analysis".to_string()],
-        },
-    ];
-    
-    skills.into_iter()
+    let skills = vec![MarketplaceSkill {
+        name: "code.analyze".to_string(),
+        version: "1.0.0".to_string(),
+        description: "Analyze code for patterns and issues".to_string(),
+        author: "apex".to_string(),
+        tier: "T0".to_string(),
+        category: "development".to_string(),
+        downloads: 1250,
+        rating: 4.5,
+        tags: vec!["code".to_string(), "analysis".to_string()],
+    }];
+
+    skills
+        .into_iter()
         .find(|s| s.name == name)
         .map(Json)
         .ok_or_else(|| "Skill not found in marketplace".to_string())
@@ -362,7 +367,7 @@ async fn search_marketplace(
     let query = params.get("q").cloned().unwrap_or_default().to_lowercase();
     let category = params.get("category").cloned();
     let tier = params.get("tier").cloned();
-    
+
     let mut skills = vec![
         MarketplaceSkill {
             name: "code.analyze".to_string(),
@@ -409,23 +414,23 @@ async fn search_marketplace(
             tags: vec!["shell".to_string(), "command".to_string()],
         },
     ];
-    
+
     if !query.is_empty() {
-        skills.retain(|s| 
-            s.name.to_lowercase().contains(&query) || 
-            s.description.to_lowercase().contains(&query) ||
-            s.tags.iter().any(|t| t.to_lowercase().contains(&query))
-        );
+        skills.retain(|s| {
+            s.name.to_lowercase().contains(&query)
+                || s.description.to_lowercase().contains(&query)
+                || s.tags.iter().any(|t| t.to_lowercase().contains(&query))
+        });
     }
-    
+
     if let Some(cat) = category {
         skills.retain(|s| s.category == cat);
     }
-    
+
     if let Some(t) = tier {
         skills.retain(|s| s.tier == t);
     }
-    
+
     Json(skills)
 }
 
@@ -451,14 +456,19 @@ async fn execute_mcp_tool_endpoint(
     State(state): State<AppState>,
     Json(payload): Json<ExecuteMcpToolRequest>,
 ) -> Result<Json<ExecuteMcpToolResponse>, String> {
-    tracing::info!("Executing MCP tool '{}/{}' from task {:?}", 
-        payload.server_id, payload.tool_name, payload.task_id);
-    
+    tracing::info!(
+        "Executing MCP tool '{}/{}' from task {:?}",
+        payload.server_id,
+        payload.tool_name,
+        payload.task_id
+    );
+
     // Try to get the tool from the server
-    let result = state.mcp_manager
+    let result = state
+        .mcp_manager
         .call_tool(&payload.server_id, &payload.tool_name, payload.arguments)
         .await;
-    
+
     match result {
         Ok(tool_result) => {
             if tool_result.success {
@@ -491,7 +501,7 @@ async fn list_mcp_tools_as_skills(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<SkillResponse>>, String> {
     let all_tools = state.mcp_manager.get_all_tools().await;
-    
+
     let skills: Vec<SkillResponse> = all_tools
         .into_iter()
         .map(|(server_id, tool)| SkillResponse {
@@ -503,6 +513,6 @@ async fn list_mcp_tools_as_skills(
             last_health_check: Some(chrono::Utc::now().to_rfc3339()),
         })
         .collect();
-    
+
     Ok(Json(skills))
 }

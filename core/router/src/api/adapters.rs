@@ -11,7 +11,10 @@ use super::{AdapterConfig, AppState, UpdateAdapterRequest, ADAPTERS};
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/adapters", get(list_adapters))
-        .route("/api/v1/adapters/:name", get(get_adapter).put(update_adapter))
+        .route(
+            "/api/v1/adapters/:name",
+            get(get_adapter).put(update_adapter),
+        )
         .route("/api/v1/adapters/:name/toggle", post(toggle_adapter))
 }
 

@@ -1,6 +1,6 @@
-use sqlx::SqlitePool;
-use sqlx::FromRow;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use sqlx::SqlitePool;
 
 /// PDF document record
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -54,7 +54,7 @@ impl PdfRepository {
             INSERT INTO pdf_documents (id, file_name, file_hash, file_size, provider)
             VALUES (?, ?, ?, ?, ?)
             RETURNING *
-            "#
+            "#,
         )
         .bind(id)
         .bind(file_name)
@@ -67,22 +67,21 @@ impl PdfRepository {
 
     /// Get a PDF document by ID
     pub async fn get_document(&self, id: &str) -> Result<PdfDocument, sqlx::Error> {
-        sqlx::query_as::<_, PdfDocument>(
-            "SELECT * FROM pdf_documents WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as::<_, PdfDocument>("SELECT * FROM pdf_documents WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// Get a PDF document by file hash (for deduplication)
-    pub async fn get_document_by_hash(&self, file_hash: &str) -> Result<Option<PdfDocument>, sqlx::Error> {
-        sqlx::query_as::<_, PdfDocument>(
-            "SELECT * FROM pdf_documents WHERE file_hash = ?"
-        )
-        .bind(file_hash)
-        .fetch_optional(&self.pool)
-        .await
+    pub async fn get_document_by_hash(
+        &self,
+        file_hash: &str,
+    ) -> Result<Option<PdfDocument>, sqlx::Error> {
+        sqlx::query_as::<_, PdfDocument>("SELECT * FROM pdf_documents WHERE file_hash = ?")
+            .bind(file_hash)
+            .fetch_optional(&self.pool)
+            .await
     }
 
     /// Update PDF document with extracted text
@@ -100,7 +99,7 @@ impl PdfRepository {
             SET page_count = ?, extracted_text = ?, metadata = ?, model_used = ?
             WHERE id = ?
             RETURNING *
-            "#
+            "#,
         )
         .bind(page_count)
         .bind(extracted_text)
@@ -121,12 +120,16 @@ impl PdfRepository {
     }
 
     /// List all PDF documents
-    pub async fn list_documents(&self, limit: Option<i64>, offset: Option<i64>) -> Result<Vec<PdfDocument>, sqlx::Error> {
+    pub async fn list_documents(
+        &self,
+        limit: Option<i64>,
+        offset: Option<i64>,
+    ) -> Result<Vec<PdfDocument>, sqlx::Error> {
         let limit = limit.unwrap_or(50);
         let offset = offset.unwrap_or(0);
-        
+
         sqlx::query_as::<_, PdfDocument>(
-            "SELECT * FROM pdf_documents ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            "SELECT * FROM pdf_documents ORDER BY created_at DESC LIMIT ? OFFSET ?",
         )
         .bind(limit)
         .bind(offset)
@@ -146,7 +149,7 @@ impl PdfRepository {
             INSERT INTO pdf_extraction_jobs (id, document_id, provider)
             VALUES (?, ?, ?)
             RETURNING *
-            "#
+            "#,
         )
         .bind(id)
         .bind(document_id)
@@ -157,12 +160,10 @@ impl PdfRepository {
 
     /// Get a job by ID
     pub async fn get_job(&self, id: &str) -> Result<PdfExtractionJob, sqlx::Error> {
-        sqlx::query_as::<_, PdfExtractionJob>(
-            "SELECT * FROM pdf_extraction_jobs WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as::<_, PdfExtractionJob>("SELECT * FROM pdf_extraction_jobs WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// Update job status
@@ -184,7 +185,7 @@ impl PdfRepository {
             SET status = ?, error_message = ?, completed_at = ?
             WHERE id = ?
             RETURNING *
-            "#
+            "#,
         )
         .bind(status)
         .bind(error_message)
@@ -195,9 +196,12 @@ impl PdfRepository {
     }
 
     /// Get jobs for a document
-    pub async fn get_jobs_for_document(&self, document_id: &str) -> Result<Vec<PdfExtractionJob>, sqlx::Error> {
+    pub async fn get_jobs_for_document(
+        &self,
+        document_id: &str,
+    ) -> Result<Vec<PdfExtractionJob>, sqlx::Error> {
         sqlx::query_as::<_, PdfExtractionJob>(
-            "SELECT * FROM pdf_extraction_jobs WHERE document_id = ? ORDER BY started_at DESC"
+            "SELECT * FROM pdf_extraction_jobs WHERE document_id = ? ORDER BY started_at DESC",
         )
         .bind(document_id)
         .fetch_all(&self.pool)
@@ -210,7 +214,7 @@ impl PdfRepository {
             r#"
             DELETE FROM pdf_documents 
             WHERE expires_at IS NOT NULL AND expires_at < datetime('now')
-            "#
+            "#,
         )
         .execute(&self.pool)
         .await?;
