@@ -141,3 +141,11 @@ flowchart TD
 - Next steps: iterate with code samples, gather feedback from stakeholders, and incorporate into CI gates.
 - Draft created for Code Quality Review and Architecture documentation.
 - Next steps: iterate with code samples, gather feedback from stakeholders, and incorporate into CI gates.
+
+### 10.1 Recent Updates (2026-03-27)
+- **TinySSE Streaming MVP** ✅ Complete
+  - Implemented clean baseline using `futures_util::stream::iter()` for deterministic in-memory SSE streams
+  - Added streaming endpoints: /stream/stats, /stream/hands/:task_id, /stream/mcp/:task_id, /stream/task/:task_id
+  - Simplified streaming_types.rs to use single SSEItem type alias
+  - Updated CI workflows to use Node 24 (typescript.yml, ui.yml)
+  - All streaming tests passing (9 integration + 2 tinysse)

@@ -1,4 +1,5 @@
 use crate::execution_stream::ExecutionEvent;
+use axum::response::sse::Event;
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -18,6 +19,9 @@ pub struct StreamingMetrics {
     pub errors_replay: AtomicU64,
     pub errors_internal: AtomicU64,
 }
+
+// TinySSE scaffolding removed in favor of adapter-based lines using SSEItem only
+pub type SSEItem = Result<Event, axum::Error>;
 
 impl StreamingMetrics {
     /// Increment active connection counter (called on stream connect).

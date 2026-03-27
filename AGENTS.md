@@ -102,6 +102,14 @@ APEX is **more secure than both** by design:
 - **Security Tests** ✅ Complete - Added 57 security tests (input validation, audit chain, permission tiers)
 - **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
 - **Hermes Tests** ✅ Complete - Added 30 new tests for Hermes features (bounded_memory, session_search, skill_manager)
+- **TinySSE Streaming** ✅ Complete - Clean baseline with iterator-based SSE streams for Hands, MCP, and Task endpoints
+- **CI Node 24 Update** ✅ Complete - Updated TypeScript and UI workflows to use Node 24
+
+### v1.7.0 Streaming MVP
+- **TinySSE Baseline** ✅ Complete - Implemented using `futures_util::stream::iter()` for deterministic in-memory streams
+- **Streaming Endpoints** ✅ Complete - /stream/stats, /stream/hands/:task_id, /stream/mcp/:task_id, /stream/task/:task_id
+- **Streaming Tests** ✅ Complete - 9 streaming_integration tests + 2 streaming_tinysse_tests passing
+- **Type Simplification** ✅ Complete - Single SSEItem type alias (Result<Event, axum::Error>)
 
 ### v0.3.1 OpenClaw Integration
 - **Death Spiral Detection** - ✅ Complete (FileCreationBurst, ToolCallLoop, NoSideEffects patterns)
@@ -226,6 +234,12 @@ Inspired by NousResearch's Hermes Agent architecture with bounded memory and age
 **Events:**
 - `GET /api/v1/events` - Server-Sent Events stream (for real-time updates)
 - `GET /api/v1/ws` - WebSocket endpoint for real-time task updates
+
+**Streaming (TinySSE):**
+- `GET /api/v1/stream/stats` - Get streaming metrics (active connections, event counts)
+- `GET /api/v1/stream/hands/:task_id` - SSE stream for Hands agent events
+- `GET /api/v1/stream/mcp/:task_id` - SSE stream for MCP events
+- `GET /api/v1/stream/task/:task_id` - SSE stream for Task events
 
 **Channels:**
 - `GET /api/v1/channels` - List all channels

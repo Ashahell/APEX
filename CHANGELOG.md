@@ -5,6 +5,33 @@ All notable changes to APEX are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.7.0] — Streaming MVP — 2026-03-27
+
+### Added
+
+#### TinySSE Streaming Baseline (Patch 3B-12.2.3.2)
+- **Clean streaming baseline** using `futures_util::stream::iter()` for deterministic in-memory SSE streams
+- **Streaming endpoints**:
+  - `GET /api/v1/stream/stats` - Streaming metrics (active connections, event counts)
+  - `GET /api/v1/stream/hands/:task_id` - Hands agent SSE stream
+  - `GET /api/v1/stream/mcp/:task_id` - MCP SSE stream
+  - `GET /api/v1/stream/task/:task_id` - Task SSE stream
+- **Type simplification**: Single `SSEItem` type alias: `Result<Event, axum::Error>`
+- **Error handling**: `StreamingError` enum with variants (StreamingDisabled, ReplayDetected, Internal, StreamNotFound, AuthRequired)
+
+#### CI Updates
+- **Node 24**: Updated TypeScript and UI workflows from Node 20 to Node 24
+
+#### Tests
+- `core/router/tests/streaming_integration.rs` — 9 tests passing
+- `core/router/tests/streaming_tinysse_tests.rs` — 2 tests passing
+
+### Changed
+- **streaming.rs**: Complete rewrite with stable iterator-based approach
+- **streaming_types.rs**: Simplified to single SSEItem type alias
+
+---
+
 ## [1.6.0] — Sapphire Features — 2026-03-25
 
 ### Added

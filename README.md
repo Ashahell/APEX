@@ -29,7 +29,7 @@ APEX is **more secure than both** by design:
 
 ## Status
 
-**Version**: v1.6.0 (Pre-Alpha) - Sapphire Features Complete
+**Version**: v1.7.0 (Pre-Alpha) - Streaming MVP Complete
 
 ## Architecture
 
@@ -90,6 +90,17 @@ Inspired by NousResearch's Hermes Agent architecture.
 | **Skills Hub** | Trust levels (Verified > Trusted > Community), marketplace integration |
 | **Session Search** | FTS5 with LIKE fallback, BM25 ranking, context extraction |
 | **User Profile** | Communication styles, verbosity levels, response format preferences |
+
+### Streaming MVP Features (v1.7.0)
+
+TinySSE-based streaming for real-time agent communication.
+
+| Feature | Description |
+|---------|-------------|
+| **TinySSE Baseline** | Clean iterator-based streams using `futures_util::stream::iter()` |
+| **Streaming Endpoints** | /stream/stats, /stream/hands/:task_id, /stream/mcp/:task_id, /stream/task/:task_id |
+| **Type Simplification** | Single SSEItem type alias: `Result<Event, axum::Error>` |
+| **CI Node 24** | Updated workflows to use Node 24 for compatibility |
 
 ### Advanced Features (Research/POC)
 - **SOUL.md Identity** - Agent reads identity file on wake (POC)

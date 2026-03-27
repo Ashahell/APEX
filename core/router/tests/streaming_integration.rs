@@ -7,20 +7,20 @@
 //! Note: These are integration tests that run against the in-memory SQLite test
 //! database. They require the full AppState so they go in `tests/` not `src/`.
 
+use apex_memory::db::Database;
 use apex_router::api::create_router;
 use apex_router::api::AppState;
-use apex_router::execution_stream::ExecutionStreamManager;
-use apex_router::streaming::{create_streaming_router, StreamingError};
-use apex_memory::db::Database;
-use apex_router::governance::GovernanceEngine;
-use apex_router::rate_limiter::RateLimiter;
-use apex_router::response_cache::ResponseCache;
-use apex_router::system_health::SystemMonitor;
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
+use apex_router::execution_stream::ExecutionStreamManager;
+use apex_router::governance::GovernanceEngine;
 use apex_router::message_bus::MessageBus;
 use apex_router::metrics::RouterMetrics;
-use apex_router::websocket::WebSocketManager;
+use apex_router::rate_limiter::RateLimiter;
+use apex_router::response_cache::ResponseCache;
+use apex_router::streaming::{create_streaming_router, StreamingError};
+use apex_router::system_health::SystemMonitor;
 use apex_router::unified_config::AppConfig;
+use apex_router::websocket::WebSocketManager;
 
 use axum::{
     body::Body,
@@ -148,9 +148,9 @@ fn make_streaming_test_state(enabled: bool) -> AppState {
         session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(
             sqlx::SqlitePool::connect_lazy("sqlite::memory:").unwrap(),
         )),
-        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(
-            Some("http://localhost".to_string()),
-        )),
+        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some(
+            "http://localhost".to_string(),
+        ))),
         totp_manager: apex_router::totp::TotpManager::new(),
         soul_loader: apex_router::soul::loader::SoulLoader::new(
             apex_router::soul::SoulConfig::default(),
@@ -177,7 +177,7 @@ fn make_streaming_test_state(enabled: bool) -> AppState {
         )),
         // Patch 15: Distributed Replay Protection
         replay_protection: std::sync::Arc::new(
-            apex_router::security::replay_protection::InMemoryReplayProtection::default()
+            apex_router::security::replay_protection::InMemoryReplayProtection::default(),
         ),
         // Patch 16: Streaming Analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
@@ -229,11 +229,17 @@ async fn replay_protection_rejects_duplicate_signature() {
 
     // First use: should NOT be a replay
     let first_result = replay_protection::record_and_check(sig);
-    assert!(!first_result, "first use of signature should not be rejected");
+    assert!(
+        !first_result,
+        "first use of signature should not be rejected"
+    );
 
     // Second use: should BE a replay
     let second_result = replay_protection::record_and_check(sig);
-    assert!(second_result, "duplicate use of same signature should be rejected as replay");
+    assert!(
+        second_result,
+        "duplicate use of same signature should be rejected as replay"
+    );
 
     // Cleanup
     replay_protection::reset();
@@ -266,10 +272,16 @@ async fn replay_protection_allows_distinct_signatures() {
 #[tokio::test]
 async fn streaming_error_to_sse_all_variants() {
     let errors = vec![
-        (StreamingError::StreamNotFound("task-X".to_string()), "Stream not found"),
+        (
+            StreamingError::StreamNotFound("task-X".to_string()),
+            "Stream not found",
+        ),
         (StreamingError::StreamingDisabled, "Streaming disabled"),
         (StreamingError::AuthRequired, "Authentication required"),
-        (StreamingError::ReplayDetected("sig-Y".to_string()), "Replay detected"),
+        (
+            StreamingError::ReplayDetected("sig-Y".to_string()),
+            "Replay detected",
+        ),
         (StreamingError::Internal("oops".to_string()), "oops"),
     ];
 
@@ -277,7 +289,10 @@ async fn streaming_error_to_sse_all_variants() {
         // Verify SSE event is created (no panic, Debug impl works)
         let sse = err.to_sse_event();
         let debug_str = format!("{:?}", sse);
-        assert!(debug_str.contains("Event"), "SSE event should be creatable for all error variants");
+        assert!(
+            debug_str.contains("Event"),
+            "SSE event should be creatable for all error variants"
+        );
     }
 }
 
@@ -309,31 +324,58 @@ async fn stream_stats_endpoint_returns_valid_json() {
 
     let state = make_streaming_test_state(true);
     let response = get_stream_stats(State(state)).await.into_response();
-    assert_eq!(response.status(), StatusCode::OK, "stats endpoint should return 200 OK");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "stats endpoint should return 200 OK"
+    );
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    let json: serde_json::Value = serde_json::from_slice(&body)
-        .expect("stats endpoint should return valid JSON");
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let json: serde_json::Value =
+        serde_json::from_slice(&body).expect("stats endpoint should return valid JSON");
 
     // Verify required top-level fields
-    assert!(json.get("active_connections").is_some(), "should have active_connections");
-    assert!(json.get("total_connections").is_some(), "should have total_connections");
+    assert!(
+        json.get("active_connections").is_some(),
+        "should have active_connections"
+    );
+    assert!(
+        json.get("total_connections").is_some(),
+        "should have total_connections"
+    );
     assert!(json.get("events").is_some(), "should have events object");
     assert!(json.get("errors").is_some(), "should have errors object");
 
     // Verify events sub-fields
     let events = json.get("events").unwrap();
-    assert!(events.get("thought").is_some(), "events should have thought");
-    assert!(events.get("tool_call").is_some(), "events should have tool_call");
-    assert!(events.get("tool_result").is_some(), "events should have tool_result");
-    assert!(events.get("complete").is_some(), "events should have complete");
+    assert!(
+        events.get("thought").is_some(),
+        "events should have thought"
+    );
+    assert!(
+        events.get("tool_call").is_some(),
+        "events should have tool_call"
+    );
+    assert!(
+        events.get("tool_result").is_some(),
+        "events should have tool_result"
+    );
+    assert!(
+        events.get("complete").is_some(),
+        "events should have complete"
+    );
     assert!(events.get("total").is_some(), "events should have total");
 
     // Verify errors sub-fields
     let errors = json.get("errors").unwrap();
     assert!(errors.get("auth").is_some(), "errors should have auth");
     assert!(errors.get("replay").is_some(), "errors should have replay");
-    assert!(errors.get("internal").is_some(), "errors should have internal");
+    assert!(
+        errors.get("internal").is_some(),
+        "errors should have internal"
+    );
     assert!(errors.get("total").is_some(), "errors should have total");
 
     // Verify numeric types (all counters should be non-negative integers)
@@ -352,24 +394,52 @@ async fn stream_stats_endpoint_returns_valid_json() {
 /// StreamingMetrics and the counter wiring in the SSE handler.
 #[tokio::test]
 async fn stream_metrics_counter_increment_integration() {
-    use apex_router::streaming::StreamingMetrics;
     use apex_router::execution_stream::ExecutionEvent;
+    use apex_router::streaming::StreamingMetrics;
 
     let metrics = StreamingMetrics::default();
 
     // Baseline: all zeros
-    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
-    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
+    assert_eq!(
+        metrics
+            .active_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    assert_eq!(
+        metrics
+            .total_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
 
     // on_connect increments both active and total
     metrics.on_connect();
-    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
-    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .active_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
+    assert_eq!(
+        metrics
+            .total_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_event with Thought increments events_thought
-    let thought = ExecutionEvent::Thought { step: 1, content: "thinking".into() };
+    let thought = ExecutionEvent::Thought {
+        step: 1,
+        content: "thinking".into(),
+    };
     metrics.on_event(&thought);
-    assert_eq!(metrics.events_thought.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .events_thought
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_event with ToolCall increments events_tool_call
     let tool_call = ExecutionEvent::ToolCall {
@@ -378,7 +448,12 @@ async fn stream_metrics_counter_increment_integration() {
         input: serde_json::json!({}),
     };
     metrics.on_event(&tool_call);
-    assert_eq!(metrics.events_tool_call.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .events_tool_call
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_event with Complete increments events_complete
     let complete = ExecutionEvent::Complete {
@@ -387,24 +462,54 @@ async fn stream_metrics_counter_increment_integration() {
         tools_used: vec!["shell".into()],
     };
     metrics.on_event(&complete);
-    assert_eq!(metrics.events_complete.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .events_complete
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_error with "auth" increments errors_auth
     metrics.on_error("auth");
-    assert_eq!(metrics.errors_auth.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .errors_auth
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_error with "replay" increments errors_replay
     metrics.on_error("replay");
-    assert_eq!(metrics.errors_replay.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .errors_replay
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_error with "internal" increments errors_internal
     metrics.on_error("internal");
-    assert_eq!(metrics.errors_internal.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .errors_internal
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // on_disconnect decrements active only (total stays at 1)
     metrics.on_disconnect();
-    assert_eq!(metrics.active_connections.load(std::sync::atomic::Ordering::Relaxed), 0);
-    assert_eq!(metrics.total_connections.load(std::sync::atomic::Ordering::Relaxed), 1);
+    assert_eq!(
+        metrics
+            .active_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        0
+    );
+    assert_eq!(
+        metrics
+            .total_connections
+            .load(std::sync::atomic::Ordering::Relaxed),
+        1
+    );
 
     // Verify StreamingStats snapshot aggregation is correct
     use apex_router::streaming::StreamingStats;
@@ -421,5 +526,3 @@ async fn stream_metrics_counter_increment_integration() {
     assert_eq!(stats.errors.internal, 1);
     assert_eq!(stats.errors.total, 3);
 }
-
-

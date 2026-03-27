@@ -371,3 +371,68 @@ Implemented secure sandbox execution for dynamically generated Python tools.
 | Phase 5: Security API | ✅ Complete |
 | Phase 6: Constitution Enforcement | ✅ Complete |
 | Phase 7: MCP/Cron Validators | ✅ Complete |
+
+---
+
+# Session Context: TinySSE Streaming MVP Complete
+
+## Overview
+- **Date**: 2026-03-27
+- **Session**: TinySSE Streaming MVP (Patch 3B-12.2.3.2)
+- **Status**: Complete
+
+---
+
+## Latest Updates
+
+### TinySSE Streaming Baseline ✅
+Implemented clean, minimal baseline for SSE streaming to avoid trait-object boxing issues.
+
+#### New Files
+- `core/router/src/streaming.rs` - Clean baseline with iterator-based SSE streams
+- `core/router/src/streaming_types.rs` - Simplified SSEItem type alias
+- `core/router/tests/streaming_tinysse_tests.rs` - Streaming tests
+
+#### Modified Files
+- `core/router/src/streaming.rs` - Complete rewrite with stable baseline
+- `core/router/src/streaming_types.rs` - Simplified types
+- `.github/workflows/typescript.yml` - Updated to Node 24
+- `.github/workflows/ui.yml` - Updated to Node 24
+- `PR_BODY_STREAMING.md` - Updated with final results
+
+---
+
+## What Was Implemented
+
+### Streaming Endpoints
+- `GET /api/v1/stream/stats` - Streaming metrics
+- `GET /api/v1/stream/hands/:task_id` - Hands SSE stream
+- `GET /api/v1/stream/mcp/:task_id` - MCP SSE stream  
+- `GET /api/v1/stream/task/:task_id` - Task SSE stream
+
+### Implementation Details
+- Uses `futures_util::stream::iter()` for deterministic in-memory streams
+- SSEItem type alias: `Result<Event, axum::Error>`
+- All endpoints return `Sse<DynEventStream>` with simple connected events
+- Error handling via StreamingError enum with variants
+
+### CI Updates
+- TypeScript workflow: Node 20 → Node 24
+- UI workflow: Node 20 → Node 24
+
+---
+
+## Test Results
+- **streaming_integration**: 9 passed
+- **streaming_tinysse_tests**: 2 passed
+- **All Rust tests**: Pass
+
+---
+
+## Session Summary
+| Phase | Status |
+|-------|--------|
+| TinySSE Baseline | ✅ Complete |
+| MCP Consolidation | ✅ Complete |
+| Streaming Tests | ✅ Complete |
+| CI Node 24 Update | ✅ Complete |
