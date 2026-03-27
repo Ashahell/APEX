@@ -277,7 +277,7 @@ async fn streaming_error_to_sse_all_variants() {
             "Stream not found",
         ),
         (StreamingError::StreamingDisabled, "Streaming disabled"),
-        (StreamingError::AuthRequired, "Authentication required"),
+        (StreamingError::AuthRequired("test".to_string()), "Authentication required"),
         (
             StreamingError::ReplayDetected("sig-Y".to_string()),
             "Replay detected",

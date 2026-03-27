@@ -2,6 +2,80 @@ use crate::execution_stream::ExecutionEvent;
 use axum::response::sse::Event;
 use serde::Serialize;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Streaming event types - formal SSE envelope
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum StreamEventType {
+    Connected,
+    Disconnected,
+    Hands,
+    Mcp,
+    Task,
+    Stats,
+    Heartbeat,
+    Error,
+}
+
+impl StreamEventType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            StreamEventType::Connected => "connected",
+            StreamEventType::Disconnected => "disconnected",
+            StreamEventType::Hands => "hands",
+            StreamEventType::Mcp => "mcp",
+            StreamEventType::Task => "task",
+            StreamEventType::Stats => "stats",
+            StreamEventType::Heartbeat => "heartbeat",
+            StreamEventType::Error => "error",
+        }
+    }
+}
+
+/// Formal SSE envelope for streaming events
+#[derive(Debug, Serialize)]
+pub struct SseEnvelope<T> {
+    #[serde(rename = "type")]
+    pub event_type: StreamEventType,
+    pub timestamp: u64,
+    pub trace_id: Option<String>,
+    pub payload: T,
+}
+
+impl<T> SseEnvelope<T> {
+    pub fn new(event_type: StreamEventType, payload: T) -> Self {
+        Self {
+            event_type,
+            timestamp: SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map(|d| d.as_millis() as u64)
+                .unwrap_or(0),
+            trace_id: None,
+            payload,
+        }
+    }
+
+    pub fn with_trace(mut self, trace_id: String) -> Self {
+        self.trace_id = Some(trace_id);
+        self
+    }
+}
+
+/// Payload for connection events
+#[derive(Debug, Serialize)]
+pub struct ConnectionPayload {
+    pub task_id: String,
+    pub connection_id: String,
+    pub message: String,
+}
+
+/// Payload for heartbeat events
+#[derive(Debug, Serialize)]
+pub struct HeartbeatPayload {
+    pub server_time: u64,
+    pub active_connections: u64,
+}
 
 /// Thread-safe streaming metrics — atomic counters for observability.
 #[derive(Debug, Default)]
