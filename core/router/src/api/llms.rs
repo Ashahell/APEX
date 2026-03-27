@@ -8,7 +8,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 use crate::api::AppState;
-use crate::unified_config::{AppConfig, LlmConfig, LlmProvider, GLOBAL_CONFIG};
+use crate::unified_config::{AppConfig, LlmConfig, LlmProvider};
 use apex_memory::provider_repo::{
     ModelFallback, ProviderHealth, ProviderModel, ProviderPlugin, ProviderRepository,
     SessionFastMode,
@@ -475,11 +475,7 @@ async fn add_llm(
     
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
-    
-    // Update in-memory global config
-    if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
-        *global_config = Some(config.clone());
-    }
+    // Do not touch any global GLOBAL_CONFIG; keep per-request AppState only.
     
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {
@@ -555,11 +551,7 @@ async fn handle_update_llm(
 
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
-
-    // Update AppConfig global
-    if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
-        *global_config = Some(config.clone());
-    }
+    // Do not touch global config
 
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {
@@ -580,11 +572,7 @@ async fn handle_delete_llm(
     
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
-    
-    // Update AppConfig global
-    if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
-        *global_config = Some(config.clone());
-    }
+    // Do not update global config
     
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {
@@ -600,12 +588,8 @@ async fn test_llm(
     State(state): State<AppState>,
     axum::extract::Path(id): axum::extract::Path<String>,
 ) -> Result<Json<TestLlmResponse>, String> {
-    // Use GLOBAL_CONFIG which is the source of truth (shared across all requests)
-    let llms = if let Ok(config) = GLOBAL_CONFIG.read() {
-        config.as_ref().map(|c| c.agent.llms.clone()).unwrap_or_default()
-    } else {
-        state.config.agent.llms.clone()
-    };
+    // Use per-request AppState config as the source of truth
+    let llms = state.config.agent.llms.clone();
     
     let llm = llms
         .iter()
@@ -877,11 +861,7 @@ async fn set_default_llm(
 
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
-
-    // Update AppConfig global
-    if let Ok(mut global_config) = GLOBAL_CONFIG.write() {
-        *global_config = Some(config.clone());
-    }
+    // Do not update global config
 
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {

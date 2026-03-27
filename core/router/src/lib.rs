@@ -56,6 +56,7 @@ pub mod computer_use_hands_api; // Hands MVP API for computer-use
 pub mod computer_use_embedding_integration; // demo embedding wiring helper
 pub mod computer_use_api; // Minimal Axum API for Computer Use MVP
 pub mod streaming;  // Patch 11: SSE streaming endpoints for Hands and MCP
+pub mod streaming_types; // Phase 1.3: Streaming types boundary
 
 pub use apex_memory;
 pub use apex_security;
