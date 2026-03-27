@@ -1,10 +1,10 @@
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::TaskStatus;
 use serde_json::Value;
-use std::sync::Arc;
-use tokio::sync::broadcast;
-use std::time::Instant;
 use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Instant;
+use tokio::sync::broadcast;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
 use crate::message_bus::{MessageBus, SkillExecutionMessage};
@@ -28,7 +28,7 @@ pub fn get_anomaly_detector() -> Option<&'static AnomalyDetector> {
 /// Load environment variables from workspace .env file
 fn load_workspace_env(workspace_path: &std::path::Path) -> HashMap<String, String> {
     let mut env_vars = HashMap::new();
-    
+
     let env_file = workspace_path.join(".env");
     if env_file.exists() {
         if let Ok(content) = std::fs::read_to_string(&env_file) {
@@ -38,15 +38,16 @@ fn load_workspace_env(workspace_path: &std::path::Path) -> HashMap<String, Strin
                 if line.is_empty() || line.starts_with('#') {
                     continue;
                 }
-                
+
                 // Parse KEY=VALUE format
                 if let Some((key, value)) = line.split_once('=') {
                     let key = key.trim().to_string();
                     let value = value.trim().to_string();
                     // Remove surrounding quotes if present
                     let value = if (value.starts_with('"') && value.ends_with('"'))
-                        || (value.starts_with('\'') && value.ends_with('\'')) {
-                        value[1..value.len()-1].to_string()
+                        || (value.starts_with('\'') && value.ends_with('\''))
+                    {
+                        value[1..value.len() - 1].to_string()
                     } else {
                         value
                     };
@@ -56,12 +57,12 @@ fn load_workspace_env(workspace_path: &std::path::Path) -> HashMap<String, Strin
             tracing::info!("Loaded {} env vars from {:?}", env_vars.len(), env_file);
         }
     }
-    
+
     env_vars
 }
 
 /// SkillWorker executes skills in either the Bun pool (T0-T2) or VM pool (T3)
-/// 
+///
 /// Tier routing:
 /// - T0, T1, T2 → SkillPool (Bun workers) - fast, for non-destructive tasks
 /// - T3 → VmPool (Firecracker/Linux VM) - isolated, for shell.execute and destructive tasks
@@ -101,7 +102,14 @@ impl SkillWorker {
         loop {
             match rx.recv().await {
                 Ok(message) => {
-                    Self::process_skill_execution(&pool, skill_pool.as_ref(), vm_pool.as_ref(), &circuit_breakers, message).await;
+                    Self::process_skill_execution(
+                        &pool,
+                        skill_pool.as_ref(),
+                        vm_pool.as_ref(),
+                        &circuit_breakers,
+                        message,
+                    )
+                    .await;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     tracing::info!("Skill worker: message bus closed");
@@ -117,15 +125,15 @@ impl SkillWorker {
     pub async fn run_supervised(self, worker_name: &str) {
         loop {
             tracing::info!(worker = %worker_name, "Starting supervised skill worker");
-            
+
             let pool = self.pool.clone();
             let skill_pool = self.skill_pool.clone();
             let vm_pool = self.vm_pool.clone();
             let circuit_breakers = self.circuit_breakers.clone();
             let rx = self.message_bus.subscribe_skills();
-            
+
             let result = Self::run_inner(pool, skill_pool, vm_pool, circuit_breakers, rx).await;
-            
+
             match result {
                 Ok(()) => {
                     tracing::info!(worker = %worker_name, "Skill worker exited normally");
@@ -149,7 +157,14 @@ impl SkillWorker {
         loop {
             match rx.recv().await {
                 Ok(message) => {
-                    Self::process_skill_execution(&pool, skill_pool.as_ref(), vm_pool.as_ref(), &circuit_breakers, message).await;
+                    Self::process_skill_execution(
+                        &pool,
+                        skill_pool.as_ref(),
+                        vm_pool.as_ref(),
+                        &circuit_breakers,
+                        message,
+                    )
+                    .await;
                 }
                 Err(broadcast::error::RecvError::Closed) => {
                     tracing::info!("Skill worker: message bus closed");
@@ -170,7 +185,7 @@ impl SkillWorker {
         message: SkillExecutionMessage,
     ) {
         let tier = &message.permission_tier;
-        
+
         tracing::info!(
             task_id = %message.task_id,
             skill = %message.skill_name,
@@ -180,8 +195,9 @@ impl SkillWorker {
 
         // SECURITY: Run injection detection before execution
         let input_str = serde_json::to_string(&message.input).unwrap_or_default();
-        let injection_result = InjectionClassifier::analyze_skill_input(&message.skill_name, &input_str);
-        
+        let injection_result =
+            InjectionClassifier::analyze_skill_input(&message.skill_name, &input_str);
+
         if !injection_result.is_safe {
             tracing::warn!(
                 task_id = %message.task_id,
@@ -190,7 +206,7 @@ impl SkillWorker {
                 injection_type = ?injection_result.injection_type,
                 "Blocked potentially malicious input"
             );
-            
+
             // Block high/critical threats, warn on others
             if injection_result.should_block {
                 let repo = TaskRepository::new(pool);
@@ -203,7 +219,7 @@ impl SkillWorker {
         }
 
         let repo = TaskRepository::new(pool);
-        
+
         // Track execution time for anomaly detection
         let execution_start = Instant::now();
 
@@ -230,12 +246,13 @@ impl SkillWorker {
 
         // Determine success for anomaly detection before consuming result
         let success = result.is_ok();
-        
+
         // Parse result JSON once for anomaly detection (extract before consuming)
-        let parsed_result = result.as_ref().ok().and_then(|r| {
-            serde_json::from_str::<serde_json::Value>(r).ok()
-        });
-        
+        let parsed_result = result
+            .as_ref()
+            .ok()
+            .and_then(|r| serde_json::from_str::<serde_json::Value>(r).ok());
+
         match result {
             Ok(result) => {
                 circuit_breakers.record_success(&message.skill_name).await;
@@ -245,7 +262,7 @@ impl SkillWorker {
                         &message.task_id,
                         TaskStatus::Completed,
                         Some(result),
-                        Some(1),  // 1 cent
+                        Some(1), // 1 cent
                     )
                     .await
                 {
@@ -270,33 +287,43 @@ impl SkillWorker {
                 }
             }
         }
-        
+
         // Record execution for anomaly detection
         let duration_ms = execution_start.elapsed().as_millis() as u64;
         let input_size = input_str.len();
-        
+
         // Extract death spiral detection data from parsed result
         let files_created = parsed_result.as_ref().and_then(|v| {
-            v.get("files_created").and_then(|f| f.as_u64()).map(|f| f as u32)
+            v.get("files_created")
+                .and_then(|f| f.as_u64())
+                .map(|f| f as u32)
         });
-        
-        let tool_calls: Option<Vec<String>> = parsed_result.as_ref().and_then(|v| {
-            v.get("tool_calls").and_then(|t| t.as_array().cloned())
-        }).map(|arr| arr.iter().filter_map(|s| s.as_str().map(String::from)).collect::<Vec<_>>());
-        
+
+        let tool_calls: Option<Vec<String>> = parsed_result
+            .as_ref()
+            .and_then(|v| v.get("tool_calls").and_then(|t| t.as_array().cloned()))
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|s| s.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            });
+
         let had_side_effects = parsed_result.as_ref().map(|_| true); // Assume side effects unless explicitly marked otherwise
-        
+
         if let Some(detector) = get_anomaly_detector() {
-            if let Some(anomaly) = detector.record_execution(
-                &message.skill_name,
-                &message.task_id,
-                duration_ms,
-                success,
-                input_size,
-                files_created,
-                tool_calls,
-                had_side_effects,
-            ).await {
+            if let Some(anomaly) = detector
+                .record_execution(
+                    &message.skill_name,
+                    &message.task_id,
+                    duration_ms,
+                    success,
+                    input_size,
+                    files_created,
+                    tool_calls,
+                    had_side_effects,
+                )
+                .await
+            {
                 tracing::warn!(
                     task_id = %message.task_id,
                     skill = %message.skill_name,
@@ -315,16 +342,20 @@ impl SkillWorker {
         message: &SkillExecutionMessage,
     ) -> Result<String, String> {
         if let Some(pool) = skill_pool {
-            pool.execute(&message.skill_name, message.input.clone(), Some(message.permission_tier.clone()))
-                .await
-                .map_err(|e| e.to_string())
-                .and_then(|resp| {
-                    if resp.ok {
-                        Ok(resp.output.unwrap_or_default())
-                    } else {
-                        Err(resp.error.unwrap_or_else(|| "Unknown error".to_string()))
-                    }
-                })
+            pool.execute(
+                &message.skill_name,
+                message.input.clone(),
+                Some(message.permission_tier.clone()),
+            )
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|resp| {
+                if resp.ok {
+                    Ok(resp.output.unwrap_or_default())
+                } else {
+                    Err(resp.error.unwrap_or_else(|| "Unknown error".to_string()))
+                }
+            })
         } else {
             // Fallback to direct execution
             Self::execute_skill(message).await
@@ -339,7 +370,7 @@ impl SkillWorker {
         // Execute T3 task in isolated VM
         let skill_name = &message.skill_name;
         let input = &message.input;
-        
+
         tracing::info!(
             skill = %skill_name,
             tier = "T3",
@@ -348,12 +379,16 @@ impl SkillWorker {
         );
 
         // Acquire a VM from the pool
-        let vm_id = vm_pool.acquire().await.map_err(|e| format!("Failed to acquire VM: {}", e))?;
-        
+        let vm_id = vm_pool
+            .acquire()
+            .await
+            .map_err(|e| format!("Failed to acquire VM: {}", e))?;
+
         // Prepare the skill execution script
         // The script will run the skill with the provided input
-        let input_json = serde_json::to_string(input).map_err(|e| format!("Failed to serialize input: {}", e))?;
-        
+        let input_json = serde_json::to_string(input)
+            .map_err(|e| format!("Failed to serialize input: {}", e))?;
+
         // Build the execution script
         // This runs the skill with input via bun in the isolated environment
         let script = format!(
@@ -365,7 +400,7 @@ impl SkillWorker {
 
         // Execute in the VM with timeout
         let result = vm_pool.execute_isolated(&vm_id, &script, Some(60)).await;
-        
+
         // Always release the VM back to the pool
         if let Err(e) = vm_pool.release(&vm_id).await {
             tracing::warn!(vm_id = %vm_id, error = %e, "Failed to release VM");
@@ -385,7 +420,7 @@ impl SkillWorker {
                     Err(err_msg)
                 }
             }
-            Err(e) => Err(format!("VM execution failed: {}", e))
+            Err(e) => Err(format!("VM execution failed: {}", e)),
         }
     }
 
@@ -435,7 +470,8 @@ impl SkillWorker {
             cmd.env(&key, &value);
         }
 
-        let output = cmd.output()
+        let output = cmd
+            .output()
             .await
             .map_err(|e| format!("Failed to execute skill: {}", e))?;
 

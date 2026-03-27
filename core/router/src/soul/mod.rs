@@ -170,15 +170,15 @@ impl Default for Constitution {
     }
 }
 
-pub mod loader;
 pub mod constitution;
 pub mod enforcer;
+pub mod loader;
 
-pub use loader::SoulLoader;
-pub use loader::SoulError;
-pub use constitution::ConstitutionManager;
 pub use constitution::ConstitutionError;
+pub use constitution::ConstitutionManager;
 pub use enforcer::ConstitutionEnforcer;
+pub use loader::SoulError;
+pub use loader::SoulLoader;
 
 use crate::unified_config::AppConfig;
 
@@ -208,7 +208,9 @@ impl SoulConfig {
     }
 
     pub fn from_config(config: &AppConfig) -> Self {
-        let base = config.soul.directory
+        let base = config
+            .soul
+            .directory
             .as_ref()
             .map(PathBuf::from)
             .unwrap_or_else(|| {

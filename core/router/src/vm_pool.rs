@@ -1,11 +1,11 @@
+use regex::Regex;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::process::Command;
 use tokio::sync::RwLock;
-use serde::{Deserialize, Serialize};
-use regex::Regex;
 
 use crate::unified_config::AppConfig;
 
@@ -21,16 +21,22 @@ fn sanitize_command_for_shell(input: &str) -> Result<String, String> {
     if dangerous_pattern.is_match(input) {
         return Err("Command contains disallowed characters".to_string());
     }
-    
+
     // Block path traversal attempts
     if input.contains("..") {
         return Err("Command contains path traversal attempt".to_string());
     }
-    
+
     // Block common attack patterns
     let attack_patterns = [
-        "rm -rf", "del /", "format", "dd if=",
-        "wget", "curl |", "nc -e", "/etc/passwd",
+        "rm -rf",
+        "del /",
+        "format",
+        "dd if=",
+        "wget",
+        "curl |",
+        "nc -e",
+        "/etc/passwd",
     ];
     let input_lower = input.to_lowercase();
     for pattern in attack_patterns {
@@ -38,7 +44,7 @@ fn sanitize_command_for_shell(input: &str) -> Result<String, String> {
             return Err("Command contains blocked pattern".to_string());
         }
     }
-    
+
     Ok(input.to_string())
 }
 
@@ -75,7 +81,7 @@ impl VmConfig {
 
     pub fn from_config(config: &AppConfig) -> Self {
         let isolation = config.execution.isolation.to_lowercase();
-        
+
         let (use_firecracker, use_gvisor, use_docker) = match isolation.as_str() {
             "firecracker" => (true, false, false),
             "gvisor" => (false, true, false),
@@ -90,23 +96,23 @@ impl VmConfig {
                 )
             }
         };
-        
-         VmConfig {
-             vcpu_count: config.execution.firecracker.vcpus,
-             memory_mib: config.execution.firecracker.memory_mib,
-             kernel_path: config.execution.firecracker.kernel_path.clone(),
-             rootfs_path: config.execution.firecracker.rootfs_path.clone(),
-             firecracker_path: config.execution.firecracker.firecracker_path.clone(),
-             runsc_path: config.execution.gvisor.runsc_path.clone(),
-             docker_image: Some(config.execution.docker.image.clone()),
-             use_firecracker,
-             use_gvisor,
-             use_docker,
-             network_isolation: config.execution.firecracker.network_isolation,
-             fast_boot: config.execution.firecracker.fast_boot,
-             use_jailer: config.execution.firecracker.use_jailer,
-             seccomp_level: config.execution.firecracker.seccomp_level,
-         }
+
+        VmConfig {
+            vcpu_count: config.execution.firecracker.vcpus,
+            memory_mib: config.execution.firecracker.memory_mib,
+            kernel_path: config.execution.firecracker.kernel_path.clone(),
+            rootfs_path: config.execution.firecracker.rootfs_path.clone(),
+            firecracker_path: config.execution.firecracker.firecracker_path.clone(),
+            runsc_path: config.execution.gvisor.runsc_path.clone(),
+            docker_image: Some(config.execution.docker.image.clone()),
+            use_firecracker,
+            use_gvisor,
+            use_docker,
+            network_isolation: config.execution.firecracker.network_isolation,
+            fast_boot: config.execution.firecracker.fast_boot,
+            use_jailer: config.execution.firecracker.use_jailer,
+            seccomp_level: config.execution.firecracker.seccomp_level,
+        }
     }
 
     pub fn is_vm_available(&self) -> bool {
@@ -297,7 +303,9 @@ impl VmPool {
                     }
 
                     if backend != VmmBackend::Mock {
-                        if let Err(e) = Self::spawn_vm_static(&id, &mut instance, &config, &backend).await {
+                        if let Err(e) =
+                            Self::spawn_vm_static(&id, &mut instance, &config, &backend).await
+                        {
                             tracing::warn!("Failed to pre-warm VM {}: {}", id, e);
                             continue;
                         }
@@ -313,10 +321,18 @@ impl VmPool {
         });
     }
 
-    async fn spawn_vm_static(id: &str, instance: &mut VmInstance, config: &VmConfig, backend: &VmmBackend) -> Result<(), String> {
+    async fn spawn_vm_static(
+        id: &str,
+        instance: &mut VmInstance,
+        config: &VmConfig,
+        backend: &VmmBackend,
+    ) -> Result<(), String> {
         match backend {
             VmmBackend::Firecracker => {
-                let _kernel_path = config.kernel_path.as_ref().ok_or_else(|| "Kernel path not set".to_string())?;
+                let _kernel_path = config
+                    .kernel_path
+                    .as_ref()
+                    .ok_or_else(|| "Kernel path not set".to_string())?;
                 let _firecracker_path = config.firecracker_path.as_deref().unwrap_or("firecracker");
 
                 tracing::debug!(vm_id = id, "Starting Firecracker VM");
@@ -379,36 +395,37 @@ impl VmPool {
             .ok_or_else(|| "Socket path not set".to_string())?;
 
         let mut cmd = Command::new(firecracker_path);
-        
+
         // Basic configuration
         cmd.arg("--api-sock")
             .arg(socket_path)
             .arg("--kernel")
             .arg(kernel_path)
             .arg("--root-drive")
-            .arg(self.config.rootfs_path.as_deref().unwrap_or("/tmp/rootfs.ext4"))
+            .arg(
+                self.config
+                    .rootfs_path
+                    .as_deref()
+                    .unwrap_or("/tmp/rootfs.ext4"),
+            )
             .arg("--vcpu")
             .arg(self.config.vcpu_count.to_string())
             .arg("--memory")
             .arg(self.config.memory_mib.to_string());
 
         // Security: Disable any interactive UI (no VNC, no screen)
-        cmd.arg("--internal-console")
-            .arg("off");
+        cmd.arg("--internal-console").arg("off");
 
         // Security: Disable indirect jumps (mitigates Spectre)
-        cmd.arg("--indirect-jumps")
-            .arg("off");
+        cmd.arg("--indirect-jumps").arg("off");
 
         // Security: Seccomp filtering (if configured)
         if let Some(level) = self.config.seccomp_level {
-            cmd.arg("--seccomp-level")
-                .arg((level as u8).to_string());
+            cmd.arg("--seccomp-level").arg((level as u8).to_string());
         }
 
         // Security: Disable logging to reduce attack surface
-        cmd.arg("--log-path")
-            .arg("/dev/null");
+        cmd.arg("--log-path").arg("/dev/null");
 
         // Network isolation (if configured)
         if self.config.network_isolation {
@@ -417,8 +434,7 @@ impl VmPool {
         }
 
         // CPU pinning for better isolation
-        cmd.arg("--cpu-template")
-            .arg("T2");
+        cmd.arg("--cpu-template").arg("T2");
 
         // Enable jailer for additional isolation (if available)
         if self.config.use_jailer {
@@ -440,7 +456,7 @@ impl VmPool {
 
         // Wait for VM to boot (optimized for fast boot)
         let boot_timeout = if self.config.fast_boot {
-            Duration::from_millis(500)  // Target: <500ms boot
+            Duration::from_millis(500) // Target: <500ms boot
         } else {
             Duration::from_secs(2)
         };
@@ -478,14 +494,17 @@ impl VmPool {
             .unwrap_or("apex-execution:latest");
 
         let container_name = format!("apex-vm-{}", id);
-        
+
         // Clean up any stale container before spawning
-        tracing::info!("Cleaning up stale container before spawn: {}", container_name);
+        tracing::info!(
+            "Cleaning up stale container before spawn: {}",
+            container_name
+        );
         let cleanup_result = Command::new("docker")
             .args(["rm", "-f", &container_name])
             .output()
             .await;
-        
+
         if let Ok(output) = cleanup_result {
             if !output.status.success() {
                 let stderr = String::from_utf8_lossy(&output.stderr);
@@ -495,11 +514,15 @@ impl VmPool {
             tracing::warn!("Failed to run docker rm command");
         }
 
-        tracing::info!(vm_id = id, image = image, "Starting Docker container with security constraints");
+        tracing::info!(
+            vm_id = id,
+            image = image,
+            "Starting Docker container with security constraints"
+        );
         tracing::debug!("docker_image config: {:?}", self.config.docker_image);
 
         let memory_limit = format!("{}m", self.config.memory_mib);
-        
+
         let mut cmd = Command::new("docker");
         cmd.arg("run")
             .arg("-d")
@@ -544,21 +567,35 @@ impl VmPool {
         let vm_id_label = format!("apex.vm-id={}", id);
 
         let docker_args = vec![
-            "run", "-d", "--name", &container_name,
-            "--memory", &memory_limit,
-            "--cpus", &cpus,
-            "--pids-limit", "256",
-            "--network", "none",
+            "run",
+            "-d",
+            "--name",
+            &container_name,
+            "--memory",
+            &memory_limit,
+            "--cpus",
+            &cpus,
+            "--pids-limit",
+            "256",
+            "--network",
+            "none",
             "--read-only",
-            "--tmpfs", "/tmp:rw,exec,size=64m",
-            "--tmpfs", "/run:rw,exec,size=16m",
-            "--cap-drop", "ALL",
+            "--tmpfs",
+            "/tmp:rw,exec,size=64m",
+            "--tmpfs",
+            "/run:rw,exec,size=16m",
+            "--cap-drop",
+            "ALL",
             "--privileged=false",
-            "--restart", "no",
-            "--label", "apex.managed=true",
-            "--label", &vm_id_label,
+            "--restart",
+            "no",
+            "--label",
+            "apex.managed=true",
+            "--label",
+            &vm_id_label,
             "--rm",
-            "--stop-timeout", "10",
+            "--stop-timeout",
+            "10",
             image,
         ];
 
@@ -576,7 +613,10 @@ impl VmPool {
         tokio::time::sleep(Duration::from_secs(2)).await;
         instance.mark_ready();
 
-        tracing::info!(vm_id = id, "Docker container started with security constraints");
+        tracing::info!(
+            vm_id = id,
+            "Docker container started with security constraints"
+        );
         Ok(())
     }
 
@@ -873,7 +913,11 @@ impl VmPool {
         script: &str,
         timeout_secs: u64,
     ) -> Result<ExecutionResult, String> {
-        tracing::info!(vm_id, timeout_secs, "Executing isolated script in Firecracker");
+        tracing::info!(
+            vm_id,
+            timeout_secs,
+            "Executing isolated script in Firecracker"
+        );
 
         let socket_path = format!("/tmp/firecracker-{}.sock", vm_id);
 
@@ -892,9 +936,12 @@ impl VmPool {
             .args([
                 "--unix-socket",
                 &socket_path,
-                "-X", "PUT",
-                "-H", "Content-Type: application/json",
-                "-d", &exec_request.to_string(),
+                "-X",
+                "PUT",
+                "-H",
+                "Content-Type: application/json",
+                "-d",
+                &exec_request.to_string(),
                 "http://localhost/exec",
             ])
             .output()
@@ -924,7 +971,11 @@ impl VmPool {
         }
     }
 
-    async fn execute_firecracker_fallback(&self, vm_id: &str, script: &str) -> Result<ExecutionResult, String> {
+    async fn execute_firecracker_fallback(
+        &self,
+        vm_id: &str,
+        script: &str,
+    ) -> Result<ExecutionResult, String> {
         // Fallback: use a simpler execution model
         // This assumes there's a helper listening on the vsock or socket
         tracing::debug!(vm_id, "Using fallback execution for Firecracker");
@@ -933,7 +984,10 @@ impl VmPool {
             .arg("-c")
             .arg(format!(
                 "echo '{}' | base64 -d | sh",
-                base64::Engine::encode(&base64::engine::general_purpose::STANDARD, script.as_bytes())
+                base64::Engine::encode(
+                    &base64::engine::general_purpose::STANDARD,
+                    script.as_bytes()
+                )
             ))
             .output()
             .await
@@ -957,12 +1011,16 @@ impl VmPool {
     }
 
     #[cfg(unix)]
-    async fn execute_via_vsock(&self, vm_id: &str, script: &str) -> Result<ExecutionResult, String> {
+    async fn execute_via_vsock(
+        &self,
+        vm_id: &str,
+        script: &str,
+    ) -> Result<ExecutionResult, String> {
         let socket_path = format!("/tmp/vsock-{}.sock", vm_id);
 
         let encoded_script = base64::Engine::encode(
             &base64::engine::general_purpose::STANDARD,
-            script.as_bytes()
+            script.as_bytes(),
         );
 
         let request = serde_json::json!({
@@ -974,10 +1032,7 @@ impl VmPool {
         let request_str = request.to_string();
 
         let output = Command::new("socat")
-            .args([
-                "-",
-                &format!("UNIX-CONNECT:{}", socket_path),
-            ])
+            .args(["-", &format!("UNIX-CONNECT:{}", socket_path)])
             .stdin(std::process::Stdio::piped())
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
@@ -989,10 +1044,24 @@ impl VmPool {
             let response_str = String::from_utf8_lossy(&output.stdout);
             if let Ok(response_json) = serde_json::from_str::<serde_json::Value>(response_str) {
                 return Ok(ExecutionResult {
-                    success: response_json.get("success").and_then(|v| v.as_bool()).unwrap_or(true),
-                    output: response_json.get("output").and_then(|v| v.as_str()).unwrap_or("").to_string(),
-                    exit_code: response_json.get("exit_code").and_then(|v| v.as_i64()).unwrap_or(0) as i32,
-                    stderr: response_json.get("stderr").and_then(|v| v.as_str()).unwrap_or("").to_string(),
+                    success: response_json
+                        .get("success")
+                        .and_then(|v| v.as_bool())
+                        .unwrap_or(true),
+                    output: response_json
+                        .get("output")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
+                    exit_code: response_json
+                        .get("exit_code")
+                        .and_then(|v| v.as_i64())
+                        .unwrap_or(0) as i32,
+                    stderr: response_json
+                        .get("stderr")
+                        .and_then(|v| v.as_str())
+                        .unwrap_or("")
+                        .to_string(),
                 });
             }
             Ok(ExecutionResult {
@@ -1012,7 +1081,11 @@ impl VmPool {
     }
 
     #[cfg(not(unix))]
-    async fn execute_via_vsock(&self, _vm_id: &str, script: &str) -> Result<ExecutionResult, String> {
+    async fn execute_via_vsock(
+        &self,
+        _vm_id: &str,
+        script: &str,
+    ) -> Result<ExecutionResult, String> {
         tracing::warn!("vsock not available on Windows, using fallback");
         self.execute_firecracker_fallback(_vm_id, script).await
     }
@@ -1040,7 +1113,8 @@ impl VmPool {
                 if std::path::Path::new(&vsock_path).exists() {
                     self.execute_via_vsock(vm_id, script).await
                 } else {
-                    self.execute_in_firecracker_isolated(vm_id, script, timeout).await
+                    self.execute_in_firecracker_isolated(vm_id, script, timeout)
+                        .await
                 }
             }
             VmmBackend::Gvisor => {
@@ -1076,14 +1150,12 @@ impl VmPool {
                     stderr: String::from_utf8_lossy(&output.stderr).to_string(),
                 })
             }
-            VmmBackend::Mock => {
-                Ok(ExecutionResult {
-                    success: true,
-                    output: format!("Mock executed: {}", script),
-                    exit_code: 0,
-                    stderr: String::new(),
-                })
-            }
+            VmmBackend::Mock => Ok(ExecutionResult {
+                success: true,
+                output: format!("Mock executed: {}", script),
+                exit_code: 0,
+                stderr: String::new(),
+            }),
         }
     }
 

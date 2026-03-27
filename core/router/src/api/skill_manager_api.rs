@@ -4,20 +4,21 @@
 
 use axum::{
     extract::{Path, State},
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::api_error::ApiError;
-use crate::skill_manager::{SkillCreateRequest, SkillPatchRequest, SkillMetadata, SkillError};
+use crate::skill_manager::{SkillCreateRequest, SkillError, SkillMetadata, SkillPatchRequest};
 
 /// GET /api/v1/skills/auto-created - List all auto-created skills
 async fn list_auto_created_skills(
     State(state): State<crate::api::AppState>,
 ) -> Result<Json<Vec<SkillMetadata>>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.list_skills()
+    manager
+        .list_skills()
         .map(|skills| Json(skills))
         .map_err(|e| ApiError::internal(format!("Failed to list skills: {}", e)))
 }
@@ -28,7 +29,8 @@ async fn create_auto_created_skill(
     Json(req): Json<SkillCreateRequest>,
 ) -> Result<Json<SkillMetadata>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.create_skill(req)
+    manager
+        .create_skill(req)
         .await
         .map(|metadata| Json(metadata))
         .map_err(|e| {
@@ -51,7 +53,8 @@ async fn get_auto_created_skill(
     Path(name): Path<String>,
 ) -> Result<Json<SkillMetadata>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.list_skills()
+    manager
+        .list_skills()
         .map_err(|e| ApiError::internal(format!("Failed to list skills: {}", e)))?
         .into_iter()
         .find(|s| s.name == name)
@@ -65,7 +68,8 @@ async fn get_skill_content(
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.get_skill_content(&name)
+    manager
+        .get_skill_content(&name)
         .await
         .map(|content| Json(serde_json::json!({ "content": content })))
         .map_err(|e| ApiError::not_found(format!("Skill '{}' not found: {}", name, e)))
@@ -78,9 +82,12 @@ async fn patch_auto_created_skill(
     Json(patch): Json<SkillPatchRequest>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.patch_skill(&name, patch)
+    manager
+        .patch_skill(&name, patch)
         .await
-        .map(|_| Json(serde_json::json!({ "success": true, "message": "Skill patched successfully" })))
+        .map(|_| {
+            Json(serde_json::json!({ "success": true, "message": "Skill patched successfully" }))
+        })
         .map_err(|e| {
             let msg = e.to_string();
             if msg.contains("not found") {
@@ -101,9 +108,12 @@ async fn delete_auto_created_skill(
     Path(name): Path<String>,
 ) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.delete_skill(&name)
+    manager
+        .delete_skill(&name)
         .await
-        .map(|_| Json(serde_json::json!({ "success": true, "message": "Skill deleted successfully" })))
+        .map(|_| {
+            Json(serde_json::json!({ "success": true, "message": "Skill deleted successfully" }))
+        })
         .map_err(|e| ApiError::not_found(format!("Skill '{}' not found: {}", name, e)))
 }
 
@@ -113,7 +123,8 @@ async fn search_similar_skills(
     axum::extract::Query(params): axum::extract::Query<SearchParams>,
 ) -> Result<Json<Vec<SkillMetadata>>, (axum::http::StatusCode, String)> {
     let manager = state.skill_manager.lock().await;
-    manager.find_similar(&params.q)
+    manager
+        .find_similar(&params.q)
         .map(Json)
         .map_err(|e| ApiError::internal(format!("Failed to search skills: {}", e)))
 }
@@ -127,15 +138,39 @@ pub struct SearchParams {
 pub fn router() -> Router<crate::api::AppState> {
     Router::new()
         .route("/api/v1/skills/auto-created", get(list_auto_created_skills))
-        .route("/api/v1/skills/auto-created", post(create_auto_created_skill))
-        .route("/api/v1/skills/auto-created/search", get(search_similar_skills))
-        .route("/api/v1/skills/auto-created/{name}", get(get_auto_created_skill))
-        .route("/api/v1/skills/auto-created/{name}", put(patch_auto_created_skill))
-        .route("/api/v1/skills/auto-created/{name}", delete(delete_auto_created_skill))
-        .route("/api/v1/skills/auto-created/{name}/content", get(get_skill_content))
+        .route(
+            "/api/v1/skills/auto-created",
+            post(create_auto_created_skill),
+        )
+        .route(
+            "/api/v1/skills/auto-created/search",
+            get(search_similar_skills),
+        )
+        .route(
+            "/api/v1/skills/auto-created/{name}",
+            get(get_auto_created_skill),
+        )
+        .route(
+            "/api/v1/skills/auto-created/{name}",
+            put(patch_auto_created_skill),
+        )
+        .route(
+            "/api/v1/skills/auto-created/{name}",
+            delete(delete_auto_created_skill),
+        )
+        .route(
+            "/api/v1/skills/auto-created/{name}/content",
+            get(get_skill_content),
+        )
         .route("/api/v1/skills/suggestions", get(list_skill_suggestions))
-        .route("/api/v1/skills/suggestions/{task_id}", get(get_skill_suggestion))
-        .route("/api/v1/skills/suggestions/{task_id}", delete(delete_skill_suggestion))
+        .route(
+            "/api/v1/skills/suggestions/{task_id}",
+            get(get_skill_suggestion),
+        )
+        .route(
+            "/api/v1/skills/suggestions/{task_id}",
+            delete(delete_skill_suggestion),
+        )
 }
 
 /// GET /api/v1/skills/suggestions - List skill suggestions from deep tasks
@@ -146,13 +181,13 @@ async fn list_skill_suggestions(
         .unwrap_or_default()
         .join("apex")
         .join("skill_suggestions");
-    
+
     if !suggestions_dir.exists() {
         return Ok(Json(Vec::new()));
     }
-    
+
     let mut suggestions = Vec::new();
-    
+
     if let Ok(entries) = std::fs::read_dir(&suggestions_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
@@ -165,7 +200,7 @@ async fn list_skill_suggestions(
             }
         }
     }
-    
+
     Ok(Json(suggestions))
 }
 
@@ -179,17 +214,20 @@ async fn get_skill_suggestion(
         .join("apex")
         .join("skill_suggestions")
         .join(format!("{}.json", task_id));
-    
+
     if !suggestion_path.exists() {
-        return Err(ApiError::not_found(format!("Suggestion for task '{}' not found", task_id)));
+        return Err(ApiError::not_found(format!(
+            "Suggestion for task '{}' not found",
+            task_id
+        )));
     }
-    
+
     let content = std::fs::read_to_string(&suggestion_path)
         .map_err(|e| ApiError::internal(format!("Failed to read suggestion: {}", e)))?;
-    
+
     let suggestion: SkillSuggestion = serde_json::from_str(&content)
         .map_err(|e| ApiError::internal(format!("Failed to parse suggestion: {}", e)))?;
-    
+
     Ok(Json(suggestion))
 }
 
@@ -203,14 +241,17 @@ async fn delete_skill_suggestion(
         .join("apex")
         .join("skill_suggestions")
         .join(format!("{}.json", task_id));
-    
+
     if !suggestion_path.exists() {
-        return Err(ApiError::not_found(format!("Suggestion for task '{}' not found", task_id)));
+        return Err(ApiError::not_found(format!(
+            "Suggestion for task '{}' not found",
+            task_id
+        )));
     }
-    
+
     std::fs::remove_file(&suggestion_path)
         .map_err(|e| ApiError::internal(format!("Failed to delete suggestion: {}", e)))?;
-    
+
     Ok(Json(serde_json::json!({ "success": true })))
 }
 

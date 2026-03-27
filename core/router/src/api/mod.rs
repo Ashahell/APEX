@@ -1,89 +1,92 @@
 #![allow(unused_imports)]
 
-pub mod tasks;
-pub mod skills;
-pub mod workflows;
-pub mod notifications;
-pub mod webhooks;
 pub mod adapters;
-pub mod memory;
-pub mod system;
-pub mod settings;
 pub mod audit;
+pub mod bounded_memory; // NEW - Hermes-style bounded memory
 pub mod channels;
-pub mod journal;
-pub mod totp;
-pub mod mcp;
-pub mod soul;
-pub mod heartbeat;
-pub mod moltbook;
-pub mod llms;
-pub mod subagent;
-pub mod dynamic_tools;
-pub mod security;
-pub mod dashboard;  // NEW
-pub mod sessions;  // NEW
-pub mod pdf;  // NEW
-pub mod channels_extended;  // NEW - Phase 6 Additional Channels
-pub mod secrets;  // NEW - Phase 7 Secrets Expansion
-pub mod slack_blocks;  // NEW - Phase 8 Slack Block Kit
-pub mod execution_patterns;  // NEW - Phase 9 Death Spiral Detection
-pub mod bounded_memory;  // NEW - Hermes-style bounded memory
-pub mod skill_manager_api;  // NEW - Hermes-style auto-created skills
-pub mod user_profile_api;  // NEW - Hermes-style user profile
-pub mod session_search_api;  // NEW - Hermes-style session search
-pub mod hub_api;  // NEW - Hermes-style skills hub
-pub mod tool_validation;  // NEW - Tool Maker Validation (Feature 1)
-pub mod persona_api;    // NEW - Persona Assembly (Feature 2)
-pub mod signing_api;   // NEW - Plugin Signing (Feature 5)
-pub mod story_api;     // NEW - Story Engine (Feature 7)
+pub mod channels_extended; // NEW - Phase 6 Additional Channels
+pub mod context_scope_api;
 pub mod continuity_api; // NEW - Continuity Scheduler (Feature 4)
-pub mod privacy_api;    // NEW - Privacy Toggle (Feature 6)
-pub mod context_scope_api; // NEW - Context Scope (Feature 3)
+pub mod dashboard; // NEW
+pub mod dynamic_tools;
+pub mod execution_patterns; // NEW - Phase 9 Death Spiral Detection
+pub mod heartbeat;
+pub mod hub_api; // NEW - Hermes-style skills hub
+pub mod journal;
+pub mod llms;
+pub mod mcp;
+pub mod memory;
+pub mod moltbook;
+pub mod notifications;
+pub mod pdf; // NEW
+pub mod persona_api; // NEW - Persona Assembly (Feature 2)
+pub mod privacy_api; // NEW - Privacy Toggle (Feature 6)
+pub mod secrets; // NEW - Phase 7 Secrets Expansion
+pub mod security;
+pub mod session_search_api; // NEW - Hermes-style session search
+pub mod sessions; // NEW
+pub mod settings;
+pub mod signing_api; // NEW - Plugin Signing (Feature 5)
+pub mod skill_manager_api; // NEW - Hermes-style auto-created skills
+pub mod skills;
+pub mod slack_blocks; // NEW - Phase 8 Slack Block Kit
+pub mod soul;
+pub mod story_api; // NEW - Story Engine (Feature 7)
+pub mod subagent;
+pub mod system;
+pub mod tasks;
+pub mod tool_validation; // NEW - Tool Maker Validation (Feature 1)
+pub mod totp;
+pub mod user_profile_api; // NEW - Hermes-style user profile
+pub mod webhooks;
+pub mod workflows; // NEW - Context Scope (Feature 3)
 
 /// Helper module for API error handling
 pub mod api_error {
     use axum::http::StatusCode;
     use std::fmt;
-    
+
     /// API Error type for consistent error responses
     pub struct ApiError {
         pub status: StatusCode,
         pub message: String,
     }
-    
+
     impl ApiError {
         /// Create a new API error with INTERNAL_SERVER_ERROR
         pub fn internal(message: impl fmt::Display) -> (StatusCode, String) {
             (StatusCode::INTERNAL_SERVER_ERROR, message.to_string())
         }
-        
+
         /// Create a new API error with NOT_FOUND
         pub fn not_found(message: impl fmt::Display) -> (StatusCode, String) {
             (StatusCode::NOT_FOUND, message.to_string())
         }
-        
+
         /// Create a new API error with BAD_REQUEST
         pub fn bad_request(message: impl fmt::Display) -> (StatusCode, String) {
             (StatusCode::BAD_REQUEST, message.to_string())
         }
-        
+
         /// Create a new API error with UNAUTHORIZED
         pub fn unauthorized(message: impl fmt::Display) -> (StatusCode, String) {
             (StatusCode::UNAUTHORIZED, message.to_string())
         }
-        
+
         /// Create a new API error with FORBIDDEN
         pub fn forbidden(message: impl fmt::Display) -> (StatusCode, String) {
             (StatusCode::FORBIDDEN, message.to_string())
         }
-        
+
         /// Convert a Result to ApiError
-        pub fn from_result<T, E: fmt::Display>(result: Result<T, E>, context: &str) -> Result<T, (StatusCode, String)> {
+        pub fn from_result<T, E: fmt::Display>(
+            result: Result<T, E>,
+            context: &str,
+        ) -> Result<T, (StatusCode, String)> {
             result.map_err(|e| Self::internal(format!("{}: {}", context, e)))
         }
     }
-    
+
     /// Macro to simplify error handling in API handlers
     /// Usage: `api_try!(repo.operation(), "description of operation")`
     #[macro_export]
@@ -105,39 +108,39 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 use ulid::Ulid;
-use lazy_static::lazy_static;
 
 use crate::circuit_breaker::CircuitBreakerRegistry;
-use crate::governance::GovernanceEngine;
-use crate::heartbeat::HeartbeatScheduler;
-use crate::message_bus::{DeepTaskMessage, MessageBus};
-use crate::metrics::RouterMetrics;
-use crate::mcp::McpServerManager;
-use crate::moltbook::MoltbookClient;
-use crate::soul::loader::SoulLoader;
-use crate::subagent::SubAgentPool;
-use crate::totp::TotpManager;
-use crate::unified_config::AppConfig;
-use crate::skill_manager::SkillManager;
-use crate::user_profile::UserProfileManager;
-use crate::session_search::SessionSearch;
-use crate::hub_client::HubClient;
-use crate::vm_pool::VmPool;
-use crate::skill_pool::SkillPool;
 use crate::dynamic_tools::ToolRegistry;
 use crate::execution_stream::ExecutionStreamManager;
-use crate::websocket::WebSocketManager;
-use crate::system_health::SystemMonitor;
-use crate::response_cache::ResponseCache;
+use crate::governance::GovernanceEngine;
+use crate::heartbeat::HeartbeatScheduler;
+use crate::hub_client::HubClient;
+use crate::mcp::McpServerManager;
+use crate::message_bus::{DeepTaskMessage, MessageBus};
+use crate::metrics::RouterMetrics;
+use crate::moltbook::MoltbookClient;
 use crate::rate_limiter::RateLimiter;
-use apex_memory::Embedder;
+use crate::response_cache::ResponseCache;
+use crate::session_search::SessionSearch;
+use crate::skill_manager::SkillManager;
+use crate::skill_pool::SkillPool;
+use crate::soul::loader::SoulLoader;
+use crate::subagent::SubAgentPool;
+use crate::system_health::SystemMonitor;
+use crate::totp::TotpManager;
+use crate::unified_config::AppConfig;
+use crate::user_profile::UserProfileManager;
+use crate::vm_pool::VmPool;
+use crate::websocket::WebSocketManager;
 use apex_memory::background_indexer::BackgroundIndexer;
+use apex_memory::Embedder;
 use apex_memory::NarrativeMemory;
-use apex_memory::{Workflow, WorkflowExecution, TaskRepository, CreateTask, TaskTier};
+use apex_memory::{CreateTask, TaskRepository, TaskTier, Workflow, WorkflowExecution};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TaskRequest {
@@ -261,7 +264,7 @@ pub struct ExecuteDeepTaskResponse {
 
 #[derive(Clone)]
 pub struct AppState {
-    pub config: AppConfig,  // C4 Step 2: Config as first-class field
+    pub config: AppConfig, // C4 Step 2: Config as first-class field
     pub pool: sqlx::SqlitePool,
     pub metrics: RouterMetrics,
     pub message_bus: MessageBus,
@@ -301,11 +304,13 @@ pub struct AppState {
     // Feature 7: Story Engine
     pub story_engine: std::sync::Arc<std::sync::Mutex<crate::story_engine::StoryEngine>>,
     // Feature 4: Continuity Scheduler
-    pub continuity_state: std::sync::Arc<std::sync::Mutex<crate::api::continuity_api::ContinuityState>>,
+    pub continuity_state:
+        std::sync::Arc<std::sync::Mutex<crate::api::continuity_api::ContinuityState>>,
     // Feature 6: Privacy Toggle
     pub privacy_guard: std::sync::Arc<std::sync::Mutex<crate::privacy_guard::PrivacyGuard>>,
     // Feature 3: Context Scope
-    pub context_scope_state: std::sync::Arc<std::sync::Mutex<crate::api::context_scope_api::ContextScopeState>>,
+    pub context_scope_state:
+        std::sync::Arc<std::sync::Mutex<crate::api::context_scope_api::ContextScopeState>>,
     // Patch 15: Replay protection backend (trait-injected, configurable)
     pub replay_protection: std::sync::Arc<dyn crate::security::replay_protection::ReplayProtection>,
     // Patch 16: Streaming analytics
@@ -420,57 +425,72 @@ pub struct UpdateAdapterRequest {
 lazy_static! {
     pub static ref ADAPTERS: std::sync::RwLock<HashMap<String, AdapterConfig>> = {
         let mut map = HashMap::new();
-        map.insert("slack".to_string(), AdapterConfig {
-            name: "slack".to_string(),
-            adapter_type: "slack".to_string(),
-            enabled: false,
-            config: serde_json::json!({
-                "bot_token": "",
-                "signing_secret": "",
-                "default_channel": "#apex"
-            }),
-        });
-        map.insert("telegram".to_string(), AdapterConfig {
-            name: "telegram".to_string(),
-            adapter_type: "telegram".to_string(),
-            enabled: false,
-            config: serde_json::json!({
-                "bot_token": "",
-                "allowed_users": []
-            }),
-        });
-        map.insert("discord".to_string(), AdapterConfig {
-            name: "discord".to_string(),
-            adapter_type: "discord".to_string(),
-            enabled: false,
-            config: serde_json::json!({
-                "bot_token": "",
-                "guild_id": "",
-                "channel_id": ""
-            }),
-        });
-        map.insert("email".to_string(), AdapterConfig {
-            name: "email".to_string(),
-            adapter_type: "email".to_string(),
-            enabled: false,
-            config: serde_json::json!({
-                "smtp_host": "",
-                "smtp_port": 587,
-                "smtp_user": "",
-                "smtp_pass": "",
-                "from_address": ""
-            }),
-        });
-        map.insert("whatsapp".to_string(), AdapterConfig {
-            name: "whatsapp".to_string(),
-            adapter_type: "whatsapp".to_string(),
-            enabled: false,
-            config: serde_json::json!({
-                "phone_number_id": "",
-                "access_token": "",
-                "verify_token": ""
-            }),
-        });
+        map.insert(
+            "slack".to_string(),
+            AdapterConfig {
+                name: "slack".to_string(),
+                adapter_type: "slack".to_string(),
+                enabled: false,
+                config: serde_json::json!({
+                    "bot_token": "",
+                    "signing_secret": "",
+                    "default_channel": "#apex"
+                }),
+            },
+        );
+        map.insert(
+            "telegram".to_string(),
+            AdapterConfig {
+                name: "telegram".to_string(),
+                adapter_type: "telegram".to_string(),
+                enabled: false,
+                config: serde_json::json!({
+                    "bot_token": "",
+                    "allowed_users": []
+                }),
+            },
+        );
+        map.insert(
+            "discord".to_string(),
+            AdapterConfig {
+                name: "discord".to_string(),
+                adapter_type: "discord".to_string(),
+                enabled: false,
+                config: serde_json::json!({
+                    "bot_token": "",
+                    "guild_id": "",
+                    "channel_id": ""
+                }),
+            },
+        );
+        map.insert(
+            "email".to_string(),
+            AdapterConfig {
+                name: "email".to_string(),
+                adapter_type: "email".to_string(),
+                enabled: false,
+                config: serde_json::json!({
+                    "smtp_host": "",
+                    "smtp_port": 587,
+                    "smtp_user": "",
+                    "smtp_pass": "",
+                    "from_address": ""
+                }),
+            },
+        );
+        map.insert(
+            "whatsapp".to_string(),
+            AdapterConfig {
+                name: "whatsapp".to_string(),
+                adapter_type: "whatsapp".to_string(),
+                enabled: false,
+                config: serde_json::json!({
+                    "phone_number_id": "",
+                    "access_token": "",
+                    "verify_token": ""
+                }),
+            },
+        );
         std::sync::RwLock::new(map)
     };
 }
@@ -597,26 +617,26 @@ pub fn create_router(state: AppState) -> Router {
         .merge(subagent::router())
         .merge(dynamic_tools::router())
         .merge(security::create_router())
-        .merge(dashboard::router())  // NEW
-        .merge(sessions::router())  // NEW - sessions_yield & sessions_resume
-        .merge(pdf::router())  // NEW - PDF tool
-        .merge(channels_extended::router())  // NEW - Additional Channels (Phase 6)
-        .merge(secrets::router())  // NEW - Secrets Expansion (Phase 7)
-        .merge(slack_blocks::router())  // NEW - Slack Block Kit (Phase 8)
-        .merge(execution_patterns::router())  // NEW - Death Spiral Detection (Phase 9)
-        .merge(bounded_memory::router())  // NEW - Hermes-style Bounded Memory
-        .merge(skill_manager_api::router())  // NEW - Hermes-style Auto-Created Skills
-        .merge(user_profile_api::router())  // NEW - Hermes-style User Profile
-        .merge(session_search_api::router())  // NEW - Hermes-style Session Search
-        .merge(hub_api::router())  // NEW - Hermes-style Skills Hub
-        .merge(tool_validation::create_tool_validation_router())  // NEW - Tool Validation (Feature 1)
-        .merge(persona_api::create_persona_router())  // NEW - Persona Assembly (Feature 2)
-        .merge(signing_api::create_signing_router())  // NEW - Plugin Signing (Feature 5)
-        .merge(story_api::create_story_router())  // NEW - Story Engine (Feature 7)
-        .merge(continuity_api::create_continuity_router())  // NEW - Continuity (Feature 4)
-        .merge(privacy_api::create_privacy_router())  // NEW - Privacy (Feature 6)
-        .merge(context_scope_api::create_context_scope_router())  // NEW - Context Scope (Feature 3)
-        .merge(crate::streaming::create_streaming_router(state.clone()))  // NEW - Patch 11: SSE streaming for Hands and MCP
+        .merge(dashboard::router()) // NEW
+        .merge(sessions::router()) // NEW - sessions_yield & sessions_resume
+        .merge(pdf::router()) // NEW - PDF tool
+        .merge(channels_extended::router()) // NEW - Additional Channels (Phase 6)
+        .merge(secrets::router()) // NEW - Secrets Expansion (Phase 7)
+        .merge(slack_blocks::router()) // NEW - Slack Block Kit (Phase 8)
+        .merge(execution_patterns::router()) // NEW - Death Spiral Detection (Phase 9)
+        .merge(bounded_memory::router()) // NEW - Hermes-style Bounded Memory
+        .merge(skill_manager_api::router()) // NEW - Hermes-style Auto-Created Skills
+        .merge(user_profile_api::router()) // NEW - Hermes-style User Profile
+        .merge(session_search_api::router()) // NEW - Hermes-style Session Search
+        .merge(hub_api::router()) // NEW - Hermes-style Skills Hub
+        .merge(tool_validation::create_tool_validation_router()) // NEW - Tool Validation (Feature 1)
+        .merge(persona_api::create_persona_router()) // NEW - Persona Assembly (Feature 2)
+        .merge(signing_api::create_signing_router()) // NEW - Plugin Signing (Feature 5)
+        .merge(story_api::create_story_router()) // NEW - Story Engine (Feature 7)
+        .merge(continuity_api::create_continuity_router()) // NEW - Continuity (Feature 4)
+        .merge(privacy_api::create_privacy_router()) // NEW - Privacy (Feature 6)
+        .merge(context_scope_api::create_context_scope_router()) // NEW - Context Scope (Feature 3)
+        .merge(crate::streaming::create_streaming_router(state.clone())) // NEW - Patch 11: SSE streaming for Hands and MCP
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

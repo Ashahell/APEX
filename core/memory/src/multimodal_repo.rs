@@ -1,6 +1,6 @@
-use sqlx::SqlitePool;
-use sqlx::FromRow;
 use serde::{Deserialize, Serialize};
+use sqlx::FromRow;
+use sqlx::SqlitePool;
 
 /// Memory embedding record
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -77,7 +77,7 @@ impl MultimodalRepository {
         mime_type: Option<&str>,
     ) -> Result<MemoryEmbedding, sqlx::Error> {
         let embedding_json = serde_json::to_string(embedding).unwrap_or_default();
-        
+
         sqlx::query_as::<_, MemoryEmbedding>(
             r#"
             INSERT INTO memory_embeddings (id, memory_id, memory_type, modality, embedding, embedding_model, original_data, mime_type)
@@ -98,9 +98,12 @@ impl MultimodalRepository {
     }
 
     /// Get embeddings for a memory item
-    pub async fn get_embeddings_for_memory(&self, memory_id: &str) -> Result<Vec<MemoryEmbedding>, sqlx::Error> {
+    pub async fn get_embeddings_for_memory(
+        &self,
+        memory_id: &str,
+    ) -> Result<Vec<MemoryEmbedding>, sqlx::Error> {
         sqlx::query_as::<_, MemoryEmbedding>(
-            "SELECT * FROM memory_embeddings WHERE memory_id = ? ORDER BY created_at DESC"
+            "SELECT * FROM memory_embeddings WHERE memory_id = ? ORDER BY created_at DESC",
         )
         .bind(memory_id)
         .fetch_all(&self.pool)
@@ -108,9 +111,13 @@ impl MultimodalRepository {
     }
 
     /// Get embeddings by modality
-    pub async fn get_embeddings_by_modality(&self, modality: &str, limit: i64) -> Result<Vec<MemoryEmbedding>, sqlx::Error> {
+    pub async fn get_embeddings_by_modality(
+        &self,
+        modality: &str,
+        limit: i64,
+    ) -> Result<Vec<MemoryEmbedding>, sqlx::Error> {
         sqlx::query_as::<_, MemoryEmbedding>(
-            "SELECT * FROM memory_embeddings WHERE modality = ? ORDER BY created_at DESC LIMIT ?"
+            "SELECT * FROM memory_embeddings WHERE modality = ? ORDER BY created_at DESC LIMIT ?",
         )
         .bind(modality)
         .bind(limit)
@@ -121,11 +128,11 @@ impl MultimodalRepository {
     /// Count embeddings by modality
     pub async fn count_by_modality(&self) -> Result<Vec<(String, i64)>, sqlx::Error> {
         let rows: Vec<(String, i64)> = sqlx::query_as(
-            "SELECT modality, COUNT(*) as count FROM memory_embeddings GROUP BY modality"
+            "SELECT modality, COUNT(*) as count FROM memory_embeddings GROUP BY modality",
         )
         .fetch_all(&self.pool)
         .await?;
-        
+
         Ok(rows)
     }
 
@@ -152,7 +159,7 @@ impl MultimodalRepository {
             INSERT INTO memory_indexing_jobs (id, memory_id, modality)
             VALUES (?, ?, ?)
             RETURNING *
-            "#
+            "#,
         )
         .bind(id)
         .bind(memory_id)
@@ -180,7 +187,7 @@ impl MultimodalRepository {
             SET status = ?, error_message = ?, completed_at = ?
             WHERE id = ?
             RETURNING *
-            "#
+            "#,
         )
         .bind(status)
         .bind(error_message)
@@ -192,16 +199,17 @@ impl MultimodalRepository {
 
     /// Get job by ID
     pub async fn get_job(&self, id: &str) -> Result<MemoryIndexingJob, sqlx::Error> {
-        sqlx::query_as::<_, MemoryIndexingJob>(
-            "SELECT * FROM memory_indexing_jobs WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as::<_, MemoryIndexingJob>("SELECT * FROM memory_indexing_jobs WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// Get pending jobs
-    pub async fn get_pending_jobs(&self, limit: i64) -> Result<Vec<MemoryIndexingJob>, sqlx::Error> {
+    pub async fn get_pending_jobs(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<MemoryIndexingJob>, sqlx::Error> {
         sqlx::query_as::<_, MemoryIndexingJob>(
             "SELECT * FROM memory_indexing_jobs WHERE status = 'pending' ORDER BY started_at ASC LIMIT ?"
         )
@@ -215,7 +223,7 @@ impl MultimodalRepository {
     /// Get multimodal config
     pub async fn get_config(&self) -> Result<MultimodalConfig, sqlx::Error> {
         sqlx::query_as::<_, MultimodalConfig>(
-            "SELECT * FROM memory_multimodal_config WHERE id = 'default'"
+            "SELECT * FROM memory_multimodal_config WHERE id = 'default'",
         )
         .fetch_one(&self.pool)
         .await
@@ -231,7 +239,7 @@ impl MultimodalRepository {
         enabled: Option<bool>,
     ) -> Result<MultimodalConfig, sqlx::Error> {
         let current = self.get_config().await?;
-        
+
         sqlx::query_as::<_, MultimodalConfig>(
             r#"
             UPDATE memory_multimodal_config
@@ -253,41 +261,34 @@ impl MultimodalRepository {
 
     /// Get embedding stats
     pub async fn get_stats(&self) -> Result<MultimodalStats, sqlx::Error> {
-        let total_embeddings: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_embeddings"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let total_embeddings: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM memory_embeddings")
+            .fetch_one(&self.pool)
+            .await?;
 
-        let image_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'image'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let image_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'image'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let audio_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'audio'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let audio_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'audio'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let text_count: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'text'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let text_count: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memory_embeddings WHERE modality = 'text'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let pending_jobs: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_indexing_jobs WHERE status = 'pending'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let pending_jobs: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memory_indexing_jobs WHERE status = 'pending'")
+                .fetch_one(&self.pool)
+                .await?;
 
-        let processing_jobs: (i64,) = sqlx::query_as(
-            "SELECT COUNT(*) FROM memory_indexing_jobs WHERE status = 'processing'"
-        )
-        .fetch_one(&self.pool)
-        .await?;
+        let processing_jobs: (i64,) =
+            sqlx::query_as("SELECT COUNT(*) FROM memory_indexing_jobs WHERE status = 'processing'")
+                .fetch_one(&self.pool)
+                .await?;
 
         Ok(MultimodalStats {
             total_embeddings: total_embeddings.0,

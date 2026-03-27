@@ -1,3 +1,4 @@
+use axum::extract::State;
 use axum::{
     extract::Query,
     routing::{get, post},
@@ -5,12 +6,16 @@ use axum::{
 };
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use axum::extract::State;
 use ulid::Ulid;
 
-use apex_memory::hybrid_search::{rrf_score, reciprocal_rank_fusion, temporal_decay, frequency_boost, mmr_select};
-use apex_memory::multimodal_repo::{MultimodalRepository, MultimodalStats, MultimodalSearchResult};
-use super::{AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse, ReflectionItem};
+use super::{
+    AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse,
+    ReflectionItem,
+};
+use apex_memory::hybrid_search::{
+    frequency_boost, mmr_select, reciprocal_rank_fusion, rrf_score, temporal_decay,
+};
+use apex_memory::multimodal_repo::{MultimodalRepository, MultimodalSearchResult, MultimodalStats};
 
 #[derive(Debug, Deserialize)]
 pub struct SearchMemoryQuery {
@@ -37,11 +42,20 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/memory/index", get(get_index_stats))
         // NEW: Memory consolidation endpoints
         .route("/api/v1/memory/consolidate", post(consolidate_memory))
-        .route("/api/v1/memory/consolidation/stats", get(get_consolidation_stats))
+        .route(
+            "/api/v1/memory/consolidation/stats",
+            get(get_consolidation_stats),
+        )
         // NEW: Multimodal endpoints (Phase 5)
-        .route("/api/v1/memory/multimodal/config", get(get_multimodal_config).put(update_multimodal_config))
+        .route(
+            "/api/v1/memory/multimodal/config",
+            get(get_multimodal_config).put(update_multimodal_config),
+        )
         .route("/api/v1/memory/multimodal/stats", get(get_multimodal_stats))
-        .route("/api/v1/memory/multimodal/embeddings", get(list_multimodal_embeddings))
+        .route(
+            "/api/v1/memory/multimodal/embeddings",
+            get(list_multimodal_embeddings),
+        )
         .route("/api/v1/memory/multimodal/index", post(index_memory))
         .route("/api/v1/memory/multimodal/search", get(search_multimodal))
 }
@@ -83,15 +97,17 @@ async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<File
     Ok(Json(files))
 }
 
-async fn get_file_content(Query(query): Query<GetFileContentQuery>) -> Result<Json<FileContent>, String> {
+async fn get_file_content(
+    Query(query): Query<GetFileContentQuery>,
+) -> Result<Json<FileContent>, String> {
     let path = &query.path;
 
     if !std::path::Path::new(path).exists() {
         return Err("File not found".to_string());
     }
 
-    let content =
-        std::fs::read_to_string(path).unwrap_or_else(|_| "// Binary file or unreadable content".to_string());
+    let content = std::fs::read_to_string(path)
+        .unwrap_or_else(|_| "// Binary file or unreadable content".to_string());
 
     Ok(Json(FileContent {
         path: path.clone(),
@@ -123,7 +139,9 @@ async fn get_memory_stats() -> Result<Json<MemoryStatsResponse>, String> {
                 if let Ok(metadata) = entry.metadata().await {
                     if metadata.is_file() {
                         let importance = (count % 10) as u32 + 1;
-                        let modified = metadata.modified().ok()
+                        let modified = metadata
+                            .modified()
+                            .ok()
                             .map(|t| {
                                 let datetime: chrono::DateTime<chrono::Utc> = t.into();
                                 datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
@@ -196,7 +214,9 @@ async fn get_reflections() -> Result<Json<Vec<ReflectionItem>>, String> {
             while let Ok(Some(entry)) = entries.next_entry().await {
                 if let Ok(metadata) = entry.metadata().await {
                     if metadata.is_file() {
-                        let modified = metadata.modified().ok()
+                        let modified = metadata
+                            .modified()
+                            .ok()
                             .map(|t| {
                                 let datetime: chrono::DateTime<chrono::Utc> = t.into();
                                 datetime.format("%Y-%m-%dT%H:%M:%SZ").to_string()
@@ -223,38 +243,51 @@ async fn search_memory(
     Query(query): Query<SearchMemoryQuery>,
 ) -> Result<Json<Vec<MemorySearchResult>>, String> {
     let limit = query.limit.unwrap_or(8);
-    
+
     // Get query embedding
-    let query_embedding = state.embedder
+    let query_embedding = state
+        .embedder
         .embed_query(&query.q)
         .await
         .map_err(|e| format!("Failed to embed query: {}", e))?;
-    
+
     // Fetch all chunks with their embeddings and metadata
     let rows: Vec<(String, String, String, String, Option<String>, f64, i64)> = sqlx::query_as(
         "SELECT mc.id, mc.file_path, mc.content, mc.memory_type, mv.embedding, 
                 COALESCE(julianday('now') - julianday(mc.accessed_at), 0) as access_age_days,
                 mc.access_count
          FROM memory_chunks mc
-         LEFT JOIN memory_vec mv ON mc.id = mv.chunk_id"
+         LEFT JOIN memory_vec mv ON mc.id = mv.chunk_id",
     )
     .fetch_all(&state.pool)
     .await
     .map_err(|e| format!("Search failed: {}", e))?;
-    
+
     // Compute vector similarity ranks
     let mut vec_scores: Vec<(String, f64, Vec<f32>)> = Vec::new();
     let mut bm25_scores: Vec<(String, usize)> = Vec::new();
-    let mut chunk_data: std::collections::HashMap<String, (String, String, String)> = std::collections::HashMap::new();
-    
+    let mut chunk_data: std::collections::HashMap<String, (String, String, String)> =
+        std::collections::HashMap::new();
+
     let query_lower = query.q.to_lowercase();
-    
+
     for row in rows {
-        let (chunk_id, file_path, content, memory_type, embedding_json, access_age_days, access_count) = row;
-        
+        let (
+            chunk_id,
+            file_path,
+            content,
+            memory_type,
+            embedding_json,
+            access_age_days,
+            access_count,
+        ) = row;
+
         // Store chunk data
-        chunk_data.insert(chunk_id.clone(), (file_path.clone(), content.clone(), memory_type.clone()));
-        
+        chunk_data.insert(
+            chunk_id.clone(),
+            (file_path.clone(), content.clone(), memory_type.clone()),
+        );
+
         // Vector similarity
         if let Some(emb_json) = embedding_json {
             if let Ok(embedding) = serde_json::from_str::<Vec<f32>>(&emb_json) {
@@ -267,7 +300,7 @@ async fn search_memory(
                 vec_scores.push((chunk_id.clone(), temporal_score * freq_boost, embedding));
             }
         }
-        
+
         // BM25-like keyword ranking
         let content_lower = content.to_lowercase();
         let count = content_lower.matches(&query_lower).count();
@@ -275,27 +308,37 @@ async fn search_memory(
             bm25_scores.push((chunk_id, count));
         }
     }
-    
+
     // Sort vector scores by similarity
     vec_scores.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-    let vec_ranks: Vec<_> = vec_scores.iter().enumerate().map(|(i, (id, _, _))| (id.clone(), i + 1)).collect();
-    
+    let vec_ranks: Vec<_> = vec_scores
+        .iter()
+        .enumerate()
+        .map(|(i, (id, _, _))| (id.clone(), i + 1))
+        .collect();
+
     // Sort BM25 scores
     bm25_scores.sort_by(|a, b| b.1.cmp(&a.1));
-    let bm25_ranks: Vec<_> = bm25_scores.iter().enumerate().map(|(i, (id, _))| (id.clone(), i + 1)).collect();
-    
+    let bm25_ranks: Vec<_> = bm25_scores
+        .iter()
+        .enumerate()
+        .map(|(i, (id, _))| (id.clone(), i + 1))
+        .collect();
+
     // Apply Reciprocal Rank Fusion
     let rrf_k = 60;
     let fused = reciprocal_rank_fusion(&vec_ranks, &bm25_ranks, rrf_k);
-    
+
     // Build final results with MMR for diversity
     let lambda = 0.7;
     let _mmr_selected = mmr_select(&vec_scores, &query_embedding, limit, lambda);
-    
-    let search_results: Vec<MemorySearchResult> = fused.iter()
+
+    let search_results: Vec<MemorySearchResult> = fused
+        .iter()
         .take(limit)
         .map(|(chunk_id, score)| {
-            let (file_path, content, memory_type) = chunk_data.get(chunk_id)
+            let (file_path, content, memory_type) = chunk_data
+                .get(chunk_id)
                 .cloned()
                 .unwrap_or_else(|| (chunk_id.clone(), String::new(), "unknown".to_string()));
             MemorySearchResult {
@@ -307,7 +350,7 @@ async fn search_memory(
             }
         })
         .collect();
-    
+
     Ok(Json(search_results))
 }
 
@@ -316,9 +359,21 @@ fn cosine_similarity_f32(a: &[f32], b: &[f32]) -> f64 {
         return 0.0;
     }
 
-    let dot_product: f64 = a.iter().zip(b.iter()).map(|(x, y)| (*x as f64) * (*y as f64)).sum();
-    let magnitude_a: f64 = a.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
-    let magnitude_b: f64 = b.iter().map(|x| (*x as f64) * (*x as f64)).sum::<f64>().sqrt();
+    let dot_product: f64 = a
+        .iter()
+        .zip(b.iter())
+        .map(|(x, y)| (*x as f64) * (*y as f64))
+        .sum();
+    let magnitude_a: f64 = a
+        .iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt();
+    let magnitude_b: f64 = b
+        .iter()
+        .map(|x| (*x as f64) * (*x as f64))
+        .sum::<f64>()
+        .sqrt();
 
     if magnitude_a == 0.0 || magnitude_b == 0.0 {
         return 0.0;
@@ -327,14 +382,13 @@ fn cosine_similarity_f32(a: &[f32], b: &[f32]) -> f64 {
     dot_product / (magnitude_a * magnitude_b)
 }
 
-async fn get_index_stats(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, String> {
-    let stats = state.background_indexer
+async fn get_index_stats(State(state): State<AppState>) -> Result<Json<serde_json::Value>, String> {
+    let stats = state
+        .background_indexer
         .get_index_stats()
         .await
         .map_err(|e| format!("Failed to get index stats: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({
         "total_chunks": stats.total_chunks,
         "indexed_files": stats.indexed_files,
@@ -369,7 +423,7 @@ async fn get_consolidation_stats(
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".apex")
         .join("memory");
-    
+
     // Return current config (could be enhanced with actual state tracking)
     Ok(Json(serde_json::json!({
         "base_path": base_path.to_string_lossy(),
@@ -391,7 +445,7 @@ async fn consolidate_memory(
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".apex")
         .join("memory");
-    
+
     // Create consolidator with proper config
     let narrative_config = apex_memory::NarrativeConfig {
         base_path: base_path.clone(),
@@ -400,10 +454,10 @@ async fn consolidate_memory(
     };
     let memory_config = SoulMemoryConfig::default();
     let consolidator = apex_memory::MemoryConsolidator::new(narrative_config, memory_config);
-    
+
     // Run consolidation
     let result = consolidator.consolidate().await;
-    
+
     Ok(Json(serde_json::json!({
         "success": result.errors.is_empty(),
         "journal_entries_kept": result.journal_entries_kept,
@@ -439,8 +493,8 @@ pub struct UpdateMultimodalConfigRequest {
 pub struct IndexMemoryRequest {
     pub memory_id: String,
     pub memory_type: String,
-    pub modality: String,  // 'image' or 'audio'
-    pub data: String,  // Base64 encoded
+    pub modality: String, // 'image' or 'audio'
+    pub data: String,     // Base64 encoded
     pub mime_type: String,
 }
 
@@ -453,7 +507,7 @@ pub struct IndexMemoryResponse {
 #[derive(Debug, Deserialize)]
 pub struct MultimodalSearchQuery {
     pub q: Option<String>,
-    pub modality: Option<String>,  // 'text', 'image', 'audio'
+    pub modality: Option<String>, // 'text', 'image', 'audio'
     pub limit: Option<usize>,
 }
 
@@ -462,12 +516,12 @@ async fn get_multimodal_config(
     State(state): State<AppState>,
 ) -> Result<Json<MultimodalConfigResponse>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     let config = repo
         .get_config()
         .await
         .map_err(|e| format!("Failed to get config: {}", e))?;
-    
+
     Ok(Json(MultimodalConfigResponse {
         image_indexing: config.image_indexing == 1,
         audio_indexing: config.audio_indexing == 1,
@@ -483,7 +537,7 @@ async fn update_multimodal_config(
     Json(req): Json<UpdateMultimodalConfigRequest>,
 ) -> Result<Json<MultimodalConfigResponse>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     let config = repo
         .update_config(
             req.image_indexing,
@@ -494,7 +548,7 @@ async fn update_multimodal_config(
         )
         .await
         .map_err(|e| format!("Failed to update config: {}", e))?;
-    
+
     Ok(Json(MultimodalConfigResponse {
         image_indexing: config.image_indexing == 1,
         audio_indexing: config.audio_indexing == 1,
@@ -509,12 +563,12 @@ async fn get_multimodal_stats(
     State(state): State<AppState>,
 ) -> Result<Json<MultimodalStats>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     let stats = repo
         .get_stats()
         .await
         .map_err(|e| format!("Failed to get stats: {}", e))?;
-    
+
     Ok(Json(stats))
 }
 
@@ -524,9 +578,9 @@ async fn list_multimodal_embeddings(
     Query(query): Query<MultimodalSearchQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     let limit = query.limit.unwrap_or(50) as i64;
-    
+
     let embeddings = if let Some(modality) = &query.modality {
         repo.get_embeddings_by_modality(modality, limit)
             .await
@@ -536,7 +590,7 @@ async fn list_multimodal_embeddings(
             .await
             .map_err(|e| format!("Failed to get embeddings: {}", e))?
     };
-    
+
     let results: Vec<serde_json::Value> = embeddings
         .into_iter()
         .map(|e| {
@@ -552,7 +606,7 @@ async fn list_multimodal_embeddings(
             })
         })
         .collect();
-    
+
     Ok(Json(results))
 }
 
@@ -562,19 +616,18 @@ async fn index_memory(
     Json(req): Json<IndexMemoryRequest>,
 ) -> Result<Json<IndexMemoryResponse>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     // Create indexing job
     let job_id = Ulid::new().to_string();
-    repo
-        .create_indexing_job(&job_id, &req.memory_id, &req.modality)
+    repo.create_indexing_job(&job_id, &req.memory_id, &req.modality)
         .await
         .map_err(|e| format!("Failed to create job: {}", e))?;
-    
+
     // NOTE: Image/audio processing requires external service (e.g., LLM with vision)
     // For now, create a placeholder embedding
     let embedding_id = Ulid::new().to_string();
     let placeholder_embedding: Vec<f32> = vec![0.0; 1536]; // Default embedding dim
-    
+
     let _ = repo
         .create_embedding(
             &embedding_id,
@@ -587,13 +640,12 @@ async fn index_memory(
             Some(&req.mime_type),
         )
         .await;
-    
+
     // Mark job as completed
-    repo
-        .update_job_status(&job_id, "completed", None)
+    repo.update_job_status(&job_id, "completed", None)
         .await
         .map_err(|e| format!("Failed to update job: {}", e))?;
-    
+
     Ok(Json(IndexMemoryResponse {
         job_id,
         status: "completed".to_string(),
@@ -606,19 +658,16 @@ async fn search_multimodal(
     Query(query): Query<MultimodalSearchQuery>,
 ) -> Result<Json<Vec<serde_json::Value>>, String> {
     let repo = MultimodalRepository::new(&state.pool);
-    
+
     let limit = query.limit.unwrap_or(10);
-    
+
     // NOTE: Full vector search requires embedding service (see embedder.rs)
     // For now, return recent embeddings filtered by modality
     let embeddings = repo
-        .get_embeddings_by_modality(
-            query.modality.as_deref().unwrap_or("text"),
-            limit as i64,
-        )
+        .get_embeddings_by_modality(query.modality.as_deref().unwrap_or("text"), limit as i64)
         .await
         .map_err(|e| format!("Failed to search: {}", e))?;
-    
+
     let results: Vec<serde_json::Value> = embeddings
         .into_iter()
         .map(|e| {
@@ -633,6 +682,6 @@ async fn search_multimodal(
             })
         })
         .collect();
-    
+
     Ok(Json(results))
 }

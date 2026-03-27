@@ -44,7 +44,7 @@ impl PreferencesRepository {
             INSERT INTO preferences (key, value, encrypted, updated_at)
             VALUES (?, ?, ?, datetime('now'))
             ON CONFLICT(key) DO UPDATE SET value = ?, encrypted = ?, updated_at = datetime('now')
-            "#
+            "#,
         )
         .bind(key)
         .bind(&final_value)
@@ -72,7 +72,8 @@ impl PreferencesRepository {
 
     pub fn decode(encoded: &str) -> String {
         use base64::{engine::general_purpose::STANDARD, Engine};
-        STANDARD.decode(encoded)
+        STANDARD
+            .decode(encoded)
             .map(|d| String::from_utf8(d).unwrap_or_else(|_| encoded.to_string()))
             .unwrap_or_else(|_| encoded.to_string())
     }

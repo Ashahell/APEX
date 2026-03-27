@@ -1,6 +1,6 @@
-use std::net::SocketAddr;
+use apex_router::computer_use_api;
 use axum::Router;
-use apex_router::computer_use_api; // ensure module is visible
+use std::net::SocketAddr; // ensure module is visible
 
 #[tokio::main]
 async fn main() {

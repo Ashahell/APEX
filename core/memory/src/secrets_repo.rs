@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite, FromRow};
 use serde::{Deserialize, Serialize};
+use sqlx::{FromRow, Pool, Sqlite};
 
 /// Secret reference for runtime resolution
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -9,7 +9,7 @@ pub struct SecretRef {
     pub secret_name: String,
     pub env_var: Option<String>,
     pub description: Option<String>,
-    pub targets: String,  // JSON array
+    pub targets: String, // JSON array
     pub category: String,
     pub created_at: String,
     pub updated_at: String,
@@ -54,37 +54,31 @@ impl SecretsRepository {
 
     /// Get all secret references
     pub async fn list_secrets(&self) -> Result<Vec<SecretRef>, sqlx::Error> {
-        sqlx::query_as::<_, SecretRef>(
-            "SELECT * FROM secret_refs ORDER BY category, secret_name"
-        )
-        .fetch_all(&self.pool)
-        .await
+        sqlx::query_as::<_, SecretRef>("SELECT * FROM secret_refs ORDER BY category, secret_name")
+            .fetch_all(&self.pool)
+            .await
     }
 
     /// Get secret reference by ID
     pub async fn get_secret(&self, id: &str) -> Result<SecretRef, sqlx::Error> {
-        sqlx::query_as::<_, SecretRef>(
-            "SELECT * FROM secret_refs WHERE id = ?"
-        )
-        .bind(id)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as::<_, SecretRef>("SELECT * FROM secret_refs WHERE id = ?")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// Get secret reference by ref_key
     pub async fn get_by_ref_key(&self, ref_key: &str) -> Result<SecretRef, sqlx::Error> {
-        sqlx::query_as::<_, SecretRef>(
-            "SELECT * FROM secret_refs WHERE ref_key = ?"
-        )
-        .bind(ref_key)
-        .fetch_one(&self.pool)
-        .await
+        sqlx::query_as::<_, SecretRef>("SELECT * FROM secret_refs WHERE ref_key = ?")
+            .bind(ref_key)
+            .fetch_one(&self.pool)
+            .await
     }
 
     /// Get secrets by category
     pub async fn get_by_category(&self, category: &str) -> Result<Vec<SecretRef>, sqlx::Error> {
         sqlx::query_as::<_, SecretRef>(
-            "SELECT * FROM secret_refs WHERE category = ? ORDER BY secret_name"
+            "SELECT * FROM secret_refs WHERE category = ? ORDER BY secret_name",
         )
         .bind(category)
         .fetch_all(&self.pool)
@@ -96,7 +90,7 @@ impl SecretsRepository {
         // Search in JSON targets array - SQLite doesn't have great JSON query support
         // so we do a simple LIKE search
         sqlx::query_as::<_, SecretRef>(
-            "SELECT * FROM secret_refs WHERE targets LIKE ? ORDER BY secret_name"
+            "SELECT * FROM secret_refs WHERE targets LIKE ? ORDER BY secret_name",
         )
         .bind(format!("%{}%", target))
         .fetch_all(&self.pool)
@@ -115,7 +109,7 @@ impl SecretsRepository {
             SET description = ?, updated_at = datetime('now')
             WHERE id = ?
             RETURNING *
-            "#
+            "#,
         )
         .bind(description)
         .bind(id)
@@ -137,12 +131,11 @@ impl SecretsRepository {
 
     /// List all categories
     pub async fn list_categories(&self) -> Result<Vec<String>, sqlx::Error> {
-        let rows: Vec<(String,)> = sqlx::query_as(
-            "SELECT DISTINCT category FROM secret_refs ORDER BY category"
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        
+        let rows: Vec<(String,)> =
+            sqlx::query_as("SELECT DISTINCT category FROM secret_refs ORDER BY category")
+                .fetch_all(&self.pool)
+                .await?;
+
         Ok(rows.into_iter().map(|(c,)| c).collect())
     }
 
@@ -165,7 +158,7 @@ impl SecretsRepository {
             (id, secret_name, rotated_by, status, error_message, old_value_hash, new_value_hash)
             VALUES (?, ?, ?, ?, ?, ?, ?)
             RETURNING *
-            "#
+            "#,
         )
         .bind(id)
         .bind(secret_name)
@@ -195,9 +188,12 @@ impl SecretsRepository {
     }
 
     /// Get recent rotations
-    pub async fn get_recent_rotations(&self, limit: i64) -> Result<Vec<SecretRotationLog>, sqlx::Error> {
+    pub async fn get_recent_rotations(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<SecretRotationLog>, sqlx::Error> {
         sqlx::query_as::<_, SecretRotationLog>(
-            "SELECT * FROM secret_rotation_log ORDER BY rotated_at DESC LIMIT ?"
+            "SELECT * FROM secret_rotation_log ORDER BY rotated_at DESC LIMIT ?",
         )
         .bind(limit)
         .fetch_all(&self.pool)
@@ -222,7 +218,7 @@ impl SecretsRepository {
             (id, secret_ref_id, access_type, accessed_by, success, error_message)
             VALUES (?, ?, ?, ?, ?, ?)
             RETURNING *
-            "#
+            "#,
         )
         .bind(id)
         .bind(secret_ref_id)
@@ -251,9 +247,12 @@ impl SecretsRepository {
     }
 
     /// Get recent accesses
-    pub async fn get_recent_accesses(&self, limit: i64) -> Result<Vec<SecretAccessLog>, sqlx::Error> {
+    pub async fn get_recent_accesses(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<SecretAccessLog>, sqlx::Error> {
         sqlx::query_as::<_, SecretAccessLog>(
-            "SELECT * FROM secret_access_log ORDER BY accessed_at DESC LIMIT ?"
+            "SELECT * FROM secret_access_log ORDER BY accessed_at DESC LIMIT ?",
         )
         .bind(limit)
         .fetch_all(&self.pool)
@@ -261,9 +260,12 @@ impl SecretsRepository {
     }
 
     /// Get failed accesses
-    pub async fn get_failed_accesses(&self, limit: i64) -> Result<Vec<SecretAccessLog>, sqlx::Error> {
+    pub async fn get_failed_accesses(
+        &self,
+        limit: i64,
+    ) -> Result<Vec<SecretAccessLog>, sqlx::Error> {
         sqlx::query_as::<_, SecretAccessLog>(
-            "SELECT * FROM secret_access_log WHERE success = 0 ORDER BY accessed_at DESC LIMIT ?"
+            "SELECT * FROM secret_access_log WHERE success = 0 ORDER BY accessed_at DESC LIMIT ?",
         )
         .bind(limit)
         .fetch_all(&self.pool)
@@ -360,7 +362,8 @@ mod tests {
 
     async fn create_tables(pool: &SqlitePool) {
         // Create secret_refs table
-        sqlx::query("CREATE TABLE IF NOT EXISTS secret_refs (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS secret_refs (
             id TEXT PRIMARY KEY,
             ref_key TEXT NOT NULL UNIQUE,
             secret_name TEXT NOT NULL,
@@ -370,10 +373,15 @@ mod tests {
             category TEXT DEFAULT 'generic',
             created_at TEXT NOT NULL DEFAULT (datetime('now')),
             updated_at TEXT NOT NULL DEFAULT (datetime('now'))
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
 
         // Create secret_rotation_log table
-        sqlx::query("CREATE TABLE IF NOT EXISTS secret_rotation_log (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS secret_rotation_log (
             id TEXT PRIMARY KEY,
             secret_name TEXT NOT NULL,
             rotated_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -382,10 +390,15 @@ mod tests {
             error_message TEXT,
             old_value_hash TEXT,
             new_value_hash TEXT
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
 
         // Create secret_access_log table
-        sqlx::query("CREATE TABLE IF NOT EXISTS secret_access_log (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS secret_access_log (
             id TEXT PRIMARY KEY,
             secret_ref_id TEXT NOT NULL,
             accessed_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -393,7 +406,11 @@ mod tests {
             accessed_by TEXT,
             success INTEGER DEFAULT 1,
             error_message TEXT
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
 
         // Insert predefined secrets
         sqlx::query("INSERT OR IGNORE INTO secret_refs (id, ref_key, secret_name, targets, category) VALUES (?, ?, ?, ?, ?)")
@@ -420,7 +437,7 @@ mod tests {
 
         let repo = SecretsRepository::new(&pool);
         let secrets = repo.list_secrets().await.unwrap();
-        
+
         assert!(secrets.len() >= 2);
         assert!(secrets.iter().any(|s| s.id == "openai_api_key"));
         assert!(secrets.iter().any(|s| s.id == "custom_1"));
@@ -433,7 +450,7 @@ mod tests {
 
         let repo = SecretsRepository::new(&pool);
         let secret = repo.get_secret("openai_api_key").await.unwrap();
-        
+
         assert_eq!(secret.ref_key, "OPENAI_API_KEY");
         assert_eq!(secret.secret_name, "OpenAI API Key");
     }
@@ -445,7 +462,7 @@ mod tests {
 
         let repo = SecretsRepository::new(&pool);
         let secrets = repo.get_by_category("api_key").await.unwrap();
-        
+
         assert!(!secrets.is_empty());
         assert!(secrets.iter().all(|s| s.category == "api_key"));
     }
@@ -456,8 +473,11 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        let updated = repo.update_description("custom_1", "My custom secret").await.unwrap();
-        
+        let updated = repo
+            .update_description("custom_1", "My custom secret")
+            .await
+            .unwrap();
+
         assert_eq!(updated.description, Some("My custom secret".to_string()));
     }
 
@@ -468,7 +488,7 @@ mod tests {
 
         let repo = SecretsRepository::new(&pool);
         let categories = repo.list_categories().await.unwrap();
-        
+
         assert!(categories.contains(&"api_key".to_string()));
         assert!(categories.contains(&"generic".to_string()));
     }
@@ -479,16 +499,19 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        let log = repo.log_rotation(
-            "rot-1",
-            "OPENAI_API_KEY",
-            Some("system"),
-            "success",
-            None,
-            Some("old_hash"),
-            Some("new_hash"),
-        ).await.unwrap();
-        
+        let log = repo
+            .log_rotation(
+                "rot-1",
+                "OPENAI_API_KEY",
+                Some("system"),
+                "success",
+                None,
+                Some("old_hash"),
+                Some("new_hash"),
+            )
+            .await
+            .unwrap();
+
         assert_eq!(log.secret_name, "OPENAI_API_KEY");
         assert_eq!(log.status, "success");
     }
@@ -499,15 +522,18 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        let log = repo.log_access(
-            "acc-1",
-            "openai_api_key",
-            "read",
-            Some("skill_worker"),
-            true,
-            None,
-        ).await.unwrap();
-        
+        let log = repo
+            .log_access(
+                "acc-1",
+                "openai_api_key",
+                "read",
+                Some("skill_worker"),
+                true,
+                None,
+            )
+            .await
+            .unwrap();
+
         assert_eq!(log.secret_ref_id, "openai_api_key");
         assert_eq!(log.access_type, "read");
         assert_eq!(log.success, 1);
@@ -519,7 +545,7 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        
+
         // Log a rotation
         repo.log_rotation(
             "rot-1",
@@ -529,9 +555,14 @@ mod tests {
             None,
             None,
             None,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let history = repo.get_rotation_history("OPENAI_API_KEY", None).await.unwrap();
+        let history = repo
+            .get_rotation_history("OPENAI_API_KEY", None)
+            .await
+            .unwrap();
         assert!(!history.is_empty());
     }
 
@@ -541,7 +572,7 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        
+
         // Log an access
         repo.log_access(
             "acc-1",
@@ -550,9 +581,14 @@ mod tests {
             Some("skill_worker"),
             true,
             None,
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        let history = repo.get_access_history("openai_api_key", None).await.unwrap();
+        let history = repo
+            .get_access_history("openai_api_key", None)
+            .await
+            .unwrap();
         assert!(!history.is_empty());
     }
 
@@ -567,7 +603,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_predefined_secret_ids() {
         let ids = get_predefined_secret_ids();
-        
+
         assert!(ids.contains(&"openai_api_key"));
         assert!(ids.contains(&"anthropic_api_key"));
         assert!(ids.contains(&"github_token"));
@@ -595,7 +631,7 @@ mod tests {
         create_tables(&pool).await;
 
         let repo = SecretsRepository::new(&pool);
-        
+
         // Log a failed access
         repo.log_access(
             "acc-fail",
@@ -604,7 +640,9 @@ mod tests {
             Some("skill_worker"),
             false,
             Some("Permission denied"),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
         let failed = repo.get_failed_accesses(10).await.unwrap();
         assert!(!failed.is_empty());

@@ -1,8 +1,8 @@
+use chrono::Utc;
+use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use reqwest::Client;
-use chrono::Utc;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Webhook {
@@ -57,7 +57,12 @@ impl WebhookManager {
     }
 
     pub async fn get_webhook(&self, id: &str) -> Option<Webhook> {
-        self.webhooks.read().await.iter().find(|w| w.id == id).cloned()
+        self.webhooks
+            .read()
+            .await
+            .iter()
+            .find(|w| w.id == id)
+            .cloned()
     }
 
     pub async fn create_webhook(&self, create: CreateWebhook) -> Webhook {
@@ -97,7 +102,10 @@ impl WebhookManager {
         let mut handles = Vec::new();
         let data = data.clone();
 
-        for webhook in webhooks.iter().filter(|w| w.enabled && w.events.contains(&event.to_string())) {
+        for webhook in webhooks
+            .iter()
+            .filter(|w| w.enabled && w.events.contains(&event.to_string()))
+        {
             let url = webhook.url.clone();
             let secret = webhook.secret.clone();
             let http_client = self.http_client.clone();
@@ -112,7 +120,7 @@ impl WebhookManager {
                 };
 
                 let mut request = http_client.post(&url).json(&payload);
-                
+
                 if let Some(secret) = secret {
                     request = request.header("X-Webhook-Secret", secret);
                 }

@@ -66,9 +66,14 @@ impl<'a> MessageRepository<'a> {
             .await
     }
 
-    pub async fn find_by_channel(&self, channel: &str, limit: i64, offset: i64) -> Result<Vec<Message>, sqlx::Error> {
+    pub async fn find_by_channel(
+        &self,
+        channel: &str,
+        limit: i64,
+        offset: i64,
+    ) -> Result<Vec<Message>, sqlx::Error> {
         sqlx::query_as::<_, Message>(
-            "SELECT * FROM messages WHERE channel = ? ORDER BY created_at DESC LIMIT ? OFFSET ?"
+            "SELECT * FROM messages WHERE channel = ? ORDER BY created_at DESC LIMIT ? OFFSET ?",
         )
         .bind(channel)
         .bind(limit)
@@ -79,7 +84,7 @@ impl<'a> MessageRepository<'a> {
 
     pub async fn find_by_task(&self, task_id: &str) -> Result<Vec<Message>, sqlx::Error> {
         sqlx::query_as::<_, Message>(
-            "SELECT * FROM messages WHERE task_id = ? ORDER BY created_at ASC"
+            "SELECT * FROM messages WHERE task_id = ? ORDER BY created_at ASC",
         )
         .bind(task_id)
         .fetch_all(self.pool)
@@ -87,11 +92,9 @@ impl<'a> MessageRepository<'a> {
     }
 
     pub async fn find_recent(&self, limit: i64) -> Result<Vec<Message>, sqlx::Error> {
-        sqlx::query_as::<_, Message>(
-            "SELECT * FROM messages ORDER BY created_at DESC LIMIT ?"
-        )
-        .bind(limit)
-        .fetch_all(self.pool)
-        .await
+        sqlx::query_as::<_, Message>("SELECT * FROM messages ORDER BY created_at DESC LIMIT ?")
+            .bind(limit)
+            .fetch_all(self.pool)
+            .await
     }
 }

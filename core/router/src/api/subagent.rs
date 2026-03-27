@@ -41,12 +41,11 @@ async fn decompose_task(
     Json(payload): Json<DecomposeRequest>,
 ) -> Result<Json<DecomposeResponse>, String> {
     let pool = state.subagent_pool.read().await;
-    
+
     // Get LLM config from environment or use defaults
-    let llm_url = std::env::var("LLAMA_SERVER_URL")
-        .unwrap_or_else(|_| "http://localhost:8080".to_string());
-    let model = std::env::var("LLAMA_MODEL")
-        .unwrap_or_else(|_| "qwen3-4b".to_string());
+    let llm_url =
+        std::env::var("LLAMA_SERVER_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+    let model = std::env::var("LLAMA_MODEL").unwrap_or_else(|_| "qwen3-4b".to_string());
 
     let subtasks = pool
         .split_task(&payload.goal, &payload.context, &llm_url, &model)
@@ -56,9 +55,7 @@ async fn decompose_task(
     Ok(Json(DecomposeResponse { subtasks }))
 }
 
-async fn list_tasks(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<SubTask>>, String> {
+async fn list_tasks(State(state): State<AppState>) -> Result<Json<Vec<SubTask>>, String> {
     let pool = state.subagent_pool.read().await;
     let tasks = pool.get_all_tasks().await;
     Ok(Json(tasks))
@@ -69,7 +66,7 @@ async fn get_task(
     Path(id): Path<String>,
 ) -> Result<Json<SubTask>, String> {
     let pool = state.subagent_pool.read().await;
-    
+
     pool.get_task(&id)
         .await
         .map(Json)
@@ -82,7 +79,7 @@ async fn update_task_status(
     Json(payload): Json<UpdateStatusRequest>,
 ) -> Result<Json<serde_json::Value>, String> {
     let pool = state.subagent_pool.read().await;
-    
+
     let success = pool
         .update_status(&id, payload.status, payload.result)
         .await;
@@ -94,21 +91,17 @@ async fn update_task_status(
     }
 }
 
-async fn get_ready_tasks(
-    State(state): State<AppState>,
-) -> Result<Json<Vec<SubTask>>, String> {
+async fn get_ready_tasks(State(state): State<AppState>) -> Result<Json<Vec<SubTask>>, String> {
     let pool = state.subagent_pool.read().await;
     let tasks = pool.get_ready_tasks().await;
     Ok(Json(tasks))
 }
 
-async fn check_complete(
-    State(state): State<AppState>,
-) -> Result<Json<serde_json::Value>, String> {
+async fn check_complete(State(state): State<AppState>) -> Result<Json<serde_json::Value>, String> {
     let pool = state.subagent_pool.read().await;
     let is_complete = pool.is_complete().await;
     let failed = pool.has_failed().await;
-    
+
     Ok(Json(serde_json::json!({
         "complete": is_complete,
         "failed": failed,

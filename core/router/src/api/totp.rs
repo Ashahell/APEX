@@ -1,10 +1,10 @@
 use axum::{
     extract::State,
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
     routing::{get, post},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -41,17 +41,23 @@ pub struct TotpStatusResponse {
     pub configured: bool,
 }
 
-async fn setup_totp(State(state): State<AppState>) -> Result<(StatusCode, AxumJson<TotpSetupResponse>), (StatusCode, String)> {
+async fn setup_totp(
+    State(state): State<AppState>,
+) -> Result<(StatusCode, AxumJson<TotpSetupResponse>), (StatusCode, String)> {
     let user_id = "default_user";
-    
+
     match state.totp_manager.generate_secret(user_id).await {
         Ok(secret) => {
             let otpauth_uri = TotpManager::generate_otpauth_uri(&secret, user_id, "APEX");
-            Ok((StatusCode::OK, AxumJson(TotpSetupResponse {
-                secret,
-                otpauth_uri,
-                message: "TOTP secret generated. Scan the QR code with your authenticator app.".to_string(),
-            })))
+            Ok((
+                StatusCode::OK,
+                AxumJson(TotpSetupResponse {
+                    secret,
+                    otpauth_uri,
+                    message: "TOTP secret generated. Scan the QR code with your authenticator app."
+                        .to_string(),
+                }),
+            ))
         }
         Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e))),
     }
@@ -62,11 +68,15 @@ async fn verify_totp(
     Json(payload): Json<TotpVerifyRequest>,
 ) -> Result<AxumJson<TotpVerifyResponse>, (StatusCode, String)> {
     let user_id = "default_user";
-    
+
     match state.totp_manager.verify(user_id, &payload.token).await {
         Ok(valid) => Ok(AxumJson(TotpVerifyResponse {
             valid,
-            message: if valid { "Token verified successfully".to_string() } else { "Invalid token".to_string() },
+            message: if valid {
+                "Token verified successfully".to_string()
+            } else {
+                "Invalid token".to_string()
+            },
         })),
         Err(e) => Ok(AxumJson(TotpVerifyResponse {
             valid: false,
@@ -75,7 +85,9 @@ async fn verify_totp(
     }
 }
 
-async fn get_totp_status(State(state): State<AppState>) -> Result<AxumJson<TotpStatusResponse>, (StatusCode, String)> {
+async fn get_totp_status(
+    State(state): State<AppState>,
+) -> Result<AxumJson<TotpStatusResponse>, (StatusCode, String)> {
     let user_id = "default_user";
     let configured = state.totp_manager.has_secret(user_id).await;
     Ok(AxumJson(TotpStatusResponse { configured }))

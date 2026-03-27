@@ -5,8 +5,8 @@
 //! Feature 3: Context Scope Isolation
 
 use axum::{
-    extract::{State, Query},
-    routing::{get, put, delete, post},
+    extract::{Query, State},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -85,10 +85,10 @@ async fn set_scope_entry(
     Json(req): Json<SetScopeRequest>,
 ) -> Json<ScopeEntry> {
     let mut scope_state = state.context_scope_state.lock().unwrap();
-    
+
     let now = chrono::Utc::now().timestamp();
     let scope_key = format!("{}:{}", req.scope, req.key);
-    
+
     let entry = ScopeEntry {
         key: req.key.clone(),
         value: req.value,
@@ -96,9 +96,9 @@ async fn set_scope_entry(
         created_at: now,
         updated_at: now,
     };
-    
+
     scope_state.entries.insert(scope_key, entry.clone());
-    
+
     Json(entry)
 }
 
@@ -108,16 +108,15 @@ async fn get_scope_entry(
     Query(params): Query<serde_json::Value>,
 ) -> Json<Option<ScopeEntry>> {
     let scope_state = state.context_scope_state.lock().unwrap();
-    
-    let scope = params.get("scope")
+
+    let scope = params
+        .get("scope")
         .and_then(|v| v.as_str())
         .unwrap_or("global");
-    let key = params.get("key")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    
+    let key = params.get("key").and_then(|v| v.as_str()).unwrap_or("");
+
     let scope_key = format!("{}:{}", scope, key);
-    
+
     Json(scope_state.entries.get(&scope_key).cloned())
 }
 
@@ -127,9 +126,9 @@ async fn delete_scope_entry(
     Json(req): Json<DeleteScopeRequest>,
 ) -> Json<bool> {
     let mut scope_state = state.context_scope_state.lock().unwrap();
-    
+
     let scope_key = format!("{}:{}", req.scope, req.key);
-    
+
     Json(scope_state.entries.remove(&scope_key).is_some())
 }
 
@@ -139,17 +138,20 @@ async fn list_scope_entries(
     Query(params): Query<serde_json::Value>,
 ) -> Json<ScopeListResponse> {
     let scope_state = state.context_scope_state.lock().unwrap();
-    
-    let scope_prefix = params.get("scope")
+
+    let scope_prefix = params
+        .get("scope")
         .and_then(|v| v.as_str())
         .unwrap_or("global")
         .to_string();
-    
-    let entries: Vec<ScopeEntry> = scope_state.entries.values()
+
+    let entries: Vec<ScopeEntry> = scope_state
+        .entries
+        .values()
         .filter(|e| e.scope == scope_prefix)
         .cloned()
         .collect();
-    
+
     Json(ScopeListResponse {
         entries: entries.clone(),
         scope: scope_prefix,
@@ -160,17 +162,23 @@ async fn list_scope_entries(
 /// Get scope statistics
 async fn get_scope_stats(State(state): State<AppState>) -> Json<ScopeStatsResponse> {
     let scope_state = state.context_scope_state.lock().unwrap();
-    
-    let global_count = scope_state.entries.values()
+
+    let global_count = scope_state
+        .entries
+        .values()
         .filter(|e| e.scope == "global")
         .count();
-    let session_count = scope_state.entries.values()
+    let session_count = scope_state
+        .entries
+        .values()
         .filter(|e| e.scope.starts_with("session:"))
         .count();
-    let channel_count = scope_state.entries.values()
+    let channel_count = scope_state
+        .entries
+        .values()
         .filter(|e| e.scope.starts_with("channel:"))
         .count();
-    
+
     Json(ScopeStatsResponse {
         global_count,
         session_count,
@@ -180,14 +188,10 @@ async fn get_scope_stats(State(state): State<AppState>) -> Json<ScopeStatsRespon
 }
 
 /// Get current active scope (from request context)
-async fn get_current_scope(
-    Query(params): Query<serde_json::Value>,
-) -> Json<serde_json::Value> {
-    let session_id = params.get("session_id")
-        .and_then(|v| v.as_str());
-    let channel_id = params.get("channel_id")
-        .and_then(|v| v.as_str());
-    
+async fn get_current_scope(Query(params): Query<serde_json::Value>) -> Json<serde_json::Value> {
+    let session_id = params.get("session_id").and_then(|v| v.as_str());
+    let channel_id = params.get("channel_id").and_then(|v| v.as_str());
+
     let scope = if let Some(ch) = channel_id {
         format!("channel:{}", ch)
     } else if let Some(sess) = session_id {
@@ -195,7 +199,7 @@ async fn get_current_scope(
     } else {
         "global".to_string()
     };
-    
+
     Json(serde_json::json!({
         "scope": scope,
         "scope_type": if scope.starts_with("channel:") {
@@ -214,12 +218,12 @@ async fn clear_scope_entries(
     Json(scope): Json<String>,
 ) -> Json<bool> {
     let mut scope_state = state.context_scope_state.lock().unwrap();
-    
+
     let initial_count = scope_state.entries.len();
     scope_state.entries.retain(|_, v| v.scope != scope);
-    
+
     let cleared = scope_state.entries.len() < initial_count;
-    
+
     Json(cleared)
 }
 

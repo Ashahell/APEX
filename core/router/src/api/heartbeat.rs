@@ -1,10 +1,10 @@
 use axum::{
     extract::State,
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
     routing::{get, post},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -12,7 +12,10 @@ use crate::api::AppState;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/heartbeat/config", get(get_heartbeat_config).post(update_heartbeat_config))
+        .route(
+            "/api/v1/heartbeat/config",
+            get(get_heartbeat_config).post(update_heartbeat_config),
+        )
         .route("/api/v1/heartbeat/stats", get(get_heartbeat_stats))
         .route("/api/v1/heartbeat/trigger", post(trigger_heartbeat))
         .route("/api/v1/heartbeat/toggle", post(toggle_heartbeat))
@@ -49,7 +52,9 @@ pub struct HeartbeatConfigUpdate {
     pub max_actions_per_wake: Option<u32>,
 }
 
-async fn get_heartbeat_config(State(state): State<AppState>) -> Result<AxumJson<HeartbeatConfigResponse>, (StatusCode, String)> {
+async fn get_heartbeat_config(
+    State(state): State<AppState>,
+) -> Result<AxumJson<HeartbeatConfigResponse>, (StatusCode, String)> {
     let config = state.config.heartbeat.clone();
     Ok(AxumJson(HeartbeatConfigResponse {
         enabled: config.enabled,
@@ -65,7 +70,7 @@ async fn update_heartbeat_config(
     Json(payload): Json<HeartbeatConfigUpdate>,
 ) -> Result<AxumJson<HeartbeatConfigResponse>, (StatusCode, String)> {
     let mut config = state.config.heartbeat.clone();
-    
+
     if let Some(interval) = payload.interval_minutes {
         config.interval_minutes = interval;
     }
@@ -78,9 +83,9 @@ async fn update_heartbeat_config(
     if let Some(max_actions) = payload.max_actions_per_wake {
         config.max_actions_per_wake = max_actions;
     }
-    
+
     state.config.heartbeat = config.clone();
-    
+
     Ok(AxumJson(HeartbeatConfigResponse {
         enabled: config.enabled,
         interval_minutes: config.interval_minutes,
@@ -90,11 +95,13 @@ async fn update_heartbeat_config(
     }))
 }
 
-async fn get_heartbeat_stats(State(state): State<AppState>) -> Result<AxumJson<HeartbeatStatsResponse>, (StatusCode, String)> {
+async fn get_heartbeat_stats(
+    State(state): State<AppState>,
+) -> Result<AxumJson<HeartbeatStatsResponse>, (StatusCode, String)> {
     let is_running = state.heartbeat_scheduler.is_running().await;
     let wake_count = state.heartbeat_scheduler.get_wake_count().await;
     let last_wake = state.heartbeat_scheduler.get_last_wake().await;
-    
+
     Ok(AxumJson(HeartbeatStatsResponse {
         is_running,
         wake_count,
@@ -103,13 +110,15 @@ async fn get_heartbeat_stats(State(state): State<AppState>) -> Result<AxumJson<H
     }))
 }
 
-async fn trigger_heartbeat(State(state): State<AppState>) -> Result<AxumJson<HeartbeatStatsResponse>, (StatusCode, String)> {
+async fn trigger_heartbeat(
+    State(state): State<AppState>,
+) -> Result<AxumJson<HeartbeatStatsResponse>, (StatusCode, String)> {
     state.heartbeat_scheduler.force_wake().await;
-    
+
     let is_running = state.heartbeat_scheduler.is_running().await;
     let wake_count = state.heartbeat_scheduler.get_wake_count().await;
     let last_wake = state.heartbeat_scheduler.get_last_wake().await;
-    
+
     Ok(AxumJson(HeartbeatStatsResponse {
         is_running,
         wake_count,
@@ -118,9 +127,11 @@ async fn trigger_heartbeat(State(state): State<AppState>) -> Result<AxumJson<Hea
     }))
 }
 
-async fn toggle_heartbeat(State(state): State<AppState>) -> Result<AxumJson<HeartbeatToggleResponse>, (StatusCode, String)> {
+async fn toggle_heartbeat(
+    State(state): State<AppState>,
+) -> Result<AxumJson<HeartbeatToggleResponse>, (StatusCode, String)> {
     let currently_running = state.heartbeat_scheduler.is_running().await;
-    
+
     if currently_running {
         state.heartbeat_scheduler.stop().await;
         Ok(AxumJson(HeartbeatToggleResponse {

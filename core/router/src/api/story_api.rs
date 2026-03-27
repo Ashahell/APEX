@@ -5,15 +5,15 @@
 //! Feature 7: Story Engine
 
 use axum::{
-    extract::{State, Path, Query},
-    routing::{get, post, delete, put},
+    extract::{Path, Query, State},
+    routing::{delete, get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 
 use crate::api::AppState;
 use crate::story_engine::{
-    DiceRoller, DiceRoll, Story, StoryCharacter, StoryChoice, StoryEngine, StorySetting,
+    DiceRoll, DiceRoller, Story, StoryCharacter, StoryChoice, StoryEngine, StorySetting,
 };
 
 /// Create story request
@@ -109,18 +109,22 @@ pub fn create_story_router() -> Router<AppState> {
         .route("/stories/:id/advance", post(advance_story))
         .route("/stories/:id/choices", get(get_choices))
         .route("/stories/:id/location", put(update_location))
-        .route("/stories/:id/inventory", get(get_inventory).post(add_inventory))
+        .route(
+            "/stories/:id/inventory",
+            get(get_inventory).post(add_inventory),
+        )
         .route("/dice/validate", get(validate_dice))
 }
 
 /// List all stories
 async fn list_stories(State(state): State<AppState>) -> Json<StoryListResponse> {
     let engine = state.story_engine.lock().unwrap();
-    let stories: Vec<StoryResponse> = engine.list_stories()
+    let stories: Vec<StoryResponse> = engine
+        .list_stories()
         .iter()
         .map(|s| StoryResponse::from(*s))
         .collect();
-    
+
     Json(StoryListResponse {
         count: stories.len(),
         stories,
@@ -132,11 +136,10 @@ async fn create_story(
     State(state): State<AppState>,
     Json(req): Json<CreateStoryRequest>,
 ) -> Json<StoryResponse> {
-    let setting = StorySetting::from_str(&req.setting)
-        .unwrap_or(StorySetting::Fantasy);
-    
+    let setting = StorySetting::from_str(&req.setting).unwrap_or(StorySetting::Fantasy);
+
     let mut engine = state.story_engine.lock().unwrap();
-    
+
     // Check if we can create more stories
     if !engine.can_create() {
         return Json(StoryResponse {
@@ -152,7 +155,7 @@ async fn create_story(
             updated_at: 0,
         });
     }
-    
+
     let story = engine.start_story(req.title, setting, req.characters);
     Json(StoryResponse::from(story))
 }
@@ -184,7 +187,7 @@ async fn make_choice(
     Json(req): Json<MakeChoiceRequest>,
 ) -> Json<serde_json::Value> {
     let mut engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story_mut(&id) {
         let choice = story.make_choice(&req.choice_id);
         Json(serde_json::json!({
@@ -206,13 +209,12 @@ async fn roll_dice(
     Path(id): Path<String>,
     Json(req): Json<RollDiceRequest>,
 ) -> Json<DiceRollResponse> {
-    let result = DiceRoller::roll(&req.dice)
-        .unwrap_or(DiceRoll {
-            dice: req.dice.clone(),
-            result: 0,
-            description: "Error rolling dice".to_string(),
-        });
-    
+    let result = DiceRoller::roll(&req.dice).unwrap_or(DiceRoll {
+        dice: req.dice.clone(),
+        result: 0,
+        description: "Error rolling dice".to_string(),
+    });
+
     Json(DiceRollResponse {
         dice: result.dice,
         result: result.result,
@@ -227,7 +229,7 @@ async fn advance_story(
     Json(req): Json<AdvanceStoryRequest>,
 ) -> Json<serde_json::Value> {
     let mut engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story_mut(&id) {
         // Check turn limit
         if story.is_at_limit() {
@@ -236,10 +238,10 @@ async fn advance_story(
                 "error": "Story has reached maximum turns",
             }));
         }
-        
+
         let rolls = vec![];
         story.advance(req.narrative, req.choices, rolls);
-        
+
         Json(serde_json::json!({
             "success": true,
             "turn_count": story.turn_count,
@@ -259,7 +261,7 @@ async fn get_choices(
     Path(id): Path<String>,
 ) -> Json<Vec<StoryChoice>> {
     let engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story(&id) {
         Json(story.state.available_choices.clone())
     } else {
@@ -274,7 +276,7 @@ async fn update_location(
     Json(location): Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
     let mut engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story_mut(&id) {
         if let Some(loc) = location.as_str() {
             story.set_location(loc.to_string());
@@ -297,12 +299,9 @@ async fn update_location(
 }
 
 /// Get inventory
-async fn get_inventory(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
-) -> Json<Vec<String>> {
+async fn get_inventory(State(state): State<AppState>, Path(id): Path<String>) -> Json<Vec<String>> {
     let engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story(&id) {
         Json(story.state.inventory.clone())
     } else {
@@ -317,7 +316,7 @@ async fn add_inventory(
     Json(item): Json<serde_json::Value>,
 ) -> Json<serde_json::Value> {
     let mut engine = state.story_engine.lock().unwrap();
-    
+
     if let Some(story) = engine.get_story_mut(&id) {
         if let Some(item_str) = item.as_str() {
             story.state.add_item(item_str.to_string());
@@ -341,12 +340,10 @@ async fn add_inventory(
 
 /// Validate dice notation
 async fn validate_dice(Query(params): Query<serde_json::Value>) -> Json<serde_json::Value> {
-    let dice = params.get("dice")
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    
+    let dice = params.get("dice").and_then(|v| v.as_str()).unwrap_or("");
+
     let result = DiceRoller::roll(dice);
-    
+
     Json(serde_json::json!({
         "valid": result.is_ok(),
         "dice": dice,

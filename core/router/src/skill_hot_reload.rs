@@ -1,8 +1,8 @@
-use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher, Event};
+use notify::{Config, Event, RecommendedWatcher, RecursiveMode, Watcher};
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct SkillHotReload {
@@ -25,11 +25,11 @@ impl SkillHotReload {
         F: Fn(String) + Send + Sync + 'static,
     {
         let skills_dir = self.skills_dir.clone();
-        
+
         *self.reload_callback.write().await = Some(Box::new(callback));
 
         let callback = self.reload_callback.clone();
-        
+
         let mut watcher = RecommendedWatcher::new(
             move |result: Result<Event, notify::Error>| {
                 if let Ok(event) = result {
@@ -49,13 +49,15 @@ impl SkillHotReload {
                 }
             },
             Config::default(),
-        ).map_err(|e| format!("Failed to create watcher: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to create watcher: {}", e))?;
 
-        watcher.watch(&skills_dir, RecursiveMode::Recursive)
+        watcher
+            .watch(&skills_dir, RecursiveMode::Recursive)
             .map_err(|e| format!("Failed to watch directory: {}", e))?;
 
         *self.watcher.write().await = Some(watcher);
-        
+
         tracing::info!(path = %skills_dir.display(), "Skill hot-reload started");
         Ok(())
     }

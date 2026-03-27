@@ -39,7 +39,13 @@ impl SubAgentPool {
         self.max_parallel
     }
 
-    pub async fn split_task(&self, goal: &str, context: &str, llm_url: &str, model: &str) -> Result<Vec<SubTask>, String> {
+    pub async fn split_task(
+        &self,
+        goal: &str,
+        context: &str,
+        llm_url: &str,
+        model: &str,
+    ) -> Result<Vec<SubTask>, String> {
         use reqwest::Client;
 
         let prompt = format!(
@@ -124,7 +130,12 @@ Only respond with valid JSON array, no explanation."#,
         tasks.clone()
     }
 
-    pub async fn update_status(&self, id: &str, status: SubTaskStatus, result: Option<String>) -> bool {
+    pub async fn update_status(
+        &self,
+        id: &str,
+        status: SubTaskStatus,
+        result: Option<String>,
+    ) -> bool {
         let mut tasks = self.tasks.write().await;
         if let Some(task) = tasks.iter_mut().find(|t| t.id == id) {
             task.status = status;
@@ -136,7 +147,7 @@ Only respond with valid JSON array, no explanation."#,
 
     pub async fn get_ready_tasks(&self) -> Vec<SubTask> {
         let tasks = self.tasks.read().await;
-        
+
         tasks
             .iter()
             .filter(|t| {
@@ -172,13 +183,27 @@ Only respond with valid JSON array, no explanation."#,
 
     pub async fn summary(&self) -> String {
         let tasks = self.tasks.read().await;
-        let pending = tasks.iter().filter(|t| t.status == SubTaskStatus::Pending).count();
-        let running = tasks.iter().filter(|t| t.status == SubTaskStatus::Running).count();
-        let completed = tasks.iter().filter(|t| t.status == SubTaskStatus::Completed).count();
-        let failed = tasks.iter().filter(|t| t.status == SubTaskStatus::Failed).count();
-        
-        format!("Subtasks: {} pending, {} running, {} completed, {} failed", 
-            pending, running, completed, failed)
+        let pending = tasks
+            .iter()
+            .filter(|t| t.status == SubTaskStatus::Pending)
+            .count();
+        let running = tasks
+            .iter()
+            .filter(|t| t.status == SubTaskStatus::Running)
+            .count();
+        let completed = tasks
+            .iter()
+            .filter(|t| t.status == SubTaskStatus::Completed)
+            .count();
+        let failed = tasks
+            .iter()
+            .filter(|t| t.status == SubTaskStatus::Failed)
+            .count();
+
+        format!(
+            "Subtasks: {} pending, {} running, {} completed, {} failed",
+            pending, running, completed, failed
+        )
     }
 }
 
@@ -199,13 +224,14 @@ pub fn should_split_task(goal: &str, current_step: u32) -> bool {
         " several ",
         " different ",
     ];
-    
-    let has_parallel_indicators = complexity_indicators.iter()
+
+    let has_parallel_indicators = complexity_indicators
+        .iter()
         .any(|ind| goal.to_lowercase().contains(ind));
-    
+
     let is_long_task = goal_len > 200;
     let is_early_step = current_step < 3;
-    
+
     (has_parallel_indicators || is_long_task) && is_early_step
 }
 
@@ -217,7 +243,10 @@ mod tests {
     fn test_should_split_task() {
         assert!(!should_split_task("Simple task", 1));
         assert!(should_split_task("Do this and then do that", 1));
-        assert!(should_split_task("Create a web app with user authentication and database and API endpoints", 1));
+        assert!(should_split_task(
+            "Create a web app with user authentication and database and API endpoints",
+            1
+        ));
     }
 
     #[tokio::test]
@@ -229,24 +258,25 @@ mod tests {
     #[tokio::test]
     async fn test_subagent_pool_update_status() {
         let pool = SubAgentPool::new(3);
-        
-        let tasks = vec![
-            SubTask {
-                id: "task1".to_string(),
-                description: "First task".to_string(),
-                status: SubTaskStatus::Pending,
-                result: None,
-                dependencies: vec![],
-            },
-        ];
-        
+
+        let tasks = vec![SubTask {
+            id: "task1".to_string(),
+            description: "First task".to_string(),
+            status: SubTaskStatus::Pending,
+            result: None,
+            dependencies: vec![],
+        }];
+
         {
             let mut pool_tasks = pool.tasks.write().await;
             *pool_tasks = tasks;
         }
-        
-        assert!(pool.update_status("task1", SubTaskStatus::Running, None).await);
-        
+
+        assert!(
+            pool.update_status("task1", SubTaskStatus::Running, None)
+                .await
+        );
+
         let task = pool.get_task("task1").await;
         assert!(task.is_some());
         assert_eq!(task.unwrap().status, SubTaskStatus::Running);
@@ -255,7 +285,7 @@ mod tests {
     #[tokio::test]
     async fn test_subagent_pool_ready_tasks() {
         let pool = SubAgentPool::new(3);
-        
+
         let tasks = vec![
             SubTask {
                 id: "task1".to_string(),
@@ -272,12 +302,12 @@ mod tests {
                 dependencies: vec!["task1".to_string()],
             },
         ];
-        
+
         {
             let mut pool_tasks = pool.tasks.write().await;
             *pool_tasks = tasks;
         }
-        
+
         let ready = pool.get_ready_tasks().await;
         assert_eq!(ready.len(), 1);
         assert_eq!(ready[0].id, "task2");

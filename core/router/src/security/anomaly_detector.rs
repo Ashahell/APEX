@@ -9,8 +9,8 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 
 /// Types of anomalies that can be detected
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -210,7 +210,7 @@ impl AnomalyDetector {
     }
 
     /// Record a skill execution for analysis
-    /// 
+    ///
     /// # Arguments
     /// * `skill_name` - Name of the skill executed
     /// * `task_id` - Task ID for tracking
@@ -262,19 +262,21 @@ impl AnomalyDetector {
         // Update skill-specific stats
         let anomaly = {
             let mut stats_map = self.skill_stats.write().await;
-            let stats = stats_map.entry(skill_name.to_string()).or_insert_with(|| SkillStats {
-                skill_name: skill_name.to_string(),
-                total_executions: 0,
-                total_errors: 0,
-                total_duration_ms: 0,
-                avg_duration_ms: 0.0,
-                max_duration_ms: 0,
-                min_duration_ms: u64::MAX,
-                last_execution: None,
-                recent_durations: VecDeque::with_capacity(self.config.stats_window_size),
-                recent_errors: 0,
-                recent_input_sizes: VecDeque::with_capacity(self.config.stats_window_size),
-            });
+            let stats = stats_map
+                .entry(skill_name.to_string())
+                .or_insert_with(|| SkillStats {
+                    skill_name: skill_name.to_string(),
+                    total_executions: 0,
+                    total_errors: 0,
+                    total_duration_ms: 0,
+                    avg_duration_ms: 0.0,
+                    max_duration_ms: 0,
+                    min_duration_ms: u64::MAX,
+                    last_execution: None,
+                    recent_durations: VecDeque::with_capacity(self.config.stats_window_size),
+                    recent_errors: 0,
+                    recent_input_sizes: VecDeque::with_capacity(self.config.stats_window_size),
+                });
 
             // Update stats
             stats.total_executions += 1;
@@ -302,20 +304,21 @@ impl AnomalyDetector {
 
             // Run anomaly detection (last expression in block returns the value)
             self.detect_anomalies(
-                stats, 
-                task_id, 
+                stats,
+                task_id,
                 input_size,
                 files_created_val,
                 &tool_calls_val,
                 had_side_effects_val,
-            ).await
+            )
+            .await
         };
 
         // Store anomaly if detected
         if let Some(ref a) = anomaly {
             let mut anomalies = self.anomalies.write().await;
             anomalies.push(a.clone());
-            
+
             // Keep only last 1000 anomalies
             if anomalies.len() > 1000 {
                 anomalies.remove(0);
@@ -343,7 +346,10 @@ impl AnomalyDetector {
         // Check 1: High frequency execution
         let recent_count = {
             let recent = self.recent_executions.read().await;
-            recent.iter().filter(|r| r.skill_name == stats.skill_name).count() as u32
+            recent
+                .iter()
+                .filter(|r| r.skill_name == stats.skill_name)
+                .count() as u32
         };
 
         if recent_count > self.config.max_executions_per_minute {
@@ -352,29 +358,41 @@ impl AnomalyDetector {
                 AnomalySeverity::High,
                 Some(&stats.skill_name),
                 Some(task_id),
-                format!("Skill {} executed {} times in last minute (limit: {})", 
-                    stats.skill_name, recent_count, self.config.max_executions_per_minute),
+                format!(
+                    "Skill {} executed {} times in last minute (limit: {})",
+                    stats.skill_name, recent_count, self.config.max_executions_per_minute
+                ),
             ));
         }
 
         // Check 2: Unusual duration (statistical outlier)
         if stats.recent_durations.len() >= 10 {
-            let mean = stats.recent_durations.iter().sum::<u64>() as f64 / stats.recent_durations.len() as f64;
-            let variance = stats.recent_durations.iter()
+            let mean = stats.recent_durations.iter().sum::<u64>() as f64
+                / stats.recent_durations.len() as f64;
+            let variance = stats
+                .recent_durations
+                .iter()
                 .map(|&d| (d as f64 - mean).powi(2))
-                .sum::<f64>() / stats.recent_durations.len() as f64;
+                .sum::<f64>()
+                / stats.recent_durations.len() as f64;
             let std_dev = variance.sqrt();
 
             if let Some(&last_duration) = stats.recent_durations.back() {
-                if (last_duration as f64) > mean + (std_dev * self.config.duration_std_dev_multiplier) {
+                if (last_duration as f64)
+                    > mean + (std_dev * self.config.duration_std_dev_multiplier)
+                {
                     return Some(self.create_anomaly(
                         AnomalyType::UnusualDuration,
                         AnomalySeverity::Medium,
                         Some(&stats.skill_name),
                         Some(task_id),
-                        format!("Skill {} duration {}ms is {}σ above average ({:.0}ms)",
-                            stats.skill_name, last_duration,
-                            (last_duration as f64 - mean) / std_dev, mean),
+                        format!(
+                            "Skill {} duration {}ms is {}σ above average ({:.0}ms)",
+                            stats.skill_name,
+                            last_duration,
+                            (last_duration as f64 - mean) / std_dev,
+                            mean
+                        ),
                     ));
                 }
             }
@@ -387,8 +405,10 @@ impl AnomalyDetector {
                 AnomalySeverity::Medium,
                 Some(&stats.skill_name),
                 Some(task_id),
-                format!("Input size {} bytes exceeds limit {} bytes", 
-                    input_size, self.config.max_input_size_bytes),
+                format!(
+                    "Input size {} bytes exceeds limit {} bytes",
+                    input_size, self.config.max_input_size_bytes
+                ),
             ));
         }
 
@@ -396,15 +416,17 @@ impl AnomalyDetector {
         if stats.recent_errors >= self.config.sequential_failure_threshold as u64 {
             let recent_total = stats.recent_durations.len() as u64;
             let error_rate = (stats.recent_errors as f64 / recent_total as f64) * 100.0;
-            
+
             if error_rate > 50.0 {
                 return Some(self.create_anomaly(
                     AnomalyType::SequentialFailures,
                     AnomalySeverity::Critical,
                     Some(&stats.skill_name),
                     Some(task_id),
-                    format!("Skill {} has {} consecutive failures ({:.1}% error rate)",
-                        stats.skill_name, stats.recent_errors, error_rate),
+                    format!(
+                        "Skill {} has {} consecutive failures ({:.1}% error rate)",
+                        stats.skill_name, stats.recent_errors, error_rate
+                    ),
                 ));
             }
         }
@@ -418,19 +440,22 @@ impl AnomalyDetector {
                 AnomalySeverity::Critical,
                 Some(&stats.skill_name),
                 Some(task_id),
-                format!("Skill {} created {} files in single execution (threshold: {})",
-                    stats.skill_name, files_created, self.config.file_burst_threshold),
+                format!(
+                    "Skill {} created {} files in single execution (threshold: {})",
+                    stats.skill_name, files_created, self.config.file_burst_threshold
+                ),
             ));
         }
 
         // Check 6: Tool Call Loop - same tool called repeatedly
         if !tool_calls.is_empty() {
             // Find most frequent tool call
-            let mut tool_counts: std::collections::HashMap<&String, u32> = std::collections::HashMap::new();
+            let mut tool_counts: std::collections::HashMap<&String, u32> =
+                std::collections::HashMap::new();
             for tool in tool_calls {
                 *tool_counts.entry(tool).or_insert(0) += 1;
             }
-            
+
             if let Some((_, &count)) = tool_counts.iter().max_by_key(|(_, c)| *c) {
                 if count >= self.config.tool_loop_threshold {
                     return Some(self.create_anomaly(
@@ -438,10 +463,12 @@ impl AnomalyDetector {
                         AnomalySeverity::High,
                         Some(&stats.skill_name),
                         Some(task_id),
-                        format!("Skill {} called tool {} {} times (possible loop)",
-                            stats.skill_name, 
+                        format!(
+                            "Skill {} called tool {} {} times (possible loop)",
+                            stats.skill_name,
                             tool_counts.iter().max_by_key(|(_, c)| *c).unwrap().0,
-                            count),
+                            count
+                        ),
                     ));
                 }
             }
@@ -451,25 +478,29 @@ impl AnomalyDetector {
         // Only check if we have enough history to compare
         if !had_side_effects && stats.total_executions >= 5 {
             let recent = self.recent_executions.read().await;
-            let skill_recent: Vec<_> = recent.iter()
+            let skill_recent: Vec<_> = recent
+                .iter()
                 .filter(|r| r.skill_name == stats.skill_name)
                 .collect();
-            
+
             if skill_recent.len() >= 5 {
-                let no_effect_count = skill_recent.iter()
+                let no_effect_count = skill_recent
+                    .iter()
                     .rev()
                     .take(self.config.no_side_effects_threshold as usize)
                     .filter(|r| !r.had_side_effects)
                     .count();
-                
+
                 if no_effect_count >= self.config.no_side_effects_threshold as usize {
                     return Some(self.create_anomaly(
                         AnomalyType::NoSideEffects,
                         AnomalySeverity::Medium,
                         Some(&stats.skill_name),
                         Some(task_id),
-                        format!("Skill {} had no side effects in {} consecutive executions",
-                            stats.skill_name, no_effect_count),
+                        format!(
+                            "Skill {} had no side effects in {} consecutive executions",
+                            stats.skill_name, no_effect_count
+                        ),
                     ));
                 }
             }
@@ -477,25 +508,35 @@ impl AnomalyDetector {
 
         // Check 8: Error Cascade - errors increasing over time
         let recent = self.recent_executions.read().await;
-        let skill_recent: Vec<_> = recent.iter()
+        let skill_recent: Vec<_> = recent
+            .iter()
             .filter(|r| r.skill_name == stats.skill_name)
             .collect();
-        
+
         if skill_recent.len() >= 3 {
             let mut error_sequence = Vec::new();
-            for record in skill_recent.iter().rev().take(self.config.error_cascade_threshold as usize) {
+            for record in skill_recent
+                .iter()
+                .rev()
+                .take(self.config.error_cascade_threshold as usize)
+            {
                 error_sequence.push(!record.success);
             }
-            
+
             // Check if all recent executions failed
-            if error_sequence.iter().all(|&e| e) && error_sequence.len() >= self.config.error_cascade_threshold as usize {
+            if error_sequence.iter().all(|&e| e)
+                && error_sequence.len() >= self.config.error_cascade_threshold as usize
+            {
                 return Some(self.create_anomaly(
                     AnomalyType::ErrorCascade,
                     AnomalySeverity::Critical,
                     Some(&stats.skill_name),
                     Some(task_id),
-                    format!("Skill {} failed {} times in a row",
-                        stats.skill_name, error_sequence.len()),
+                    format!(
+                        "Skill {} failed {} times in a row",
+                        stats.skill_name,
+                        error_sequence.len()
+                    ),
                 ));
             }
         }
@@ -539,7 +580,9 @@ impl AnomalyDetector {
 
     /// Get anomalies filtered by severity
     pub async fn get_anomalies_by_severity(&self, severity: AnomalySeverity) -> Vec<Anomaly> {
-        self.anomalies.read().await
+        self.anomalies
+            .read()
+            .await
             .iter()
             .filter(|a| a.severity == severity)
             .cloned()
@@ -610,12 +653,25 @@ mod tests {
 
         // Execute same skill 10 times rapidly
         for i in 0..10 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100, None, None, None).await;
+            detector
+                .record_execution(
+                    "test.skill",
+                    &format!("task-{}", i),
+                    100,
+                    true,
+                    100,
+                    None,
+                    None,
+                    None,
+                )
+                .await;
         }
 
         let anomalies = detector.get_anomalies().await;
         assert!(!anomalies.is_empty());
-        assert!(anomalies.iter().any(|a| a.anomaly_type == AnomalyType::HighFrequency));
+        assert!(anomalies
+            .iter()
+            .any(|a| a.anomaly_type == AnomalyType::HighFrequency));
     }
 
     #[tokio::test]
@@ -624,11 +680,33 @@ mod tests {
 
         // Record normal executions
         for i in 0..20 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, true, 100, None, None, None).await;
+            detector
+                .record_execution(
+                    "test.skill",
+                    &format!("task-{}", i),
+                    100,
+                    true,
+                    100,
+                    None,
+                    None,
+                    None,
+                )
+                .await;
         }
 
         // Record one very long execution
-        let anomaly = detector.record_execution("test.skill", "task-long", 10_000, true, 100, None, None, None).await;
+        let anomaly = detector
+            .record_execution(
+                "test.skill",
+                "task-long",
+                10_000,
+                true,
+                100,
+                None,
+                None,
+                None,
+            )
+            .await;
 
         assert!(anomaly.is_some());
         assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::UnusualDuration);
@@ -644,11 +722,24 @@ mod tests {
 
         // Record failures
         for i in 0..5 {
-            detector.record_execution("test.skill", &format!("task-{}", i), 100, false, 100, None, None, None).await;
+            detector
+                .record_execution(
+                    "test.skill",
+                    &format!("task-{}", i),
+                    100,
+                    false,
+                    100,
+                    None,
+                    None,
+                    None,
+                )
+                .await;
         }
 
         let anomalies = detector.get_anomalies().await;
-        assert!(anomalies.iter().any(|a| a.anomaly_type == AnomalyType::SequentialFailures));
+        assert!(anomalies
+            .iter()
+            .any(|a| a.anomaly_type == AnomalyType::SequentialFailures));
     }
 
     #[tokio::test]
@@ -659,7 +750,18 @@ mod tests {
             ..Default::default()
         });
 
-        let anomaly = detector.record_execution("test.skill", "task-1", 100, true, 10_000_000, None, None, None).await;
+        let anomaly = detector
+            .record_execution(
+                "test.skill",
+                "task-1",
+                100,
+                true,
+                10_000_000,
+                None,
+                None,
+                None,
+            )
+            .await;
 
         assert!(anomaly.is_some());
         assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::InputSizeAnomaly);
@@ -674,15 +776,24 @@ mod tests {
         });
 
         // Create a burst of files
-        let anomaly = detector.record_execution(
-            "test.skill", "task-1", 100, true, 100,
-            Some(10),  // files_created > threshold
-            None,
-            Some(true),
-        ).await;
+        let anomaly = detector
+            .record_execution(
+                "test.skill",
+                "task-1",
+                100,
+                true,
+                100,
+                Some(10), // files_created > threshold
+                None,
+                Some(true),
+            )
+            .await;
 
         assert!(anomaly.is_some());
-        assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::FileCreationBurst);
+        assert_eq!(
+            anomaly.unwrap().anomaly_type,
+            AnomalyType::FileCreationBurst
+        );
     }
 
     #[tokio::test]
@@ -701,13 +812,19 @@ mod tests {
             "file.read".to_string(),
             "file.read".to_string(),
         ];
-        
-        let anomaly = detector.record_execution(
-            "test.skill", "task-1", 100, true, 100,
-            None,
-            Some(tool_calls),
-            Some(true),
-        ).await;
+
+        let anomaly = detector
+            .record_execution(
+                "test.skill",
+                "task-1",
+                100,
+                true,
+                100,
+                None,
+                Some(tool_calls),
+                Some(true),
+            )
+            .await;
 
         assert!(anomaly.is_some());
         assert_eq!(anomaly.unwrap().anomaly_type, AnomalyType::ToolCallLoop);

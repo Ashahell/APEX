@@ -1,10 +1,10 @@
 use axum::{
     extract::{Path, State},
-    response::Json,
-    response::IntoResponse,
-    Json as AxumJson, Router,
-    routing::{get, put, delete},
     http::StatusCode,
+    response::IntoResponse,
+    response::Json,
+    routing::{delete, get, put},
+    Json as AxumJson, Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -35,10 +35,12 @@ async fn get_setting(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<(StatusCode, AxumJson<SettingResponse>), (StatusCode, String)> {
-    let pref = state.preferences_repo
-        .get(&key)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get setting: {}", e)))?;
+    let pref = state.preferences_repo.get(&key).await.map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get setting: {}", e),
+        )
+    })?;
 
     match pref {
         Some(p) => {
@@ -47,11 +49,14 @@ async fn get_setting(
             } else {
                 p.value
             };
-            Ok((StatusCode::OK, AxumJson(SettingResponse {
-                key: p.key,
-                value,
-                encrypted: p.encrypted,
-            })))
+            Ok((
+                StatusCode::OK,
+                AxumJson(SettingResponse {
+                    key: p.key,
+                    value,
+                    encrypted: p.encrypted,
+                }),
+            ))
         }
         None => Err((StatusCode::NOT_FOUND, format!("Setting not found: {}", key))),
     }
@@ -63,8 +68,9 @@ async fn set_setting(
     Json(req): Json<SetSettingRequest>,
 ) -> Result<Json<SettingResponse>, String> {
     let encrypt = req.encrypt.unwrap_or(false);
-    
-    state.preferences_repo
+
+    state
+        .preferences_repo
         .set(&key, &req.value, encrypt)
         .await
         .map_err(|e| format!("Failed to set setting: {}", e))?;
@@ -80,7 +86,8 @@ async fn delete_setting(
     State(state): State<AppState>,
     Path(key): Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
-    state.preferences_repo
+    state
+        .preferences_repo
         .delete(&key)
         .await
         .map_err(|e| format!("Failed to delete setting: {}", e))?;

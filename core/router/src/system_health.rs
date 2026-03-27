@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
-use tokio::sync::RwLock;
 use std::time::{SystemTime, UNIX_EPOCH};
+use tokio::sync::RwLock;
 
 #[derive(Clone)]
 pub struct SystemMonitor {
@@ -29,18 +29,21 @@ impl SystemMonitor {
     pub async fn record_request(&self, endpoint: &str, response_time_ms: f64, is_error: bool) {
         let mut state = self.state.write().await;
         state.requests_total += 1;
-        
-        *state.requests_by_endpoint.entry(endpoint.to_string()).or_insert(0) += 1;
-        
+
+        *state
+            .requests_by_endpoint
+            .entry(endpoint.to_string())
+            .or_insert(0) += 1;
+
         if is_error {
             state.errors_total += 1;
         }
-        
+
         state.response_times.push(response_time_ms);
         if state.response_times.len() > 1000 {
             state.response_times.drain(0..100);
         }
-        
+
         let sum: f64 = state.response_times.iter().sum();
         state.avg_response_time_ms = sum / state.response_times.len() as f64;
     }
@@ -53,7 +56,7 @@ impl SystemMonitor {
 
     pub async fn get_system_health(&self) -> SystemHealth {
         let state = self.state.read().await;
-        
+
         let uptime = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs())
@@ -100,7 +103,7 @@ mod tests {
     async fn test_system_monitor_new() {
         let monitor = SystemMonitor::new();
         let health = monitor.get_system_health().await;
-        
+
         assert_eq!(health.requests_total, 0);
         assert_eq!(health.errors_total, 0);
     }
@@ -108,13 +111,13 @@ mod tests {
     #[tokio::test]
     async fn test_record_request() {
         let monitor = SystemMonitor::new();
-        
+
         monitor.record_request("/api/v1/tasks", 15.5, false).await;
         monitor.record_request("/api/v1/tasks", 22.0, false).await;
         monitor.record_request("/api/v1/tasks", 10.0, true).await;
-        
+
         let health = monitor.get_system_health().await;
-        
+
         assert_eq!(health.requests_total, 3);
         assert_eq!(health.errors_total, 1);
         assert!(health.avg_response_time_ms > 0.0);
@@ -123,14 +126,14 @@ mod tests {
     #[tokio::test]
     async fn test_error_rate() {
         let monitor = SystemMonitor::new();
-        
+
         for _ in 0..10 {
             monitor.record_request("/api/test", 10.0, false).await;
         }
         monitor.record_request("/api/test", 10.0, true).await;
-        
+
         let health = monitor.get_system_health().await;
-        
+
         assert_eq!(health.requests_total, 11);
         assert_eq!(health.errors_total, 1);
         assert!((health.error_rate - 9.09).abs() < 0.1);

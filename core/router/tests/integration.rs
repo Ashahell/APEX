@@ -1,33 +1,36 @@
-use apex_router::governance::GovernanceEngine;
-use apex_router::rate_limiter::RateLimiter;
-use apex_router::response_cache::ResponseCache;
-use apex_router::system_health::SystemMonitor;
 use apex_memory::db::Database;
 use apex_memory::task_repo::TaskRepository;
 use apex_memory::tasks::{CreateTask, TaskTier};
 use apex_router::api::{create_router, AppState};
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
 use apex_router::execution_stream::ExecutionStreamManager;
+use apex_router::governance::GovernanceEngine;
 use apex_router::message_bus::MessageBus;
 use apex_router::metrics::RouterMetrics;
+use apex_router::rate_limiter::RateLimiter;
+use apex_router::response_cache::ResponseCache;
+use apex_router::system_health::SystemMonitor;
 use apex_router::vm_pool::VmPool;
 use apex_router::websocket::WebSocketManager;
 use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
-use std::path::PathBuf;
-use std::time::Instant;
-use std::sync::Mutex;
 use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::time::Instant;
 use tower::ServiceExt;
 
-static TEST_TIMINGS: Mutex<Option<HashMap<String, (usize, std::time::Duration)>>> = Mutex::new(None);
+static TEST_TIMINGS: Mutex<Option<HashMap<String, (usize, std::time::Duration)>>> =
+    Mutex::new(None);
 
 fn record_test_time(name: &str, duration: std::time::Duration) {
     if let Ok(mut guard) = TEST_TIMINGS.lock() {
         let timings = guard.get_or_insert_with(HashMap::new);
-        let entry = timings.entry(name.to_string()).or_insert((0, Duration::ZERO));
+        let entry = timings
+            .entry(name.to_string())
+            .or_insert((0, Duration::ZERO));
         entry.0 += 1;
         entry.1 += duration;
     }
@@ -41,7 +44,10 @@ pub struct TestTimer {
 
 impl TestTimer {
     pub fn new(name: &str) -> Self {
-        Self { name: name.to_string(), start: Instant::now() }
+        Self {
+            name: name.to_string(),
+            start: Instant::now(),
+        }
     }
 }
 
@@ -56,41 +62,60 @@ async fn zz_benchmark_test_harness() {
     let timestamp = chrono::Utc::now().format("%Y-%m-%d %H:%M:%S UTC");
     println!("\n=== PERFORMANCE METRICS ===");
     println!("Timestamp: {}", timestamp);
-    
+
     let timings = {
         let guard = TEST_TIMINGS.lock().unwrap();
         guard.clone()
     };
-    
+
     if let Some(timings) = timings {
         let mut sorted: Vec<_> = timings.iter().collect();
-        sorted.sort_by(|a, b| b.1.1.cmp(&a.1.1));
-        
+        sorted.sort_by(|a, b| b.1 .1.cmp(&a.1 .1));
+
         let mut total_time = Duration::ZERO;
         let mut test_count = 0;
-        
-        println!("\n{:<45} {:>8} {:>12} {:>12}", "Test Name", "Runs", "Total(ms)", "Avg(ms)");
+
+        println!(
+            "\n{:<45} {:>8} {:>12} {:>12}",
+            "Test Name", "Runs", "Total(ms)", "Avg(ms)"
+        );
         println!("{:-<45} {:-<8} {:-<12} {:-<12}", "", "", "", "");
-        
+
         for (name, (count, duration)) in &sorted {
             let avg = duration.as_millis() as f64 / *count as f64;
-            println!("{:<45} {:>8} {:>12} {:>12.2}", 
-                if name.len() > 44 { &name[..44] } else { name }, 
-                count, 
-                duration.as_millis(), 
-                avg);
+            println!(
+                "{:<45} {:>8} {:>12} {:>12.2}",
+                if name.len() > 44 { &name[..44] } else { name },
+                count,
+                duration.as_millis(),
+                avg
+            );
             total_time += *duration;
             test_count += count;
         }
-        
+
         println!("{:-<45} {:-<8} {:-<12} {:-<12}", "", "", "", "");
-        println!("{:<45} {:>8} {:>12}", "TOTAL", test_count, total_time.as_millis());
-        
+        println!(
+            "{:<45} {:>8} {:>12}",
+            "TOTAL",
+            test_count,
+            total_time.as_millis()
+        );
+
         // Performance tiers
-        let fast = sorted.iter().filter(|(_, (_, d))| d.as_millis() < 10).count();
-        let medium = sorted.iter().filter(|(_, (_, d))| d.as_millis() >= 10 && d.as_millis() < 100).count();
-        let slow = sorted.iter().filter(|(_, (_, d))| d.as_millis() >= 100).count();
-        
+        let fast = sorted
+            .iter()
+            .filter(|(_, (_, d))| d.as_millis() < 10)
+            .count();
+        let medium = sorted
+            .iter()
+            .filter(|(_, (_, d))| d.as_millis() >= 10 && d.as_millis() < 100)
+            .count();
+        let slow = sorted
+            .iter()
+            .filter(|(_, (_, d))| d.as_millis() >= 100)
+            .count();
+
         println!("\nPerformance Distribution:");
         println!("  Fast (<10ms):    {:>3} tests", fast);
         println!("  Medium (10-100ms): {:>3} tests", medium);
@@ -98,7 +123,7 @@ async fn zz_benchmark_test_harness() {
     } else {
         println!("No timing data collected. Run other tests first.");
     }
-    
+
     println!("\n=== END METRICS ===\n");
 }
 
@@ -110,34 +135,41 @@ async fn create_test_state() -> AppState {
 
     let embedder = std::sync::Arc::new(apex_memory::embedder::Embedder::default());
     let indexer_config = apex_memory::background_indexer::IndexerConfig::default();
-    let background_indexer = std::sync::Arc::new(apex_memory::background_indexer::BackgroundIndexer::new(
-        embedder.clone(),
-        db.pool().clone(),
-        indexer_config,
-    ));
+    let background_indexer =
+        std::sync::Arc::new(apex_memory::background_indexer::BackgroundIndexer::new(
+            embedder.clone(),
+            db.pool().clone(),
+            indexer_config,
+        ));
     let narrative_config = apex_memory::narrative::NarrativeConfig::default();
-    let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(narrative_config));
+    let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(
+        narrative_config,
+    ));
 
     // Create bounded memory state for tests
     let bounded_memory = apex_router::api::bounded_memory::BoundedMemoryState::new(
-        std::env::temp_dir().to_string_lossy().to_string()
+        std::env::temp_dir().to_string_lossy().to_string(),
     );
 
     // Create skill manager for tests
     let skill_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
-        apex_router::skill_manager::SkillManager::new(std::env::temp_dir().join("skills"))
+        apex_router::skill_manager::SkillManager::new(std::env::temp_dir().join("skills")),
     ));
 
     AppState {
-        config: apex_router::unified_config::AppConfig::default(),  // C4 Step 2
+        config: apex_router::unified_config::AppConfig::default(), // C4 Step 2
         pool: db.pool().clone(),
         metrics: RouterMetrics::new(),
         message_bus: MessageBus::new(10),
         circuit_breakers: CircuitBreakerRegistry::new(),
         vm_pool: Some(VmPool::new(Default::default(), 2, 0)),
         skill_pool: None,
-        subagent_pool: std::sync::Arc::new(tokio::sync::RwLock::new(apex_router::subagent::SubAgentPool::new(4))),
-        dynamic_tools: std::sync::Arc::new(tokio::sync::RwLock::new(apex_router::dynamic_tools::ToolRegistry::new())),
+        subagent_pool: std::sync::Arc::new(tokio::sync::RwLock::new(
+            apex_router::subagent::SubAgentPool::new(4),
+        )),
+        dynamic_tools: std::sync::Arc::new(tokio::sync::RwLock::new(
+            apex_router::dynamic_tools::ToolRegistry::new(),
+        )),
         execution_streams: ExecutionStreamManager::new(),
         ws_manager: WebSocketManager::new(),
         moltbook: None,
@@ -156,39 +188,49 @@ async fn create_test_state() -> AppState {
         narrative_memory,
         bounded_memory,
         skill_manager,
-        user_profile: std::sync::Arc::new(apex_router::user_profile::UserProfileManager::new(db.pool().clone())),
-        session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(db.pool().clone())),
-        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some("https://skills.sh/api/v1".to_string()))),
+        user_profile: std::sync::Arc::new(apex_router::user_profile::UserProfileManager::new(
+            db.pool().clone(),
+        )),
+        session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(
+            db.pool().clone(),
+        )),
+        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some(
+            "https://skills.sh/api/v1".to_string(),
+        ))),
         totp_manager: apex_router::totp::TotpManager::new(),
-        soul_loader: apex_router::soul::loader::SoulLoader::new(apex_router::soul::SoulConfig::default()),
+        soul_loader: apex_router::soul::loader::SoulLoader::new(
+            apex_router::soul::SoulConfig::default(),
+        ),
         heartbeat_scheduler: apex_router::heartbeat::HeartbeatScheduler::new(
-            apex_router::heartbeat::HeartbeatConfig::default()
+            apex_router::heartbeat::HeartbeatConfig::default(),
         ),
         mcp_manager: std::sync::Arc::new(apex_router::mcp::McpServerManager::new()),
-        anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
+        anomaly_detector: Some(std::sync::Arc::new(
+            apex_router::security::AnomalyDetector::new(),
+        )),
         // Feature 5: Plugin Signing
         signature_store: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::skill_signer::SignatureStore::new()
+            apex_router::skill_signer::SignatureStore::new(),
         )),
         // Feature 7: Story Engine
         story_engine: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::story_engine::StoryEngine::new()
+            apex_router::story_engine::StoryEngine::new(),
         )),
         // Feature 4: Continuity Scheduler
         continuity_state: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::api::continuity_api::ContinuityState::default()
+            apex_router::api::continuity_api::ContinuityState::default(),
         )),
         // Feature 6: Privacy Toggle
         privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::privacy_guard::PrivacyGuard::default_guard()
+            apex_router::privacy_guard::PrivacyGuard::default_guard(),
         )),
         // Feature 3: Context Scope
         context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::api::context_scope_api::ContextScopeState::default()
+            apex_router::api::context_scope_api::ContextScopeState::default(),
         )),
         // Patch 15: Distributed Replay Protection
         replay_protection: std::sync::Arc::new(
-            apex_router::security::replay_protection::InMemoryReplayProtection::default()
+            apex_router::security::replay_protection::InMemoryReplayProtection::default(),
         ),
         // Patch 16: Streaming Analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
@@ -1317,7 +1359,8 @@ async fn test_settings_delete() {
     let app = create_router(state);
 
     // First set a setting
-    let _ = app.clone()
+    let _ = app
+        .clone()
         .oneshot(
             Request::builder()
                 .method("PUT")
@@ -1441,8 +1484,10 @@ async fn test_llm_providers_endpoint() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let providers: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert!(providers.len() >= 26); // At least 26 providers
 }
@@ -1465,8 +1510,10 @@ async fn test_llm_list_endpoint() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let llms: Vec<serde_json::Value> = serde_json::from_slice(&body).unwrap();
     assert_eq!(llms.len(), 1); // One default LLM configured
     assert_eq!(llms[0]["name"], "Local Qwen3-4B");
@@ -1490,8 +1537,10 @@ async fn test_llm_get_default_endpoint() {
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let llm: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(llm["name"], "Local Qwen3-4B"); // Default LLM is set
 }
@@ -1508,12 +1557,14 @@ async fn test_llm_invalid_provider() {
                 .method("POST")
                 .uri("/api/v1/llms")
                 .header("Content-Type", "application/json")
-                .body(Body::from(r#"{
+                .body(Body::from(
+                    r#"{
                     "name": "Test LLM",
                     "provider": "invalid_provider",
                     "url": "http://localhost:8080/v1",
                     "model": "test-model"
-                }"#))
+                }"#,
+                ))
                 .unwrap(),
         )
         .await
@@ -1536,20 +1587,24 @@ async fn test_llm_add_endpoint() {
                 .method("POST")
                 .uri("/api/v1/llms")
                 .header("Content-Type", "application/json")
-                .body(Body::from(r#"{
+                .body(Body::from(
+                    r#"{
                     "name": "Test LLM",
                     "provider": "local",
                     "url": "http://localhost:8080/v1",
                     "model": "qwen3-4b"
-                }"#))
+                }"#,
+                ))
                 .unwrap(),
         )
         .await
         .unwrap();
 
     assert_eq!(response.status(), StatusCode::OK);
-    
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let llm: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(llm["name"], "Test LLM");
     assert_eq!(llm["provider"], "local");
@@ -1560,9 +1615,9 @@ async fn test_config_persistence_save_and_load() {
     let _timer = TestTimer::new("test_config_persistence_save_and_load");
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
-    
+
     let repo = apex_memory::ConfigRepository::new(&db.pool());
-    
+
     // Save a config section
     let test_config = serde_json::json!({
         "llms": [
@@ -1577,17 +1632,18 @@ async fn test_config_persistence_save_and_load() {
         ],
         "default_llm_id": "test-llm"
     });
-    
+
     apex_router::unified_config::AppConfig::save_section_to_db(&repo, "agent", &test_config)
         .await
         .unwrap();
-    
+
     // Load it back
-    let loaded: serde_json::Value = apex_router::unified_config::AppConfig::load_section_from_db(&repo, "agent")
-        .await
-        .unwrap()
-        .unwrap();
-    
+    let loaded: serde_json::Value =
+        apex_router::unified_config::AppConfig::load_section_from_db(&repo, "agent")
+            .await
+            .unwrap()
+            .unwrap();
+
     assert_eq!(loaded["llms"][0]["name"], "Test LLM");
     assert_eq!(loaded["default_llm_id"], "test-llm");
 }
@@ -1597,18 +1653,20 @@ async fn test_config_persistence_full_config() {
     let _timer = TestTimer::new("test_config_persistence_full_config");
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
-    
+
     let repo = apex_memory::ConfigRepository::new(&db.pool());
-    
+
     // Create a full config
     let config = apex_router::unified_config::AppConfig::default();
-    
+
     // Save full config
     config.save_to_db(&repo).await.unwrap();
-    
+
     // Load it back
-    let loaded = apex_router::unified_config::AppConfig::load_from_db(&repo).await.unwrap();
-    
+    let loaded = apex_router::unified_config::AppConfig::load_from_db(&repo)
+        .await
+        .unwrap();
+
     // Verify key fields match
     assert_eq!(loaded.agent.use_llm, config.agent.use_llm);
 }
@@ -1618,12 +1676,14 @@ async fn test_config_persistence_nonexistent() {
     let _timer = TestTimer::new("test_config_persistence_nonexistent");
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
-    
+
     let repo = apex_memory::ConfigRepository::new(&db.pool());
-    
+
     // Try to load non-existent config
-    let result = apex_router::unified_config::AppConfig::load_from_db(&repo).await.unwrap();
-    
+    let result = apex_router::unified_config::AppConfig::load_from_db(&repo)
+        .await
+        .unwrap();
+
     // Should return default config
     assert!(result.agent.llms.len() >= 1);
 }

@@ -1,5 +1,5 @@
-use sqlx::{Pool, Sqlite};
 use serde::{Deserialize, Serialize};
+use sqlx::{Pool, Sqlite};
 
 #[derive(Debug, Clone, sqlx::FromRow)]
 pub struct Workflow {
@@ -64,7 +64,7 @@ impl WorkflowRepository {
             "SELECT id, name, description, definition, category, version, is_active, 
              created_at_ms, updated_at_ms, last_executed_at_ms, execution_count, 
              avg_duration_secs, success_rate 
-             FROM workflows ORDER BY name"
+             FROM workflows ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await
@@ -75,7 +75,7 @@ impl WorkflowRepository {
             "SELECT id, name, description, definition, category, version, is_active, 
              created_at_ms, updated_at_ms, last_executed_at_ms, execution_count, 
              avg_duration_secs, success_rate 
-             FROM workflows WHERE is_active = 1 ORDER BY name"
+             FROM workflows WHERE is_active = 1 ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await
@@ -86,7 +86,7 @@ impl WorkflowRepository {
             "SELECT id, name, description, definition, category, version, is_active, 
              created_at_ms, updated_at_ms, last_executed_at_ms, execution_count, 
              avg_duration_secs, success_rate 
-             FROM workflows WHERE category = ? ORDER BY name"
+             FROM workflows WHERE category = ? ORDER BY name",
         )
         .bind(category)
         .fetch_all(&self.pool)
@@ -98,7 +98,7 @@ impl WorkflowRepository {
             "SELECT id, name, description, definition, category, version, is_active, 
              created_at_ms, updated_at_ms, last_executed_at_ms, execution_count, 
              avg_duration_secs, success_rate 
-             FROM workflows WHERE id = ?"
+             FROM workflows WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -110,7 +110,7 @@ impl WorkflowRepository {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_millis() as i64;
-        
+
         sqlx::query(
             "INSERT INTO workflows (id, name, description, definition, category, version, is_active, created_at_ms, updated_at_ms, execution_count)
              VALUES (?, ?, ?, ?, ?, 1, 1, ?, ?, 0)"
@@ -139,12 +139,16 @@ impl WorkflowRepository {
         }
         let workflow = workflow.unwrap();
 
-        let desc = update.description.as_ref()
+        let desc = update
+            .description
+            .as_ref()
             .or(workflow.description.as_ref())
             .map(|s| s.as_str())
             .unwrap_or("")
             .to_string();
-        let cat = update.category.as_ref()
+        let cat = update
+            .category
+            .as_ref()
             .or(workflow.category.as_ref())
             .map(|s| s.as_str())
             .unwrap_or("")
@@ -154,13 +158,18 @@ impl WorkflowRepository {
             "UPDATE workflows SET 
              name = ?, description = ?, definition = ?, category = ?, 
              is_active = ?, version = version + 1, updated_at_ms = ?
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(update.name.as_ref().unwrap_or(&workflow.name))
         .bind(&desc)
         .bind(update.definition.as_ref().unwrap_or(&workflow.definition))
         .bind(&cat)
-        .bind(update.is_active.map(|v| if v { 1 } else { 0 }).unwrap_or(workflow.is_active))
+        .bind(
+            update
+                .is_active
+                .map(|v| if v { 1 } else { 0 })
+                .unwrap_or(workflow.is_active),
+        )
         .bind(now)
         .bind(id)
         .execute(&self.pool)
@@ -203,7 +212,7 @@ impl WorkflowRepository {
             "UPDATE workflows SET 
              last_executed_at_ms = ?, 
              execution_count = execution_count + 1 
-             WHERE id = ?"
+             WHERE id = ?",
         )
         .bind(now)
         .bind(&execution.workflow_id)
@@ -213,14 +222,18 @@ impl WorkflowRepository {
         Ok(())
     }
 
-    pub async fn get_executions(&self, workflow_id: &str, limit: i32) -> Result<Vec<WorkflowExecution>, sqlx::Error> {
+    pub async fn get_executions(
+        &self,
+        workflow_id: &str,
+        limit: i32,
+    ) -> Result<Vec<WorkflowExecution>, sqlx::Error> {
         sqlx::query_as::<_, WorkflowExecution>(
             "SELECT id, workflow_id, status, started_at_ms, completed_at_ms, duration_secs, 
              input_data, output_data, error_message, triggered_by 
              FROM workflow_execution_logs 
              WHERE workflow_id = ? 
              ORDER BY started_at_ms DESC 
-             LIMIT ?"
+             LIMIT ?",
         )
         .bind(workflow_id)
         .bind(limit)
@@ -230,7 +243,7 @@ impl WorkflowRepository {
 
     pub async fn get_categories(&self) -> Result<Vec<String>, sqlx::Error> {
         sqlx::query_scalar::<_, String>(
-            "SELECT DISTINCT category FROM workflows WHERE category IS NOT NULL ORDER BY category"
+            "SELECT DISTINCT category FROM workflows WHERE category IS NOT NULL ORDER BY category",
         )
         .fetch_all(&self.pool)
         .await
@@ -243,7 +256,8 @@ mod tests {
     use sqlx::SqlitePool;
 
     async fn create_tables(pool: &SqlitePool) {
-        sqlx::query("CREATE TABLE IF NOT EXISTS workflows (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS workflows (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
             description TEXT,
@@ -257,9 +271,14 @@ mod tests {
             execution_count INTEGER DEFAULT 0,
             avg_duration_secs REAL,
             success_rate REAL
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
 
-        sqlx::query("CREATE TABLE IF NOT EXISTS workflow_execution_logs (
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS workflow_execution_logs (
             id TEXT PRIMARY KEY,
             workflow_id TEXT NOT NULL,
             status TEXT NOT NULL,
@@ -270,7 +289,11 @@ mod tests {
             output_data TEXT,
             error_message TEXT,
             triggered_by TEXT
-        )").execute(pool).await.unwrap();
+        )",
+        )
+        .execute(pool)
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

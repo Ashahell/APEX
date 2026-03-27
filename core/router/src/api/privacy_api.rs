@@ -5,7 +5,7 @@
 //! Feature 6: Privacy Toggle
 
 use axum::{
-    extract::{State, Query},
+    extract::{Query, State},
     routing::{get, put},
     Json, Router,
 };
@@ -50,7 +50,10 @@ pub struct ProviderCheckResponse {
 pub fn create_privacy_router() -> Router<AppState> {
     Router::new()
         .route("/privacy/status", get(get_privacy_status))
-        .route("/privacy/config", get(get_privacy_config).put(update_privacy_config))
+        .route(
+            "/privacy/config",
+            get(get_privacy_config).put(update_privacy_config),
+        )
         .route("/privacy/check", get(check_provider))
         .route("/privacy/providers", get(list_providers))
         .route("/privacy/audit", get(get_audit_log))
@@ -60,13 +63,16 @@ pub fn create_privacy_router() -> Router<AppState> {
 async fn get_privacy_status(State(state): State<AppState>) -> Json<PrivacyStatusResponse> {
     let guard = state.privacy_guard.lock().unwrap();
     let config = guard.config();
-    
+
     Json(PrivacyStatusResponse {
         enabled: config.enabled,
         blocked_providers: config.blocked_providers.clone(),
         allow_local_only: config.allow_local_only,
         audit_log_enabled: config.audit_log_enabled,
-        cloud_providers: PrivacyGuard::cloud_providers().into_iter().map(String::from).collect(),
+        cloud_providers: PrivacyGuard::cloud_providers()
+            .into_iter()
+            .map(String::from)
+            .collect(),
     })
 }
 
@@ -82,9 +88,9 @@ async fn update_privacy_config(
     Json(req): Json<UpdatePrivacyConfigRequest>,
 ) -> Json<PrivacyConfig> {
     let mut guard = state.privacy_guard.lock().unwrap();
-    
+
     let mut config = guard.config().clone();
-    
+
     if let Some(enabled) = req.enabled {
         config.enabled = enabled;
     }
@@ -97,9 +103,9 @@ async fn update_privacy_config(
     if let Some(audit) = req.audit_log_enabled {
         config.audit_log_enabled = audit;
     }
-    
+
     guard.update_config(config.clone());
-    
+
     Json(config)
 }
 
@@ -108,13 +114,14 @@ async fn check_provider(
     State(state): State<AppState>,
     Query(params): Query<serde_json::Value>,
 ) -> Json<ProviderCheckResponse> {
-    let provider = params.get("provider")
+    let provider = params
+        .get("provider")
         .and_then(|v| v.as_str())
         .unwrap_or("");
-    
+
     let guard = state.privacy_guard.lock().unwrap();
     let result = guard.check(provider);
-    
+
     Json(ProviderCheckResponse {
         provider: provider.to_string(),
         allowed: result.allowed,
@@ -124,7 +131,12 @@ async fn check_provider(
 
 /// List available cloud providers
 async fn list_providers(State(_state): State<AppState>) -> Json<Vec<String>> {
-    Json(PrivacyGuard::cloud_providers().into_iter().map(String::from).collect())
+    Json(
+        PrivacyGuard::cloud_providers()
+            .into_iter()
+            .map(String::from)
+            .collect(),
+    )
 }
 
 /// Get audit log entries (stub - would need actual implementation)
@@ -132,10 +144,8 @@ async fn get_audit_log(
     State(_state): State<AppState>,
     Query(params): Query<serde_json::Value>,
 ) -> Json<serde_json::Value> {
-    let limit = params.get("limit")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(50) as usize;
-    
+    let limit = params.get("limit").and_then(|v| v.as_u64()).unwrap_or(50) as usize;
+
     // Return empty log for now
     Json(serde_json::json!({
         "entries": [],

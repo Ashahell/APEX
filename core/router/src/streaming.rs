@@ -103,21 +103,47 @@ impl StreamingAuth {
             return Ok(());
         }
 
-        // Extract signature
-        let signature = request
+        // 1) Try header-based authentication first
+        let signature_header = request
             .headers()
             .get("X-APEX-Signature")
             .and_then(|v| v.to_str().ok())
             .map(|s| s.to_string());
-
-        // Extract timestamp
-        let timestamp: Option<i64> = request
+        let timestamp_header = request
             .headers()
             .get("X-APEX-Timestamp")
             .and_then(|v| v.to_str().ok())
             .and_then(|s| s.parse().ok());
 
-        let (signature, timestamp) = match (signature, timestamp) {
+        // Prepare to use either header-based or query-based credentials
+        let mut sig = signature_header.clone();
+        let mut ts = timestamp_header;
+
+        // 2) If missing, try browser-friendly query params: ?sig=...&ts=...
+        if sig.is_none() || ts.is_none() {
+            if let Some(query) = request.uri().query() {
+                let mut qsig: Option<String> = None;
+                let mut qts: Option<i64> = None;
+                for part in query.split('&') {
+                    if let Some((k, v)) = part.split_once('=') {
+                        if k == "sig" {
+                            qsig = Some(v.to_string());
+                        } else if k == "ts" {
+                            if let Ok(val) = v.parse::<i64>() {
+                                qts = Some(val);
+                            }
+                        }
+                    }
+                }
+                if qsig.is_some() && qts.is_some() {
+                    sig = qsig;
+                    ts = Some(qts.unwrap());
+                }
+            }
+        }
+
+        // If we still don't have credentials, reject
+        let (signature, timestamp) = match (sig, ts) {
             (Some(s), Some(t)) => (s, t),
             _ => {
                 return Err(StreamingError::AuthRequired(
@@ -133,10 +159,9 @@ impl StreamingAuth {
             return Err(StreamingError::TimestampTooOld(age));
         }
 
-        // Verify HMAC signature
+        // Verify HMAC signature (body is empty for SSE or query-based path)
         let path = request.uri().path();
         let method = request.method().as_str();
-
         if !verify_request(&self.secret, method, path, &[], &signature, timestamp) {
             return Err(StreamingError::InvalidSignature("HMAC verification failed".to_string()));
         }

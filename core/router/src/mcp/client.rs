@@ -1,10 +1,10 @@
 use std::collections::HashMap;
+use std::process::Stdio;
 use std::sync::Arc;
-use tokio::sync::{mpsc, Mutex, RwLock};
-use tokio::time;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 use tokio::process::Command as AsyncCommand;
-use std::process::Stdio;
+use tokio::sync::{mpsc, Mutex, RwLock};
+use tokio::time;
 
 use crate::mcp::types::*;
 
@@ -59,11 +59,11 @@ pub struct McpClient {
     server_id: String,
     child: Option<tokio::process::Child>,
     stdin: Option<mpsc::Sender<String>>,
-    
+
     // Response tracking
     responses: Arc<RwLock<HashMap<u64, ResponseSender>>>,
     next_id: u64,
-    
+
     // Connection state
     connection_state: ConnectionState,
     reconnect_attempts: u32,
@@ -71,12 +71,12 @@ pub struct McpClient {
     protocol_version: Option<String>,
     server_info: Option<McpServerInfo>,
     tools: Vec<McpToolDefinition>,
-    
+
     // Server connection details for reconnection
     reconnect_command: Option<String>,
     reconnect_args: Option<Vec<String>>,
     reconnect_env: Option<HashMap<String, String>>,
-    
+
     // Retry configuration
     config: McpClientConfig,
 }
@@ -147,12 +147,12 @@ impl McpClient {
 
         // Store connection details for auto-reconnect
         self.store_connection_details(command.to_string(), args.clone(), env.clone());
-        
+
         let mut last_error = String::new();
-        
+
         // Set connecting state
         self.connection_state = ConnectionState::Connecting;
-        
+
         // Retry loop with exponential backoff
         for attempt in 0..self.config.max_retries {
             // Clean up any previous attempt
@@ -167,20 +167,29 @@ impl McpClient {
                     self.connection_state = ConnectionState::Connected;
                     self.reconnect_attempts = 0;
                     self.last_error = None;
-                    tracing::info!("MCP client '{}' connected on attempt {}", self.server_id, attempt + 1);
+                    tracing::info!(
+                        "MCP client '{}' connected on attempt {}",
+                        self.server_id,
+                        attempt + 1
+                    );
                     return Ok(());
                 }
                 Err(e) => {
                     last_error = e;
                     self.connection_state = ConnectionState::Error(last_error.clone());
                     self.last_error = Some(last_error.clone());
-                    tracing::warn!("MCP client '{}' connection attempt {} failed: {}", self.server_id, attempt + 1, last_error);
-                    
+                    tracing::warn!(
+                        "MCP client '{}' connection attempt {} failed: {}",
+                        self.server_id,
+                        attempt + 1,
+                        last_error
+                    );
+
                     // Don't retry if this was the last attempt
                     if attempt + 1 >= self.config.max_retries {
                         break;
                     }
-                    
+
                     // Calculate delay with exponential backoff
                     let delay_ms = Self::calculate_retry_delay(attempt, &self.config);
                     tracing::info!("MCP client '{}' retrying in {}ms", self.server_id, delay_ms);
@@ -189,7 +198,10 @@ impl McpClient {
             }
         }
 
-        Err(format!("Failed to connect after {} attempts: {}", self.config.max_retries, last_error))
+        Err(format!(
+            "Failed to connect after {} attempts: {}",
+            self.config.max_retries, last_error
+        ))
     }
 
     /// Internal connect attempt (no retry)
@@ -216,17 +228,15 @@ impl McpClient {
             .map_err(|e| format!("Failed to spawn MCP server: {}", e))?;
 
         // Take ownership of stdin and stdout
-        let stdin = child.stdin.take()
-            .ok_or("Failed to capture stdin")?;
-        let stdout = child.stdout.take()
-            .ok_or("Failed to capture stdout")?;
+        let stdin = child.stdin.take().ok_or("Failed to capture stdin")?;
+        let stdout = child.stdout.take().ok_or("Failed to capture stdout")?;
 
         // Create channel for stdin communication
         let (tx, mut rx) = mpsc::channel::<String>(100);
-        
+
         // Clone for stdin writer task
         let server_id = self.server_id.clone();
-        
+
         // Spawn task to write to stdin
         tokio::spawn(async move {
             let mut stdin = stdin;
@@ -247,13 +257,13 @@ impl McpClient {
         // Create response map for the reader task
         let responses = self.responses.clone();
         let reader_server_id = self.server_id.clone();
-        
+
         // Spawn task to read from stdout and dispatch responses
         tokio::spawn(async move {
             let mut reader = BufReader::new(stdout).lines();
             while let Ok(Some(line)) = reader.next_line().await {
                 tracing::debug!("MCP stdout: {}", line);
-                
+
                 // Parse the response
                 match serde_json::from_str::<serde_json::Value>(&line) {
                     Ok(json) => {
@@ -280,22 +290,25 @@ impl McpClient {
         // Store the child process and communication channels
         self.child = Some(child);
         self.stdin = Some(tx);
-        
+
         tracing::info!("MCP client '{}' connected to server", self.server_id);
         Ok(())
     }
 
     /// Send a JSON-RPC request and wait for response
-    async fn send_request<T: serde::Serialize>(&mut self, method: &str, params: T) -> Result<serde_json::Value, String> {
-        let tx = self.stdin.as_ref()
-            .ok_or("Not connected")?;
-        
+    async fn send_request<T: serde::Serialize>(
+        &mut self,
+        method: &str,
+        params: T,
+    ) -> Result<serde_json::Value, String> {
+        let tx = self.stdin.as_ref().ok_or("Not connected")?;
+
         let id = self.next_id;
         self.next_id += 1;
 
         // Create response channel
         let (response_tx, mut response_rx) = mpsc::channel::<Result<serde_json::Value, String>>(1);
-        
+
         // Register this request ID
         {
             let mut responses = self.responses.write().await;
@@ -312,7 +325,8 @@ impl McpClient {
         let request_str = request.to_string();
         tracing::debug!("MCP request: {}", request_str);
 
-        tx.send(request_str).await
+        tx.send(request_str)
+            .await
             .map_err(|e| format!("Failed to send request: {}", e))?;
 
         // Wait for response with timeout
@@ -330,7 +344,8 @@ impl McpClient {
         }
 
         // Extract result
-        result.get("result")
+        result
+            .get("result")
             .cloned()
             .ok_or_else(|| "No result in response".to_string())
     }
@@ -352,30 +367,30 @@ impl McpClient {
         });
 
         let response = self.send_request("initialize", request).await?;
-        
+
         // Parse server info from response
         if let Some(server_info) = response.get("serverInfo") {
             self.server_info = serde_json::from_value(server_info.clone()).ok();
         }
-        
+
         if let Some(protocol_version) = response.get("protocolVersion").and_then(|v| v.as_str()) {
             self.protocol_version = Some(protocol_version.to_string());
         }
 
         // Send initialized notification
-        let tx = self.stdin.as_ref()
-            .ok_or("Not connected")?;
-        
+        let tx = self.stdin.as_ref().ok_or("Not connected")?;
+
         let initialized_notification = serde_json::json!({
             "jsonrpc": "2.0",
             "method": "notifications/initialized"
         });
-        
-            tx.send(initialized_notification.to_string()).await
+
+        tx.send(initialized_notification.to_string())
+            .await
             .map_err(|e| format!("Failed to send initialized notification: {}", e))?;
 
         self.connection_state = ConnectionState::Connected;
-        
+
         tracing::info!("MCP client '{}' initialized", self.server_id);
         Ok(())
     }
@@ -387,15 +402,21 @@ impl McpClient {
         }
 
         // Send tools/list request and get response
-        let response = self.send_request("tools/list", serde_json::json!({})).await?;
-        
+        let response = self
+            .send_request("tools/list", serde_json::json!({}))
+            .await?;
+
         // Parse tools from response
         let tools: Vec<McpToolDefinition> = serde_json::from_value(response.clone())
             .map_err(|e| format!("Failed to parse tools: {}", e))?;
-        
+
         self.tools = tools.clone();
-        
-        tracing::debug!("MCP client '{}' listed {} tools", self.server_id, tools.len());
+
+        tracing::debug!(
+            "MCP client '{}' listed {} tools",
+            self.server_id,
+            tools.len()
+        );
         Ok(tools)
     }
 
@@ -414,9 +435,9 @@ impl McpClient {
             "name": name,
             "arguments": arguments
         });
-        
+
         let response = self.send_request("tools/call", call_params).await?;
-        
+
         // Parse result as McpToolResult
         let result: McpToolResult = serde_json::from_value(response)
             .map_err(|e| format!("Failed to parse tool result: {}", e))?;
@@ -429,7 +450,7 @@ impl McpClient {
     pub fn disconnect(&mut self) {
         // Note: We can't safely clear the response map here without blocking
         // The channels will be dropped when the client is dropped
-        
+
         if let Some(mut child) = self.child.take() {
             let _ = child.kill();
         }
@@ -488,7 +509,12 @@ impl McpClient {
     }
 
     /// Store connection details for auto-reconnect
-    pub fn store_connection_details(&mut self, command: String, args: Vec<String>, env: HashMap<String, String>) {
+    pub fn store_connection_details(
+        &mut self,
+        command: String,
+        args: Vec<String>,
+        env: HashMap<String, String>,
+    ) {
         self.reconnect_command = Some(command);
         self.reconnect_args = Some(args);
         self.reconnect_env = Some(env);
@@ -500,27 +526,41 @@ impl McpClient {
             return Err("Auto-reconnect is disabled".to_string());
         }
 
-        let command = self.reconnect_command.clone()
+        let command = self
+            .reconnect_command
+            .clone()
             .ok_or("No connection details stored for reconnect")?;
-        let args = self.reconnect_args.clone()
+        let args = self
+            .reconnect_args
+            .clone()
             .ok_or("No connection details stored for reconnect")?;
-        let env = self.reconnect_env.clone()
+        let env = self
+            .reconnect_env
+            .clone()
             .ok_or("No connection details stored for reconnect")?;
 
         // Check max reconnect attempts
-        if self.config.max_auto_reconnect > 0 && self.reconnect_attempts >= self.config.max_auto_reconnect {
-            return Err(format!("Max auto-reconnect attempts ({}) reached", self.config.max_auto_reconnect));
+        if self.config.max_auto_reconnect > 0
+            && self.reconnect_attempts >= self.config.max_auto_reconnect
+        {
+            return Err(format!(
+                "Max auto-reconnect attempts ({}) reached",
+                self.config.max_auto_reconnect
+            ));
         }
 
         self.connection_state = ConnectionState::Reconnecting;
         self.reconnect_attempts += 1;
 
-        tracing::info!("MCP client '{}' attempting auto-reconnect (attempt {})", 
-            self.server_id, self.reconnect_attempts);
+        tracing::info!(
+            "MCP client '{}' attempting auto-reconnect (attempt {})",
+            self.server_id,
+            self.reconnect_attempts
+        );
 
         // Attempt to reconnect with retries
         let result = self.connect(&command, args, env).await;
-        
+
         if result.is_ok() {
             // Re-initialize
             if let Err(e) = self.initialize().await {
@@ -529,11 +569,14 @@ impl McpClient {
                 self.connection_state = ConnectionState::Error(err_str.clone());
                 return Err(err_str);
             }
-            
+
             // Clear tools cache after reconnect
             self.tools.clear();
-            
-            tracing::info!("MCP client '{}' auto-reconnected successfully", self.server_id);
+
+            tracing::info!(
+                "MCP client '{}' auto-reconnected successfully",
+                self.server_id
+            );
         } else {
             let error = result.as_ref().unwrap_err();
             let error_str = error.to_string();
@@ -556,12 +599,18 @@ impl McpClient {
             return Err("Not connected".to_string());
         }
 
-        let response = self.send_request("resources/list", serde_json::json!({})).await?;
-        
+        let response = self
+            .send_request("resources/list", serde_json::json!({}))
+            .await?;
+
         let resources: Vec<McpResource> = serde_json::from_value(response)
             .map_err(|e| format!("Failed to parse resources: {}", e))?;
-        
-        tracing::debug!("MCP client '{}' listed {} resources", self.server_id, resources.len());
+
+        tracing::debug!(
+            "MCP client '{}' listed {} resources",
+            self.server_id,
+            resources.len()
+        );
         Ok(resources)
     }
 
@@ -571,11 +620,13 @@ impl McpClient {
             return Err("Not connected".to_string());
         }
 
-        let response = self.send_request("resources/read", serde_json::json!({ "uri": uri })).await?;
-        
+        let response = self
+            .send_request("resources/read", serde_json::json!({ "uri": uri }))
+            .await?;
+
         let contents: Vec<McpResourceContent> = serde_json::from_value(response)
             .map_err(|e| format!("Failed to parse resource content: {}", e))?;
-        
+
         tracing::debug!("MCP client '{}' read resource '{}'", self.server_id, uri);
         Ok(contents)
     }
@@ -586,9 +637,14 @@ impl McpClient {
             return Err("Not connected".to_string());
         }
 
-        self.send_request("resources/subscribe", serde_json::json!({ "uri": uri })).await?;
-        
-        tracing::debug!("MCP client '{}' subscribed to resource '{}'", self.server_id, uri);
+        self.send_request("resources/subscribe", serde_json::json!({ "uri": uri }))
+            .await?;
+
+        tracing::debug!(
+            "MCP client '{}' subscribed to resource '{}'",
+            self.server_id,
+            uri
+        );
         Ok(())
     }
 
@@ -598,9 +654,14 @@ impl McpClient {
             return Err("Not connected".to_string());
         }
 
-        self.send_request("resources/unsubscribe", serde_json::json!({ "uri": uri })).await?;
-        
-        tracing::debug!("MCP client '{}' unsubscribed from resource '{}'", self.server_id, uri);
+        self.send_request("resources/unsubscribe", serde_json::json!({ "uri": uri }))
+            .await?;
+
+        tracing::debug!(
+            "MCP client '{}' unsubscribed from resource '{}'",
+            self.server_id,
+            uri
+        );
         Ok(())
     }
 
@@ -614,12 +675,18 @@ impl McpClient {
             return Err("Not connected".to_string());
         }
 
-        let response = self.send_request("prompts/list", serde_json::json!({})).await?;
-        
+        let response = self
+            .send_request("prompts/list", serde_json::json!({}))
+            .await?;
+
         let prompts: Vec<McpPrompt> = serde_json::from_value(response)
             .map_err(|e| format!("Failed to parse prompts: {}", e))?;
-        
-        tracing::debug!("MCP client '{}' listed {} prompts", self.server_id, prompts.len());
+
+        tracing::debug!(
+            "MCP client '{}' listed {} prompts",
+            self.server_id,
+            prompts.len()
+        );
         Ok(prompts)
     }
 
@@ -637,12 +704,12 @@ impl McpClient {
             "name": name,
             "arguments": arguments
         });
-        
+
         let response = self.send_request("prompts/get", params).await?;
-        
+
         let prompt_response: McpPromptGetResponse = serde_json::from_value(response)
             .map_err(|e| format!("Failed to parse prompt: {}", e))?;
-        
+
         tracing::debug!("MCP client '{}' got prompt '{}'", self.server_id, name);
         Ok(prompt_response.messages)
     }

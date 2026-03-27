@@ -2,29 +2,29 @@
 //!
 //! Tests for HMAC authentication, TOTP verification, and permission tier enforcement.
 
-use apex_router::api::{create_router, AppState};
-use apex_router::totp::TotpManager;
-use apex_router::classifier::TaskClassifier;
 use apex_memory::db::Database;
 use apex_memory::tasks::TaskTier;
+use apex_router::api::{create_router, AppState};
+use apex_router::circuit_breaker::CircuitBreakerRegistry;
+use apex_router::classifier::TaskClassifier;
+use apex_router::execution_stream::ExecutionStreamManager;
 use apex_router::governance::GovernanceEngine;
+use apex_router::message_bus::MessageBus;
+use apex_router::metrics::RouterMetrics;
 use apex_router::rate_limiter::RateLimiter;
 use apex_router::response_cache::ResponseCache;
 use apex_router::system_health::SystemMonitor;
-use apex_router::circuit_breaker::CircuitBreakerRegistry;
-use apex_router::execution_stream::ExecutionStreamManager;
-use apex_router::message_bus::MessageBus;
-use apex_router::metrics::RouterMetrics;
+use apex_router::totp::TotpManager;
 use apex_router::vm_pool::VmPool;
 use apex_router::websocket::WebSocketManager;
 use axum::{
     body::Body,
-    http::{Request, StatusCode, HeaderMap, header, HeaderValue},
+    http::{header, HeaderMap, HeaderValue, Request, StatusCode},
 };
-use std::path::PathBuf;
-use tower::ServiceExt;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+use std::path::PathBuf;
+use tower::ServiceExt;
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -34,7 +34,8 @@ const TEST_USER: &str = "test-user";
 
 /// Re-implement sign_request locally (since auth module is not public)
 fn sign_request(secret: &str, method: &str, path: &str, body: &[u8], timestamp: i64) -> String {
-    let mut mac = HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
+    let mut mac =
+        HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
     mac.update(timestamp.to_string().as_bytes());
     mac.update(method.as_bytes());
     mac.update(path.as_bytes());
@@ -44,7 +45,14 @@ fn sign_request(secret: &str, method: &str, path: &str, body: &[u8], timestamp: 
 }
 
 /// Re-implement verify_request locally
-fn verify_request(secret: &str, method: &str, path: &str, body: &[u8], signature: &str, timestamp: i64) -> bool {
+fn verify_request(
+    secret: &str,
+    method: &str,
+    path: &str,
+    body: &[u8],
+    signature: &str,
+    timestamp: i64,
+) -> bool {
     let expected = sign_request(secret, method, path, body, timestamp);
     expected == signature
 }
@@ -53,7 +61,7 @@ fn verify_request(secret: &str, method: &str, path: &str, body: &[u8], signature
 fn generate_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64) {
     let timestamp = chrono::Utc::now().timestamp();
     let signature = sign_request(TEST_SECRET, method, path, body, timestamp);
-    
+
     (signature, timestamp)
 }
 
@@ -61,7 +69,7 @@ fn generate_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64)
 fn generate_invalid_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64) {
     let timestamp = chrono::Utc::now().timestamp();
     let signature = sign_request("wrong-secret", method, path, body, timestamp); // Wrong secret!
-    
+
     (signature, timestamp)
 }
 
@@ -69,7 +77,7 @@ fn generate_invalid_auth_headers(method: &str, path: &str, body: &[u8]) -> (Stri
 fn generate_expired_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64) {
     let timestamp = chrono::Utc::now().timestamp() - 400; // 400 seconds old (> 300s limit)
     let signature = sign_request(TEST_SECRET, method, path, body, timestamp);
-    
+
     (signature, timestamp)
 }
 
@@ -84,22 +92,25 @@ async fn create_test_state() -> AppState {
 
     let embedder = std::sync::Arc::new(apex_memory::embedder::Embedder::default());
     let indexer_config = apex_memory::background_indexer::IndexerConfig::default();
-    let background_indexer = std::sync::Arc::new(apex_memory::background_indexer::BackgroundIndexer::new(
-        embedder.clone(),
-        db.pool().clone(),
-        indexer_config,
-    ));
+    let background_indexer =
+        std::sync::Arc::new(apex_memory::background_indexer::BackgroundIndexer::new(
+            embedder.clone(),
+            db.pool().clone(),
+            indexer_config,
+        ));
     let narrative_config = apex_memory::narrative::NarrativeConfig::default();
-    let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(narrative_config));
+    let narrative_memory = std::sync::Arc::new(apex_memory::narrative::NarrativeMemory::new(
+        narrative_config,
+    ));
 
     // Create bounded memory state for tests
     let bounded_memory = apex_router::api::bounded_memory::BoundedMemoryState::new(
-        std::env::temp_dir().to_string_lossy().to_string()
+        std::env::temp_dir().to_string_lossy().to_string(),
     );
 
     // Create skill manager for tests
     let skill_manager = std::sync::Arc::new(tokio::sync::Mutex::new(
-        apex_router::skill_manager::SkillManager::new(std::env::temp_dir().join("skills"))
+        apex_router::skill_manager::SkillManager::new(std::env::temp_dir().join("skills")),
     ));
 
     // Create config with auth enabled but using our test secret
@@ -115,8 +126,12 @@ async fn create_test_state() -> AppState {
         circuit_breakers: CircuitBreakerRegistry::new(),
         vm_pool: Some(VmPool::new(Default::default(), 2, 0)),
         skill_pool: None,
-        subagent_pool: std::sync::Arc::new(tokio::sync::RwLock::new(apex_router::subagent::SubAgentPool::new(4))),
-        dynamic_tools: std::sync::Arc::new(tokio::sync::RwLock::new(apex_router::dynamic_tools::ToolRegistry::new())),
+        subagent_pool: std::sync::Arc::new(tokio::sync::RwLock::new(
+            apex_router::subagent::SubAgentPool::new(4),
+        )),
+        dynamic_tools: std::sync::Arc::new(tokio::sync::RwLock::new(
+            apex_router::dynamic_tools::ToolRegistry::new(),
+        )),
         execution_streams: ExecutionStreamManager::new(),
         ws_manager: WebSocketManager::new(),
         moltbook: None,
@@ -135,34 +150,44 @@ async fn create_test_state() -> AppState {
         narrative_memory,
         bounded_memory,
         skill_manager,
-        user_profile: std::sync::Arc::new(apex_router::user_profile::UserProfileManager::new(db.pool().clone())),
-        session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(db.pool().clone())),
-        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some("https://skills.sh/api/v1".to_string()))),
+        user_profile: std::sync::Arc::new(apex_router::user_profile::UserProfileManager::new(
+            db.pool().clone(),
+        )),
+        session_search: std::sync::Arc::new(apex_router::session_search::SessionSearch::new(
+            db.pool().clone(),
+        )),
+        hub_client: std::sync::Arc::new(apex_router::hub_client::HubClient::new(Some(
+            "https://skills.sh/api/v1".to_string(),
+        ))),
         totp_manager: TotpManager::new(),
-        soul_loader: apex_router::soul::loader::SoulLoader::new(apex_router::soul::SoulConfig::default()),
+        soul_loader: apex_router::soul::loader::SoulLoader::new(
+            apex_router::soul::SoulConfig::default(),
+        ),
         heartbeat_scheduler: apex_router::heartbeat::HeartbeatScheduler::new(
-            apex_router::heartbeat::HeartbeatConfig::default()
+            apex_router::heartbeat::HeartbeatConfig::default(),
         ),
         mcp_manager: std::sync::Arc::new(apex_router::mcp::McpServerManager::new()),
-        anomaly_detector: Some(std::sync::Arc::new(apex_router::security::AnomalyDetector::new())),
+        anomaly_detector: Some(std::sync::Arc::new(
+            apex_router::security::AnomalyDetector::new(),
+        )),
         signature_store: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::skill_signer::SignatureStore::new()
+            apex_router::skill_signer::SignatureStore::new(),
         )),
         story_engine: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::story_engine::StoryEngine::new()
+            apex_router::story_engine::StoryEngine::new(),
         )),
         continuity_state: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::api::continuity_api::ContinuityState::default()
+            apex_router::api::continuity_api::ContinuityState::default(),
         )),
         privacy_guard: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::privacy_guard::PrivacyGuard::default_guard()
+            apex_router::privacy_guard::PrivacyGuard::default_guard(),
         )),
         context_scope_state: std::sync::Arc::new(std::sync::Mutex::new(
-            apex_router::api::context_scope_api::ContextScopeState::default()
+            apex_router::api::context_scope_api::ContextScopeState::default(),
         )),
         // Patch 15: Distributed Replay Protection
         replay_protection: std::sync::Arc::new(
-            apex_router::security::replay_protection::InMemoryReplayProtection::default()
+            apex_router::security::replay_protection::InMemoryReplayProtection::default(),
         ),
         // Patch 16: Streaming Analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
@@ -180,20 +205,50 @@ async fn create_test_state() -> AppState {
 async fn test_hmac_different_methods_different_signatures() {
     let secret = TEST_SECRET;
     let timestamp = chrono::Utc::now().timestamp();
-    
+
     let get_sig = sign_request(secret, "GET", "/api/v1/tasks", b"", timestamp);
     let post_sig = sign_request(secret, "POST", "/api/v1/tasks", b"", timestamp);
     let put_sig = sign_request(secret, "PUT", "/api/v1/tasks", b"{}", timestamp);
-    
+
     // All should be different
-    assert_ne!(get_sig, post_sig, "GET and POST should have different signatures");
-    assert_ne!(post_sig, put_sig, "POST and PUT should have different signatures");
-    assert_ne!(get_sig, put_sig, "GET and PUT should have different signatures");
-    
+    assert_ne!(
+        get_sig, post_sig,
+        "GET and POST should have different signatures"
+    );
+    assert_ne!(
+        post_sig, put_sig,
+        "POST and PUT should have different signatures"
+    );
+    assert_ne!(
+        get_sig, put_sig,
+        "GET and PUT should have different signatures"
+    );
+
     // All should verify correctly
-    assert!(verify_request(secret, "GET", "/api/v1/tasks", b"", &get_sig, timestamp));
-    assert!(verify_request(secret, "POST", "/api/v1/tasks", b"", &post_sig, timestamp));
-    assert!(verify_request(secret, "PUT", "/api/v1/tasks", b"{}", &put_sig, timestamp));
+    assert!(verify_request(
+        secret,
+        "GET",
+        "/api/v1/tasks",
+        b"",
+        &get_sig,
+        timestamp
+    ));
+    assert!(verify_request(
+        secret,
+        "POST",
+        "/api/v1/tasks",
+        b"",
+        &post_sig,
+        timestamp
+    ));
+    assert!(verify_request(
+        secret,
+        "PUT",
+        "/api/v1/tasks",
+        b"{}",
+        &put_sig,
+        timestamp
+    ));
 }
 
 // ============================================================================
@@ -203,50 +258,71 @@ async fn test_hmac_different_methods_different_signatures() {
 #[tokio::test]
 async fn test_totp_initial_status_not_configured() {
     let manager = TotpManager::new();
-    
+
     let has_secret = manager.has_secret(TEST_USER).await;
-    
-    assert!(!has_secret, "Initial TOTP status should show not configured");
+
+    assert!(
+        !has_secret,
+        "Initial TOTP status should show not configured"
+    );
 }
 
 #[tokio::test]
 async fn test_totp_generate_secret() {
     let manager = TotpManager::new();
-    
+
     let secret = manager.generate_secret(TEST_USER).await.unwrap();
-    
+
     assert!(!secret.is_empty(), "Generated secret should not be empty");
-    assert!(manager.has_secret(TEST_USER).await, "User should have secret after generation");
+    assert!(
+        manager.has_secret(TEST_USER).await,
+        "User should have secret after generation"
+    );
 }
 
 #[tokio::test]
 async fn test_totp_verify_no_secret_returns_error() {
     let manager = TotpManager::new();
-    
+
     let result = manager.verify(TEST_USER, "123456").await;
-    
-    assert!(result.is_err(), "Verifying without secret should return error");
+
+    assert!(
+        result.is_err(),
+        "Verifying without secret should return error"
+    );
 }
 
 #[tokio::test]
 async fn test_totp_remove_secret() {
     let manager = TotpManager::new();
-    
+
     // Generate secret
     manager.generate_secret(TEST_USER).await.unwrap();
-    assert!(manager.has_secret(TEST_USER).await, "User should have secret after generation");
-    
+    assert!(
+        manager.has_secret(TEST_USER).await,
+        "User should have secret after generation"
+    );
+
     // Remove secret
     manager.remove_secret(TEST_USER).await;
-    assert!(!manager.has_secret(TEST_USER).await, "User should not have secret after removal");
+    assert!(
+        !manager.has_secret(TEST_USER).await,
+        "User should not have secret after removal"
+    );
 }
 
 #[tokio::test]
 async fn test_totp_generate_otpauth_uri() {
     let uri = TotpManager::generate_otpauth_uri("JBSWY3DPEHPK3PXP", TEST_USER, "APEX");
-    
-    assert!(uri.contains("otpauth://totp/"), "URI should contain otpauth scheme");
-    assert!(uri.contains("secret="), "URI should contain secret parameter");
+
+    assert!(
+        uri.contains("otpauth://totp/"),
+        "URI should contain otpauth scheme"
+    );
+    assert!(
+        uri.contains("secret="),
+        "URI should contain secret parameter"
+    );
     assert!(uri.contains("issuer=APEX"), "URI should contain issuer");
 }
 
@@ -254,10 +330,11 @@ async fn test_totp_generate_otpauth_uri() {
 async fn test_totp_api_endpoint_setup() {
     let state = create_test_state().await;
     let app = create_router(state);
-    
+
     // Setup TOTP - requires auth
-    let (signature, timestamp) = generate_auth_headers("POST", "/api/v1/totp/setup", b"{\"user_id\":\"test-user\"}");
-    
+    let (signature, timestamp) =
+        generate_auth_headers("POST", "/api/v1/totp/setup", b"{\"user_id\":\"test-user\"}");
+
     let response = app
         .oneshot(
             Request::builder()
@@ -271,22 +348,26 @@ async fn test_totp_api_endpoint_setup() {
         )
         .await
         .unwrap();
-    
+
     // Should return OK with secret
-    assert_eq!(response.status(), StatusCode::OK, "TOTP setup should succeed with valid auth");
+    assert_eq!(
+        response.status(),
+        StatusCode::OK,
+        "TOTP setup should succeed with valid auth"
+    );
 }
 
 #[tokio::test]
 async fn test_totp_api_endpoint_verify() {
     let state = create_test_state().await;
-    
+
     // Pre-setup TOTP for user
     let secret = state.totp_manager.generate_secret(TEST_USER).await.unwrap();
-    
+
     // Generate a valid token using the totp_rs library
-    use totp_rs::{TOTP, Algorithm};
     use base32::Alphabet;
-    
+    use totp_rs::{Algorithm, TOTP};
+
     let secret_bytes = base32::decode(Alphabet::Rfc4648 { padding: false }, &secret).unwrap();
     let totp = TOTP::new(
         Algorithm::SHA1,
@@ -296,29 +377,35 @@ async fn test_totp_api_endpoint_verify() {
         secret_bytes,
         Some("APEX".to_string()),
         TEST_USER.to_string(),
-    ).unwrap();
-    
-    let valid_token = totp.generate(std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_secs());
-    
+    )
+    .unwrap();
+
+    let valid_token = totp.generate(
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    );
+
     // Verify valid token
     let result = state.totp_manager.verify(TEST_USER, &valid_token).await;
-    assert!(result.is_ok(), "Valid TOTP token should verify successfully");
+    assert!(
+        result.is_ok(),
+        "Valid TOTP token should verify successfully"
+    );
     assert!(result.unwrap(), "Valid token should return true");
 }
 
 #[tokio::test]
 async fn test_totp_api_verify_invalid_token() {
     let state = create_test_state().await;
-    
+
     // Pre-setup TOTP for user
     state.totp_manager.generate_secret(TEST_USER).await.unwrap();
-    
+
     // Verify with invalid token
     let result = state.totp_manager.verify(TEST_USER, "000000").await;
-    
+
     assert!(result.is_ok(), "Verification should return Ok");
     assert!(!result.unwrap(), "Invalid token should return false");
 }
@@ -330,12 +417,20 @@ async fn test_totp_api_verify_invalid_token() {
 #[tokio::test]
 async fn test_task_tier_classification() {
     // Test that tasks are properly classified into tiers
-    
+
     // Instant tier: simple queries
     let instant_result = TaskClassifier::classify("What time is it?");
-    assert_eq!(instant_result, TaskTier::Instant, "Simple query should be Instant tier");
-    
-    // Shallow tier: single skill execution  
+    assert_eq!(
+        instant_result,
+        TaskTier::Instant,
+        "Simple query should be Instant tier"
+    );
+
+    // Shallow tier: single skill execution
     let shallow_result = TaskClassifier::classify("Generate Python code for a function");
-    assert_eq!(shallow_result, TaskTier::Shallow, "Skill execution should be Shallow tier");
+    assert_eq!(
+        shallow_result,
+        TaskTier::Shallow,
+        "Skill execution should be Shallow tier"
+    );
 }

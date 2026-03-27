@@ -1,10 +1,10 @@
 use axum::{
     extract::{Path, Query, State},
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -13,8 +13,16 @@ use apex_memory::DecisionJournalRepository;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/journal", get(list_journal).post(create_journal_entry))
-        .route("/api/v1/journal/:id", get(get_journal_entry).put(update_journal_entry).delete(delete_journal_entry))
+        .route(
+            "/api/v1/journal",
+            get(list_journal).post(create_journal_entry),
+        )
+        .route(
+            "/api/v1/journal/:id",
+            get(get_journal_entry)
+                .put(update_journal_entry)
+                .delete(delete_journal_entry),
+        )
         .route("/api/v1/journal/search", get(search_journal))
 }
 
@@ -93,7 +101,7 @@ async fn list_journal(
     let limit = query.limit.unwrap_or(20);
     let offset = query.offset.unwrap_or(0);
     let repo = DecisionJournalRepository::new(&state.pool);
-    
+
     match repo.find_all(limit, offset).await {
         Ok(entries) => {
             let total = entries.len() as i64;
@@ -102,7 +110,10 @@ async fn list_journal(
                 total,
             }))
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to list journal: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to list journal: {}", e),
+        )),
     }
 }
 
@@ -113,7 +124,10 @@ async fn get_journal_entry(
     let repo = DecisionJournalRepository::new(&state.pool);
     match repo.find_by_id(&id).await {
         Ok(e) => Ok(AxumJson(e.map(convert_entry))),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to get entry: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to get entry: {}", e),
+        )),
     }
 }
 
@@ -132,16 +146,22 @@ async fn create_journal_entry(
         tags: payload.tags,
     };
     let repo = DecisionJournalRepository::new(&state.pool);
-    
+
     match repo.create(&id, create).await {
         Ok(_) => {
             if let Ok(Some(e)) = repo.find_by_id(&id).await {
                 Ok((StatusCode::CREATED, AxumJson(convert_entry(e))))
             } else {
-                Err((StatusCode::INTERNAL_SERVER_ERROR, "Failed to find created entry".to_string()))
+                Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "Failed to find created entry".to_string(),
+                ))
             }
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to create entry: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to create entry: {}", e),
+        )),
     }
 }
 
@@ -160,7 +180,7 @@ async fn update_journal_entry(
         tags: payload.tags,
     };
     let repo = DecisionJournalRepository::new(&state.pool);
-    
+
     match repo.update(&id, update).await {
         Ok(_) => {
             if let Ok(Some(e)) = repo.find_by_id(&id).await {
@@ -169,7 +189,10 @@ async fn update_journal_entry(
                 Ok(AxumJson(None))
             }
         }
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to update entry: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to update entry: {}", e),
+        )),
     }
 }
 
@@ -180,7 +203,10 @@ async fn delete_journal_entry(
     let repo = DecisionJournalRepository::new(&state.pool);
     match repo.delete(&id).await {
         Ok(_) => Ok(AxumJson(true)),
-        Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to delete entry: {}", e))),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to delete entry: {}", e),
+        )),
     }
 }
 
@@ -189,7 +215,7 @@ async fn search_journal(
     State(state): State<AppState>,
 ) -> Result<AxumJson<JournalSearchResponse>, (StatusCode, String)> {
     let limit = query.limit.unwrap_or(20);
-    
+
     if let Some(q) = query.q {
         let repo = DecisionJournalRepository::new(&state.pool);
         match repo.search(&q, limit).await {
@@ -200,7 +226,10 @@ async fn search_journal(
                     total,
                 }))
             }
-            Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Search failed: {}", e))),
+            Err(e) => Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Search failed: {}", e),
+            )),
         }
     } else {
         list_journal(Query(query), State(state)).await

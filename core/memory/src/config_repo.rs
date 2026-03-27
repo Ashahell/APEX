@@ -43,10 +43,12 @@ impl ConfigRepository {
     }
 
     pub async fn get(&self, key: &str) -> Result<Option<ConfigEntry>, sqlx::Error> {
-        sqlx::query_as::<_, ConfigEntry>("SELECT key, value, created_at, updated_at FROM config_store WHERE key = ?")
-            .bind(key)
-            .fetch_optional(&self.pool)
-            .await
+        sqlx::query_as::<_, ConfigEntry>(
+            "SELECT key, value, created_at, updated_at FROM config_store WHERE key = ?",
+        )
+        .bind(key)
+        .fetch_optional(&self.pool)
+        .await
     }
 
     pub async fn set(&self, key: &str, value: &str) -> Result<(), sqlx::Error> {
@@ -55,7 +57,7 @@ impl ConfigRepository {
             INSERT INTO config_store (key, value, updated_at)
             VALUES (?, ?, datetime('now'))
             ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = datetime('now')
-            "#
+            "#,
         )
         .bind(key)
         .bind(value)
@@ -75,9 +77,11 @@ impl ConfigRepository {
     }
 
     pub async fn get_all(&self) -> Result<Vec<ConfigEntry>, sqlx::Error> {
-        sqlx::query_as::<_, ConfigEntry>("SELECT key, value, created_at, updated_at FROM config_store")
-            .fetch_all(&self.pool)
-            .await
+        sqlx::query_as::<_, ConfigEntry>(
+            "SELECT key, value, created_at, updated_at FROM config_store",
+        )
+        .fetch_all(&self.pool)
+        .await
     }
 
     // MCP Server methods
@@ -135,7 +139,12 @@ impl ConfigRepository {
         Ok(())
     }
 
-    pub async fn update_mcp_server_status(&self, id: &str, status: &str, error: Option<&str>) -> Result<(), sqlx::Error> {
+    pub async fn update_mcp_server_status(
+        &self,
+        id: &str,
+        status: &str,
+        error: Option<&str>,
+    ) -> Result<(), sqlx::Error> {
         sqlx::query(
             "UPDATE mcp_servers SET status = ?, last_error = ?, updated_at = datetime('now') WHERE id = ?"
         )
@@ -159,7 +168,7 @@ impl ConfigRepository {
 
     pub async fn get_all_mcp_tools(&self) -> Result<Vec<McpTool>, sqlx::Error> {
         sqlx::query_as::<_, McpTool>(
-            "SELECT id, server_id, name, description, input_schema FROM mcp_tools"
+            "SELECT id, server_id, name, description, input_schema FROM mcp_tools",
         )
         .fetch_all(&self.pool)
         .await
@@ -171,7 +180,7 @@ impl ConfigRepository {
             INSERT INTO mcp_tools (id, server_id, name, description, input_schema)
             VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET name = ?, description = ?, input_schema = ?
-            "#
+            "#,
         )
         .bind(&tool.id)
         .bind(&tool.server_id)

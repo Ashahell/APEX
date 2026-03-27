@@ -7,7 +7,10 @@ fn sanitize_identifier(value: &str) -> Result<String, String> {
     if value.is_empty() || value.len() > 100 {
         return Err("Invalid identifier length".to_string());
     }
-    if !value.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ') {
+    if !value
+        .chars()
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_' || c == ' ')
+    {
         return Err("Invalid characters in identifier".to_string());
     }
     Ok(value.to_string())
@@ -160,7 +163,7 @@ impl<'a> TaskRepository<'a> {
             WHERE status IN ('completed', 'failed', 'cancelled') 
             AND completed_at IS NOT NULL 
             AND completed_at < datetime('now', ?)
-            "#
+            "#,
         )
         .bind(format!("-{} days", days))
         .execute(self.pool)
@@ -182,9 +185,13 @@ impl<'a> TaskRepository<'a> {
         Ok(cents as f64 / 100.0)
     }
 
-    pub async fn find_by_project(&self, project: &str, limit: i64) -> Result<Vec<Task>, sqlx::Error> {
+    pub async fn find_by_project(
+        &self,
+        project: &str,
+        limit: i64,
+    ) -> Result<Vec<Task>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            "SELECT * FROM tasks WHERE project = ? ORDER BY created_at DESC LIMIT ?"
+            "SELECT * FROM tasks WHERE project = ? ORDER BY created_at DESC LIMIT ?",
         )
         .bind(project)
         .bind(limit)
@@ -192,9 +199,13 @@ impl<'a> TaskRepository<'a> {
         .await
     }
 
-    pub async fn find_by_priority(&self, priority: &str, limit: i64) -> Result<Vec<Task>, sqlx::Error> {
+    pub async fn find_by_priority(
+        &self,
+        priority: &str,
+        limit: i64,
+    ) -> Result<Vec<Task>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            "SELECT * FROM tasks WHERE priority = ? ORDER BY created_at DESC LIMIT ?"
+            "SELECT * FROM tasks WHERE priority = ? ORDER BY created_at DESC LIMIT ?",
         )
         .bind(priority)
         .bind(limit)
@@ -202,9 +213,13 @@ impl<'a> TaskRepository<'a> {
         .await
     }
 
-    pub async fn find_by_category(&self, category: &str, limit: i64) -> Result<Vec<Task>, sqlx::Error> {
+    pub async fn find_by_category(
+        &self,
+        category: &str,
+        limit: i64,
+    ) -> Result<Vec<Task>, sqlx::Error> {
         sqlx::query_as::<_, Task>(
-            "SELECT * FROM tasks WHERE category = ? ORDER BY created_at DESC LIMIT ?"
+            "SELECT * FROM tasks WHERE category = ? ORDER BY created_at DESC LIMIT ?",
         )
         .bind(category)
         .bind(limit)
@@ -268,11 +283,11 @@ impl<'a> TaskRepository<'a> {
 
         // Use query! macro with validated values to prevent SQL injection
         let mut query_builder = sqlx::query_as::<_, Task>(&query);
-        
+
         for value in &values {
             query_builder = query_builder.bind(value.as_str());
         }
-        
+
         query_builder
             .bind(limit)
             .bind(offset)
@@ -327,9 +342,11 @@ impl<'a> TaskRepository<'a> {
     }
 
     pub async fn get_projects(&self) -> Result<Vec<String>, sqlx::Error> {
-        let rows = sqlx::query("SELECT DISTINCT project FROM tasks WHERE project IS NOT NULL ORDER BY project")
-            .fetch_all(self.pool)
-            .await?;
+        let rows = sqlx::query(
+            "SELECT DISTINCT project FROM tasks WHERE project IS NOT NULL ORDER BY project",
+        )
+        .fetch_all(self.pool)
+        .await?;
 
         let mut projects = Vec::new();
         for row in rows {
@@ -341,9 +358,11 @@ impl<'a> TaskRepository<'a> {
     }
 
     pub async fn get_categories(&self) -> Result<Vec<String>, sqlx::Error> {
-        let rows = sqlx::query("SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL ORDER BY category")
-            .fetch_all(self.pool)
-            .await?;
+        let rows = sqlx::query(
+            "SELECT DISTINCT category FROM tasks WHERE category IS NOT NULL ORDER BY category",
+        )
+        .fetch_all(self.pool)
+        .await?;
 
         let mut categories = Vec::new();
         for row in rows {
@@ -354,7 +373,11 @@ impl<'a> TaskRepository<'a> {
         Ok(categories)
     }
 
-    pub async fn update_input_content(&self, id: &str, input_content: &str) -> Result<(), sqlx::Error> {
+    pub async fn update_input_content(
+        &self,
+        id: &str,
+        input_content: &str,
+    ) -> Result<(), sqlx::Error> {
         let now = Utc::now();
         sqlx::query("UPDATE tasks SET input_content = ?, updated_at = ? WHERE id = ?")
             .bind(input_content)

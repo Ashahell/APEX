@@ -1,8 +1,8 @@
 use axum::{
     extract::{Path, Query, State},
     response::Json,
-    Router,
     routing::{get, post},
+    Router,
 };
 use serde::{Deserialize, Serialize};
 
@@ -61,7 +61,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/audit", get(list_audit))
         .route("/api/v1/audit", post(create_audit))
-        .route("/api/v1/audit/entity/:entity_type/:entity_id", get(get_audit_by_entity))
+        .route(
+            "/api/v1/audit/entity/:entity_type/:entity_id",
+            get(get_audit_by_entity),
+        )
         .route("/api/v1/audit/chain", get(get_chain_status))
 }
 
@@ -72,17 +75,20 @@ async fn list_audit(
     let limit = query.limit.unwrap_or(50).min(100);
     let offset = query.offset.unwrap_or(0);
 
-    let entries = if let (Some(entity_type), Some(entity_id)) = (&query.entity_type, &query.entity_id) {
-        state.audit_repo
-            .find_by_entity(entity_type, entity_id)
-            .await
-            .map_err(|e| format!("Failed to list audit: {}", e))?
-    } else {
-        state.audit_repo
-            .find_all(limit, offset)
-            .await
-            .map_err(|e| format!("Failed to list audit: {}", e))?
-    };
+    let entries =
+        if let (Some(entity_type), Some(entity_id)) = (&query.entity_type, &query.entity_id) {
+            state
+                .audit_repo
+                .find_by_entity(entity_type, entity_id)
+                .await
+                .map_err(|e| format!("Failed to list audit: {}", e))?
+        } else {
+            state
+                .audit_repo
+                .find_all(limit, offset)
+                .await
+                .map_err(|e| format!("Failed to list audit: {}", e))?
+        };
 
     Ok(Json(entries.into_iter().map(|e| e.into()).collect()))
 }
@@ -91,7 +97,8 @@ async fn create_audit(
     State(state): State<AppState>,
     Json(req): Json<CreateAuditRequest>,
 ) -> Result<Json<AuditEntryResponse>, String> {
-    let entry = state.audit_repo
+    let entry = state
+        .audit_repo
         .create(apex_memory::CreateAuditEntry {
             action: req.action,
             entity_type: req.entity_type,
@@ -108,7 +115,8 @@ async fn get_audit_by_entity(
     State(state): State<AppState>,
     Path((entity_type, entity_id)): Path<(String, String)>,
 ) -> Result<Json<Vec<AuditEntryResponse>>, String> {
-    let entries = state.audit_repo
+    let entries = state
+        .audit_repo
         .find_by_entity(&entity_type, &entity_id)
         .await
         .map_err(|e| format!("Failed to get audit: {}", e))?;
@@ -116,15 +124,15 @@ async fn get_audit_by_entity(
     Ok(Json(entries.into_iter().map(|e| e.into()).collect()))
 }
 
-async fn get_chain_status(
-    State(state): State<AppState>,
-) -> Result<Json<AuditChainStatus>, String> {
-    let valid = state.audit_repo
+async fn get_chain_status(State(state): State<AppState>) -> Result<Json<AuditChainStatus>, String> {
+    let valid = state
+        .audit_repo
         .verify_chain()
         .await
         .map_err(|e| format!("Failed to verify chain: {}", e))?;
 
-    let total = state.audit_repo
+    let total = state
+        .audit_repo
         .count()
         .await
         .map_err(|e| format!("Failed to count audit: {}", e))?;

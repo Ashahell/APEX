@@ -20,7 +20,13 @@ pub struct ScreenshotManager {
 impl ScreenshotManager {
     pub fn new() -> Self {
         ScreenshotManager {
-            config: ScreenshotConfig { display: 0, quality: 70, max_width: 1024, max_height: 768, cache_ttl_ms: 60000 },
+            config: ScreenshotConfig {
+                display: 0,
+                quality: 70,
+                max_width: 1024,
+                max_height: 768,
+                cache_ttl_ms: 60000,
+            },
         }
     }
 }

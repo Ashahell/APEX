@@ -44,29 +44,29 @@ pub mod memory_constants {
     /// Default character limit for MEMORY.md (agent's notes)
     /// ~800 tokens, keeps system prompts bounded
     pub const DEFAULT_MEMORY_CHAR_LIMIT: usize = 2_200;
-    
+
     /// Default character limit for USER.md (user profile)
     /// ~500 tokens
     pub const DEFAULT_USER_CHAR_LIMIT: usize = 1_375;
-    
+
     /// Capacity threshold for showing warning (80%)
     pub const MEMORY_WARNING_THRESHOLD: f32 = 0.80;
-    
+
     /// Capacity threshold for forcing consolidation (95%)
     pub const MEMORY_CRITICAL_THRESHOLD: f32 = 0.95;
-    
+
     /// Minimum character length for a useful entry
     pub const MIN_ENTRY_LENGTH: usize = 10;
-    
+
     /// Maximum character length for a single entry
     pub const MAX_ENTRY_LENGTH: usize = 500;
-    
+
     /// Delimiter used to separate entries in snapshot
     pub const ENTRY_DELIMITER: &str = "§";
-    
+
     /// Default memory directory name
     pub const MEMORY_DIR: &str = "memory";
-    
+
     /// Memory file names
     pub const MEMORY_FILE: &str = "memory.md";
     pub const USER_FILE: &str = "user.md";
@@ -76,22 +76,22 @@ pub mod memory_constants {
 pub mod skill_constants {
     /// Minimum tool calls to trigger skill creation
     pub const MIN_TOOL_CALLS_FOR_SKILL: u32 = 5;
-    
+
     /// Minimum successful steps to consider task complete
     pub const MIN_SUCCESSFUL_STEPS: u32 = 3;
-    
+
     /// Version string for auto-created skills
     pub const SKILL_VERSION: &str = "1.0.0";
-    
+
     /// Category for agent-created skills
     pub const AUTO_SKILL_CATEGORY: &str = "auto-created";
-    
+
     /// Directory for auto-created skills
     pub const AUTO_SKILLS_DIR: &str = "skills/auto-created";
-    
+
     /// Subdirectory for skill reference files
     pub const SKILL_REFERENCES_DIR: &str = "references";
-    
+
     /// Triggers that indicate memory-worthy content
     pub const MEMORY_TRIGGERS: [&str; 6] = [
         "learned",
@@ -101,7 +101,7 @@ pub mod skill_constants {
         "remember to",
         "important:",
     ];
-    
+
     /// Maximum skill description length
     pub const MAX_SKILL_DESCRIPTION: usize = 200;
 }
@@ -109,40 +109,40 @@ pub mod skill_constants {
 /// Skills hub/marketplace constants
 pub mod hub_constants {
     use crate::hub_client::TrustLevel;
-    
+
     /// Trust level: Built-in (ships with Hermes)
     pub const TRUST_LEVEL_BUILTIN: &str = "builtin";
-    
+
     /// Trust level: Official (in repo)
     pub const TRUST_LEVEL_OFFICIAL: &str = "official";
-    
+
     /// Trust level: Trusted registry
     pub const TRUST_LEVEL_TRUSTED: &str = "trusted";
-    
+
     /// Trust level: Community source
     pub const TRUST_LEVEL_COMMUNITY: &str = "community";
-    
+
     /// Default hub URL
     pub const DEFAULT_HUB_URL: &str = "https://skills.sh/api/v1";
-    
+
     /// Hub request timeout in seconds
     pub const HUB_REQUEST_TIMEOUT_SECS: u64 = 30;
-    
+
     /// Minimum trust level required (verified, trusted, community)
     pub const MIN_TRUST_LEVEL: TrustLevel = TrustLevel::Community;
-    
+
     /// skills.sh base URL
     pub const SKILLS_SH_URL: &str = "https://skills.sh";
-    
+
     /// agentskills.io base URL
     pub const AGENTSKILLS_URL: &str = "https://agentskills.io";
-    
+
     /// Hub cache TTL in seconds (1 hour)
     pub const HUB_CACHE_TTL_SECS: u64 = 3600;
-    
+
     /// Hub list request timeout in milliseconds
     pub const HUB_LIST_TIMEOUT_MS: u64 = 5000;
-    
+
     /// Security scan dangerous patterns
     pub const DANGEROUS_PATTERNS: [&str; 5] = [
         r"curl\s+\|\s*sh",
@@ -157,22 +157,22 @@ pub mod hub_constants {
 pub mod search_constants {
     /// FTS5 tokenizer configuration
     pub const FTS5_TOKENIZER: &str = "porter unicode61";
-    
+
     /// Maximum search results to return
     pub const MAX_SEARCH_RESULTS: usize = 20;
-    
+
     /// Maximum summary length for LLM summarization
     pub const MAX_SUMMARY_LENGTH: usize = 500;
-    
+
     /// BM25 k1 parameter for relevance scoring
     pub const BM25_K1: f64 = 1.2;
-    
+
     /// BM25 b parameter for relevance scoring
     pub const BM25_B: f64 = 0.75;
-    
+
     /// Session search FTS5 table name
     pub const SESSIONS_FTS_TABLE: &str = "sessions_fts";
-    
+
     /// Default session context window
     pub const DEFAULT_SESSION_CONTEXT_LINES: usize = 50;
 }
@@ -181,16 +181,16 @@ pub mod search_constants {
 pub mod user_constants {
     /// Maximum user name length
     pub const USER_NAME_MAX_LENGTH: usize = 100;
-    
+
     /// Maximum preferences total length
     pub const USER_PREFERENCES_MAX_LENGTH: usize = 1000;
-    
+
     /// Maximum preferred tools to track
     pub const MAX_PREFERRED_TOOLS: usize = 20;
-    
+
     /// Maximum preferred categories to track
     pub const MAX_PREFERRED_CATEGORIES: usize = 10;
-    
+
     /// Valid communication styles
     pub const COMMUNICATION_STYLES: [&str; 4] = [
         "concise",   // Brief responses
@@ -198,16 +198,16 @@ pub mod user_constants {
         "technical", // Technical depth
         "casual",    // Conversational
     ];
-    
+
     /// Minimum confidence for preference to be included in system prompt
     pub const PREFERENCE_CONFIDENCE_THRESHOLD: f32 = 0.8;
-    
+
     /// Minimum interactions to establish a preference
     pub const MIN_INTERACTIONS_FOR_PREFERENCE: u32 = 3;
-    
+
     /// Default communication style for new users
     pub const DEFAULT_COMMUNICATION_STYLE: &str = "detailed";
-    
+
     /// Maximum pet peeves to track
     pub const MAX_PET_PEEVES: usize = 10;
 }
@@ -231,13 +231,13 @@ pub struct AppConfig {
     pub logging: LoggingConfig,
     pub skills: SkillsConfig,
     pub skill_pool: SkillPoolConfigSection,
-    pub tool_validation_level: Option<String>,  // Feature 1: Tool validation level
+    pub tool_validation_level: Option<String>, // Feature 1: Tool validation level
     pub soul: SoulConfig,
     pub heartbeat: HeartbeatConfig,
     pub moltbook: MoltbookConfigSection,
     pub memory: MemoryConfig,
     pub hub: HubConfig,
-    pub streaming: StreamingConfig,  // Patch 11: SSE streaming config
+    pub streaming: StreamingConfig, // Patch 11: SSE streaming config
     #[serde(skip)]
     pub config_source: ConfigSource,
 }
@@ -269,14 +269,13 @@ pub struct AuthConfig {
 impl Default for AuthConfig {
     fn default() -> Self {
         // In production, require the secret. In development, allow a dev secret.
-        let shared_secret = std::env::var("APEX_SHARED_SECRET")
-            .unwrap_or_else(|_| {
-                // Allow dev secret in development builds
-                // In production deployments, ensure APEX_SHARED_SECRET is set
-                tracing::warn!("Using dev secret. Set APEX_SHARED_SECRET for production.");
-                "dev-secret-change-in-production".to_string()
-            });
-        
+        let shared_secret = std::env::var("APEX_SHARED_SECRET").unwrap_or_else(|_| {
+            // Allow dev secret in development builds
+            // In production deployments, ensure APEX_SHARED_SECRET is set
+            tracing::warn!("Using dev secret. Set APEX_SHARED_SECRET for production.");
+            "dev-secret-change-in-production".to_string()
+        });
+
         Self {
             shared_secret,
             disabled: std::env::var("APEX_AUTH_DISABLED")
@@ -358,46 +357,46 @@ pub enum LlmProvider {
     Ollama,
     Vllm,
     LmStudio,
-    
+
     // Major Cloud Providers
     OpenAI,
     Anthropic,
     Google,
     Azure,
-    
+
     // Aggregators & Gateways
     OpenRouter,
     Cloudflare,
     Vercel,
     Together,
     LiteLlama,
-    
+
     // AI Providers
     Mistral,
     Cohere,
     Groq,
     Fireworks,
     HuggingFace,
-    
+
     // Chinese Providers
     ZhipuGlm,
     Qianfan,
     Moonshot,
     MiniMax,
-    
+
     // Enterprise
     Bedrock,
     Vertex,
-    
+
     // xAI
     Xai,
-    
+
     // Venice
     Venice,
-    
+
     // OpenCode
     OpenCode,
-    
+
     // Custom (any OpenAI-compatible endpoint)
     Custom,
 }
@@ -594,7 +593,8 @@ impl Default for NatsConfig {
                 .ok()
                 .map(|v| v == "1")
                 .unwrap_or(false),
-            url: std::env::var("APEX_NATS_URL").unwrap_or_else(|_| config_constants::DEFAULT_NATS_URL.to_string()),
+            url: std::env::var("APEX_NATS_URL")
+                .unwrap_or_else(|_| config_constants::DEFAULT_NATS_URL.to_string()),
             subject_prefix: std::env::var("APEX_NATS_SUBJECT_PREFIX")
                 .unwrap_or_else(|_| "apex".to_string()),
         }
@@ -859,7 +859,13 @@ impl Default for StreamingConfig {
                 .unwrap_or(3600), // 1 hour default
             replay_backend: std::env::var("APEX_REPLAY_BACKEND")
                 .ok()
-                .map(|v| if v == "redis" { ReplayBackend::Redis } else { ReplayBackend::Memory })
+                .map(|v| {
+                    if v == "redis" {
+                        ReplayBackend::Redis
+                    } else {
+                        ReplayBackend::Memory
+                    }
+                })
                 .unwrap_or(ReplayBackend::Memory),
             redis_url: std::env::var("APEX_REDIS_URL").ok(),
         }
@@ -887,7 +893,9 @@ impl Default for AppConfig {
             logging: LoggingConfig::default(),
             skills: SkillsConfig::default(),
             skill_pool: SkillPoolConfigSection::default(),
-            tool_validation_level: Some(tool_validation_constants::DEFAULT_VALIDATION_LEVEL.to_string()),
+            tool_validation_level: Some(
+                tool_validation_constants::DEFAULT_VALIDATION_LEVEL.to_string(),
+            ),
             soul: SoulConfig::default(),
             heartbeat: HeartbeatConfig::default(),
             moltbook: MoltbookConfigSection::default(),
@@ -967,41 +975,48 @@ impl AppConfig {
 
     /// Load config from database using ConfigRepository
     pub async fn load_from_db(repo: &apex_memory::ConfigRepository) -> Result<Self, ConfigError> {
-        let entry = repo.get("app_config").await
+        let entry = repo
+            .get("app_config")
+            .await
             .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
+
         match entry {
             Some(e) => {
-                serde_json::from_str(&e.value)
-                    .map_err(|e| ConfigError::ParseError(e.to_string()))
+                serde_json::from_str(&e.value).map_err(|e| ConfigError::ParseError(e.to_string()))
             }
             None => Ok(Self::default()),
         }
     }
 
     /// Save config to database using ConfigRepository
-    pub async fn save_to_db(&self, repo: &apex_memory::ConfigRepository) -> Result<(), ConfigError> {
-        let json = serde_json::to_string(self)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
-        
-        repo.set("app_config", &json).await
+    pub async fn save_to_db(
+        &self,
+        repo: &apex_memory::ConfigRepository,
+    ) -> Result<(), ConfigError> {
+        let json =
+            serde_json::to_string(self).map_err(|e| ConfigError::ParseError(e.to_string()))?;
+
+        repo.set("app_config", &json)
+            .await
             .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
+
         // Also update global in-memory config
         Self::set_global(self.clone());
-        
+
         Ok(())
     }
 
     /// Load a specific section (e.g., "llms") from database
     pub async fn load_section_from_db<T: serde::de::DeserializeOwned>(
         repo: &apex_memory::ConfigRepository,
-        key: &str
+        key: &str,
     ) -> Result<Option<T>, ConfigError> {
         let full_key = format!("app_config_{}", key);
-        let entry = repo.get(&full_key).await
+        let entry = repo
+            .get(&full_key)
+            .await
             .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
+
         match entry {
             Some(e) => {
                 let value: T = serde_json::from_str(&e.value)
@@ -1016,23 +1031,24 @@ impl AppConfig {
     pub async fn save_section_to_db<T: serde::Serialize>(
         repo: &apex_memory::ConfigRepository,
         key: &str,
-        value: &T
+        value: &T,
     ) -> Result<(), ConfigError> {
         let full_key = format!("app_config_{}", key);
-        let json = serde_json::to_string(value)
-            .map_err(|e| ConfigError::ParseError(e.to_string()))?;
-        
-        repo.set(&full_key, &json).await
+        let json =
+            serde_json::to_string(value).map_err(|e| ConfigError::ParseError(e.to_string()))?;
+
+        repo.set(&full_key, &json)
+            .await
             .map_err(|e| ConfigError::IoError(e.to_string()))?;
-        
+
         Ok(())
     }
 
     pub fn global() -> AppConfig {
         // C4 Step 1: Check thread-local override first (for test isolation)
-        THREAD_CONFIG.with(|c| {
-            c.borrow().clone()
-        }).unwrap_or_else(|| Self::get_global().unwrap_or_else(Self::default))
+        THREAD_CONFIG
+            .with(|c| c.borrow().clone())
+            .unwrap_or_else(|| Self::get_global().unwrap_or_else(Self::default))
     }
 
     /// C4 Step 1: Test helper — sets a config visible only to the calling thread.
@@ -1116,7 +1132,11 @@ impl AppConfig {
         );
         vars.insert(
             "APEX_VM_SECCOMP_LEVEL".to_string(),
-            self.execution.firecracker.seccomp_level.map(|v| v.to_string()).unwrap_or_default(),
+            self.execution
+                .firecracker
+                .seccomp_level
+                .map(|v| v.to_string())
+                .unwrap_or_default(),
         );
 
         vars.insert("APEX_DATABASE_URL".to_string(), "[REDACTED]".to_string());
@@ -1312,35 +1332,61 @@ mod tests {
 pub mod tool_validation_constants {
     /// Strict import allowlist - only safe stdlib modules
     pub const STRICT_IMPORT_ALLOWLIST: &[&str] = &[
-        "json", "re", "math", "datetime", "collections", "itertools",
-        "random", "uuid", "hashlib", "typing", "os.path", "pathlib",
+        "json",
+        "re",
+        "math",
+        "datetime",
+        "collections",
+        "itertools",
+        "random",
+        "uuid",
+        "hashlib",
+        "typing",
+        "os.path",
+        "pathlib",
     ];
-    
+
     /// Moderate import allowlist - includes network and parsing
     pub const MODERATE_IMPORT_ALLOWLIST: &[&str] = &[
         // Strict +
-        "urllib", "http.client", "csv", "xml.etree", "base64",
-        "textwrap", "html", "ast", "inspect", "functools",
+        "urllib",
+        "http.client",
+        "csv",
+        "xml.etree",
+        "base64",
+        "textwrap",
+        "html",
+        "ast",
+        "inspect",
+        "functools",
     ];
-    
+
     /// System killer imports - always blocked
     pub const SYSTEM_KILLER_IMPORTS: &[&str] = &[
-        "os.system", "subprocess", "pty", "socket", "ctypes",
-        "importlib", "__import__", "eval", "exec", "compile",
+        "os.system",
+        "subprocess",
+        "pty",
+        "socket",
+        "ctypes",
+        "importlib",
+        "__import__",
+        "eval",
+        "exec",
+        "compile",
     ];
-    
+
     /// Default validation level
     pub const DEFAULT_VALIDATION_LEVEL: &str = "strict";
-    
+
     /// Maximum code length (characters)
     pub const MAX_CODE_LENGTH: usize = 50000;
-    
+
     /// Sandbox timeout (seconds)
     pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
-    
+
     /// Validation levels
     pub const VALIDATION_LEVELS: [&str; 3] = ["strict", "moderate", "permissive"];
-    
+
     /// Maximum blocked imports to report
     pub const MAX_BLOCKED_REPORT: usize = 10;
 }
@@ -1349,48 +1395,53 @@ pub mod tool_validation_constants {
 pub mod persona_constants {
     /// Maximum number of personas
     pub const MAX_PERSONAS: usize = 20;
-    
+
     /// Default persona name
     pub const DEFAULT_PERSONA_NAME: &str = "default";
-    
+
     /// Persona file name
     pub const PERSONA_FILE: &str = "personas.json";
-    
+
     /// Maximum prompt pieces per persona
     pub const MAX_PROMPT_PIECES: usize = 10;
-    
+
     /// Maximum tools per persona
     pub const MAX_TOOLS_PER_PERSONA: usize = 50;
-    
+
     /// Maximum persona name length
     pub const MAX_NAME_LENGTH: usize = 50;
-    
+
     /// Maximum description length
     pub const MAX_DESCRIPTION_LENGTH: usize = 500;
-    
+
     /// Valid prompt piece types
-    pub const PROMPT_PIECE_TYPES: [&str; 5] = [
-        "system", "location", "emotion", "context", "custom"
-    ];
+    pub const PROMPT_PIECE_TYPES: [&str; 5] =
+        ["system", "location", "emotion", "context", "custom"];
 }
 
 /// Privacy constants (Feature 6: Privacy Toggle)
 pub mod privacy_constants {
     /// Privacy mode config key
     pub const PRIVACY_MODE_KEY: &str = "privacy_mode_enabled";
-    
+
     /// Cloud provider identifiers
     pub const CLOUD_PROVIDERS: [&str; 8] = [
-        "openai", "anthropic", "google", "cohere", "fireworks",
-        "azure", "aws_bedrock", "huggingface"
+        "openai",
+        "anthropic",
+        "google",
+        "cohere",
+        "fireworks",
+        "azure",
+        "aws_bedrock",
+        "huggingface",
     ];
-    
+
     /// Privacy warning threshold (percent)
     pub const PRIVACY_WARNING_THRESHOLD: usize = 80;
-    
+
     /// Maximum audit log entries
     pub const MAX_AUDIT_ENTRIES: usize = 1000;
-    
+
     /// Audit log file name
     pub const AUDIT_LOG_FILE: &str = "privacy_audit.log";
 }
@@ -1399,25 +1450,30 @@ pub mod privacy_constants {
 pub mod continuity_constants {
     /// Maximum scheduled tasks
     pub const MAX_SCHEDULED_TASKS: usize = 50;
-    
+
     /// Task type identifiers
     pub const TASK_TYPES: [&str; 7] = [
-        "morning_greeting", "evening_checkin", "weekly_summary",
-        "dream_mode", "alarm", "random_checkin", "custom"
+        "morning_greeting",
+        "evening_checkin",
+        "weekly_summary",
+        "dream_mode",
+        "alarm",
+        "random_checkin",
+        "custom",
     ];
-    
+
     /// Default morning hour (24h format)
     pub const DEFAULT_MORNING_HOUR: u32 = 8;
-    
+
     /// Default evening hour (24h format)
     pub const DEFAULT_EVENING_HOUR: u32 = 21;
-    
+
     /// Maximum task history entries
     pub const MAX_TASK_HISTORY: usize = 100;
-    
+
     /// Schedule check interval (seconds)
     pub const CHECK_INTERVAL_SECS: u64 = 60;
-    
+
     /// Cron field limits
     pub const CRON_SECOND_MIN: u32 = 0;
     pub const CRON_SECOND_MAX: u32 = 59;
@@ -1437,22 +1493,22 @@ pub mod continuity_constants {
 pub mod signing_constants {
     /// Signature algorithm
     pub const SIGNATURE_ALGORITHM: &str = "ed25519";
-    
+
     /// Signature expiry days
     pub const SIGNATURE_EXPIRY_DAYS: i64 = 365;
-    
+
     /// Key bits
     pub const KEY_BITS: usize = 256;
-    
+
     /// Maximum signature size (bytes)
     pub const MAX_SIGNATURE_SIZE: usize = 64;
-    
+
     /// Keys directory
     pub const KEYS_DIR: &str = "keys";
-    
+
     /// Signing key file
     pub const SIGNING_KEY_FILE: &str = "signing_key.pem";
-    
+
     /// Verification key file
     pub const VERIFY_KEY_FILE: &str = "verify_key.pub";
 }
@@ -1461,27 +1517,26 @@ pub mod signing_constants {
 pub mod story_constants {
     /// Maximum stories
     pub const MAX_STORIES: usize = 100;
-    
+
     /// Maximum story turns
     pub const MAX_STORY_TURNS: usize = 10000;
-    
+
     /// Valid dice types
     pub const DICE_TYPES: [&str; 7] = ["d4", "d6", "d8", "d10", "d12", "d20", "d100"];
-    
+
     /// Default dice
     pub const DEFAULT_DICE: &str = "d20";
-    
+
     /// Story task type
     pub const STORY_TASK_TYPE: &str = "story";
-    
+
     /// Valid settings
-    pub const STORY_SETTINGS: [&str; 6] = [
-        "fantasy", "scifi", "horror", "mystery", "western", "modern"
-    ];
-    
+    pub const STORY_SETTINGS: [&str; 6] =
+        ["fantasy", "scifi", "horror", "mystery", "western", "modern"];
+
     /// Maximum characters per story
     pub const MAX_CHARACTERS_PER_STORY: usize = 6;
-    
+
     /// Maximum inventory items
     pub const MAX_INVENTORY_ITEMS: usize = 20;
 }
@@ -1492,14 +1547,14 @@ pub mod scope_constants {
     pub const SCOPE_GLOBAL: &str = "global";
     pub const SCOPE_SESSION: &str = "session";
     pub const SCOPE_CHANNEL: &str = "channel";
-    
+
     /// Default scopes per data type
     pub const MEMORY_SCOPE_DEFAULT: &str = "global";
     pub const BOUNDED_MEMORY_SCOPE_DEFAULT: &str = "global";
     pub const KNOWLEDGE_SCOPE_DEFAULT: &str = "global";
     pub const PREFERENCES_SCOPE_DEFAULT: &str = "session";
     pub const SKILLS_SCOPE_DEFAULT: &str = "global";
-    
+
     /// Valid scope types
     pub const VALID_SCOPE_TYPES: [&str; 3] = ["global", "session", "channel"];
 }

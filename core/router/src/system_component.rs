@@ -1,5 +1,5 @@
 //! System Component Trait
-//! 
+//!
 //! Provides a unified interface for all system components (managers, pools, services)
 //! to ensure consistent lifecycle management, health monitoring, and graceful shutdown.
 
@@ -113,7 +113,7 @@ impl Default for ComponentState {
 }
 
 /// Core trait for all system components
-/// 
+///
 /// This trait provides a unified interface for managing the lifecycle of
 /// all system components in APEX. Components should implement this trait
 /// to ensure consistent initialization, startup, shutdown, and health monitoring.
@@ -175,7 +175,7 @@ pub trait SystemComponent: Send + Sync + 'static {
     fn info(&self) -> ComponentInfo;
 
     /// Initialize the component
-    /// 
+    ///
     /// This is called once during startup before `start()`.
     /// Use this for:
     /// - Establishing database connections
@@ -185,7 +185,7 @@ pub trait SystemComponent: Send + Sync + 'static {
     async fn initialize(&self) -> Result<(), ComponentError>;
 
     /// Start the component
-    /// 
+    ///
     /// This is called after `initialize()` to begin operations.
     /// Use this for:
     /// - Starting background tasks
@@ -194,7 +194,7 @@ pub trait SystemComponent: Send + Sync + 'static {
     async fn start(&self) -> Result<(), ComponentError>;
 
     /// Stop the component gracefully
-    /// 
+    ///
     /// This is called during shutdown to stop operations.
     /// Use this for:
     /// - Cancelling background tasks
@@ -204,7 +204,7 @@ pub trait SystemComponent: Send + Sync + 'static {
     async fn stop(&self) -> Result<(), ComponentError>;
 
     /// Get the health status of the component
-    /// 
+    ///
     /// Returns the current health of the component.
     /// Implementations should perform quick checks only.
     async fn health(&self) -> HealthStatus;
@@ -248,7 +248,10 @@ mod tests {
     #[test]
     fn test_component_error_display() {
         let err = ComponentError::not_initialized("test");
-        assert_eq!(err.to_string(), "[NOT_INITIALIZED] Component 'test' is not initialized");
+        assert_eq!(
+            err.to_string(),
+            "[NOT_INITIALIZED] Component 'test' is not initialized"
+        );
     }
 
     #[test]

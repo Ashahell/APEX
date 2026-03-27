@@ -1,12 +1,14 @@
 use axum::{
-    extract::{State, Path, Query},
-    routing::{get, delete},
+    extract::{Path, Query, State},
+    routing::{delete, get},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
-use apex_memory::execution_pattern_repo::{ExecutionPatternRepository, ExecutionPattern, PatternAlertTemplate};
+use apex_memory::execution_pattern_repo::{
+    ExecutionPattern, ExecutionPatternRepository, PatternAlertTemplate,
+};
 
 use crate::api::AppState;
 
@@ -17,14 +19,25 @@ pub fn router() -> Router<AppState> {
         // Patterns
         .route("/api/v1/patterns", get(list_patterns))
         .route("/api/v1/patterns/task/:task_id", get(get_patterns_by_task))
-        .route("/api/v1/patterns/type/:pattern_type", get(get_patterns_by_type))
-        .route("/api/v1/patterns/severity/:severity", get(get_patterns_by_severity))
+        .route(
+            "/api/v1/patterns/type/:pattern_type",
+            get(get_patterns_by_type),
+        )
+        .route(
+            "/api/v1/patterns/severity/:severity",
+            get(get_patterns_by_severity),
+        )
         .route("/api/v1/patterns/stats", get(get_pattern_stats))
-        .route("/api/v1/patterns/task/:task_id", delete(delete_patterns_by_task))
-        
+        .route(
+            "/api/v1/patterns/task/:task_id",
+            delete(delete_patterns_by_task),
+        )
         // Alert templates
         .route("/api/v1/patterns/templates", get(list_templates))
-        .route("/api/v1/patterns/templates/:pattern_type", get(get_template))
+        .route(
+            "/api/v1/patterns/templates/:pattern_type",
+            get(get_template),
+        )
 }
 
 // ============ Query Types ============
@@ -51,16 +64,19 @@ pub struct PatternResponse {
 
 impl From<ExecutionPattern> for PatternResponse {
     fn from(p: ExecutionPattern) -> Self {
-        let tool_calls: Option<Vec<String>> = p.tool_calls
+        let tool_calls: Option<Vec<String>> = p
+            .tool_calls
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
-        let file_ops: Option<Vec<String>> = p.file_ops
+        let file_ops: Option<Vec<String>> = p
+            .file_ops
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
-        let details: Option<serde_json::Value> = p.details
+        let details: Option<serde_json::Value> = p
+            .details
             .as_ref()
             .and_then(|s| serde_json::from_str(s).ok());
-        
+
         Self {
             id: p.id,
             task_id: p.task_id,
@@ -103,12 +119,12 @@ async fn list_patterns(
 ) -> Result<Json<Vec<PatternResponse>>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
     let limit = query.limit.unwrap_or(50);
-    
+
     let patterns = repo
         .get_recent(limit)
         .await
         .map_err(|e| format!("Failed to list patterns: {}", e))?;
-    
+
     Ok(Json(patterns.into_iter().map(|p| p.into()).collect()))
 }
 
@@ -118,12 +134,12 @@ async fn get_patterns_by_task(
     Path(task_id): Path<String>,
 ) -> Result<Json<Vec<PatternResponse>>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let patterns = repo
         .get_by_task(&task_id)
         .await
         .map_err(|e| format!("Failed to get patterns: {}", e))?;
-    
+
     Ok(Json(patterns.into_iter().map(|p| p.into()).collect()))
 }
 
@@ -133,12 +149,12 @@ async fn get_patterns_by_type(
     Path(pattern_type): Path<String>,
 ) -> Result<Json<Vec<PatternResponse>>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let patterns = repo
         .get_by_type(&pattern_type)
         .await
         .map_err(|e| format!("Failed to get patterns: {}", e))?;
-    
+
     Ok(Json(patterns.into_iter().map(|p| p.into()).collect()))
 }
 
@@ -148,36 +164,46 @@ async fn get_patterns_by_severity(
     Path(severity): Path<String>,
 ) -> Result<Json<Vec<PatternResponse>>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let patterns = repo
         .get_by_severity(&severity)
         .await
         .map_err(|e| format!("Failed to get patterns: {}", e))?;
-    
+
     Ok(Json(patterns.into_iter().map(|p| p.into()).collect()))
 }
 
 // Get pattern statistics
-async fn get_pattern_stats(
-    State(state): State<AppState>,
-) -> Result<Json<PatternStats>, String> {
+async fn get_pattern_stats(State(state): State<AppState>) -> Result<Json<PatternStats>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let by_severity = repo
         .count_by_severity()
         .await
         .map_err(|e| format!("Failed to get stats: {}", e))?;
-    
+
     let by_type = repo
         .count_by_type()
         .await
         .map_err(|e| format!("Failed to get stats: {}", e))?;
-    
+
     let total: i64 = by_severity.iter().map(|(_, c)| c).sum();
-    
+
     Ok(Json(PatternStats {
-        by_severity: by_severity.into_iter().map(|(s, c)| SeverityCount { severity: s, count: c }).collect(),
-        by_type: by_type.into_iter().map(|(t, c)| TypeCount { pattern_type: t, count: c }).collect(),
+        by_severity: by_severity
+            .into_iter()
+            .map(|(s, c)| SeverityCount {
+                severity: s,
+                count: c,
+            })
+            .collect(),
+        by_type: by_type
+            .into_iter()
+            .map(|(t, c)| TypeCount {
+                pattern_type: t,
+                count: c,
+            })
+            .collect(),
         total,
     }))
 }
@@ -188,12 +214,11 @@ async fn delete_patterns_by_task(
     Path(task_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
-    repo
-        .delete_by_task(&task_id)
+
+    repo.delete_by_task(&task_id)
         .await
         .map_err(|e| format!("Failed to delete patterns: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -204,12 +229,12 @@ async fn list_templates(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<PatternAlertTemplate>>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let templates = repo
         .list_templates()
         .await
         .map_err(|e| format!("Failed to list templates: {}", e))?;
-    
+
     Ok(Json(templates))
 }
 
@@ -219,11 +244,11 @@ async fn get_template(
     Path(pattern_type): Path<String>,
 ) -> Result<Json<PatternAlertTemplate>, String> {
     let repo = ExecutionPatternRepository::new(&state.pool);
-    
+
     let template = repo
         .get_template(&pattern_type)
         .await
         .map_err(|e| format!("Template not found: {}", e))?;
-    
+
     Ok(Json(template))
 }

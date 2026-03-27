@@ -3,15 +3,24 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Instant;
 
-use crate::dynamic_tools::{ToolRegistry};
-use crate::execution_stream::{predict_consequences, ConsequencePreview, ExecutionEvent, ExecutionStream};
+use crate::dynamic_tools::ToolRegistry;
+use crate::execution_stream::{
+    predict_consequences, ConsequencePreview, ExecutionEvent, ExecutionStream,
+};
 use crate::llama::LlamaClient;
 use crate::subagent::SubAgentPool;
 use crate::unified_config::AppConfig;
 use apex_memory::working_memory::WorkingMemory;
 
 const SENSITIVE_TOOLS: &[&str] = &["shell.execute", "bash", "write", "delete", "exec"];
-const TOOL_GENERATION_KEYWORDS: &[&str] = &["create", "build", "make", "implement", "develop", "generate"];
+const TOOL_GENERATION_KEYWORDS: &[&str] = &[
+    "create",
+    "build",
+    "make",
+    "implement",
+    "develop",
+    "generate",
+];
 
 const INJECTION_PATTERNS: &[&str] = &[
     r"(?i)^\s*ignore\s+previous\s+instructions",
@@ -49,13 +58,13 @@ const MEMORY_TRIGGERS: &[&str] = &[
 
 fn sanitize_for_llm(input: &str) -> String {
     let mut result = input.to_string();
-    
+
     for pattern in INJECTION_PATTERNS {
         if let Ok(regex) = Regex::new(pattern) {
             result = regex.replace_all(&result, "[FILTERED]").to_string();
         }
     }
-    
+
     result
 }
 
@@ -90,10 +99,13 @@ impl Default for AgentConfig {
 impl AgentConfig {
     pub fn from_config(config: &AppConfig) -> Self {
         // Get API key from the default LLM if available
-        let api_key = config.agent.llms.iter()
+        let api_key = config
+            .agent
+            .llms
+            .iter()
             .find(|l| l.id == config.agent.default_llm_id.as_deref().unwrap_or("default"))
             .and_then(|l| l.api_key.clone());
-        
+
         AgentConfig {
             max_steps: config.agent.max_iterations as u32,
             max_budget_usd: config.agent.max_budget_cents as f64 / 100.0,
@@ -138,36 +150,48 @@ struct TirResult {
 impl AgentLoop {
     fn parse_tir_response(&self, response: &str) -> Option<TirResult> {
         let response_clean = response.trim();
-        
+
         if let Ok(json) = serde_json::from_str::<serde_json::Value>(response_clean) {
             if let Some(arr) = json.as_array() {
                 let mut steps = Vec::new();
                 let mut final_action = String::new();
-                
+
                 for item in arr {
                     let step_type = item.get("type")?.as_str()?.to_string();
-                    let content = item.get("content").or(item.get("observation")).and_then(|c| c.as_str()).unwrap_or("").to_string();
+                    let content = item
+                        .get("content")
+                        .or(item.get("observation"))
+                        .and_then(|c| c.as_str())
+                        .unwrap_or("")
+                        .to_string();
                     let tool = item.get("tool").and_then(|t| t.as_str()).map(String::from);
                     let input = item.get("input").cloned();
-                    
+
                     steps.push(TirStep {
                         step_type: step_type.clone(),
                         content: content.clone(),
                         tool: tool.clone(),
                         input: input.clone(),
                     });
-                    
+
                     if step_type == "Action" && !tool.is_none() {
-                        final_action = format!("{}: {:?}", tool.unwrap(), input.unwrap_or(serde_json::Value::Null));
+                        final_action = format!(
+                            "{}: {:?}",
+                            tool.unwrap(),
+                            input.unwrap_or(serde_json::Value::Null)
+                        );
                     }
                 }
-                
+
                 if !steps.is_empty() && !final_action.is_empty() {
-                    return Some(TirResult { steps, final_action });
+                    return Some(TirResult {
+                        steps,
+                        final_action,
+                    });
                 }
             }
         }
-        
+
         None
     }
 }
@@ -242,14 +266,14 @@ impl AgentState {
         let plan_total: u64 = self.step_timings.iter().map(|s| s.plan_ms).sum();
         let act_total: u64 = self.step_timings.iter().map(|s| s.act_ms).sum();
         let total: u64 = self.step_timings.iter().map(|s| s.total_ms).sum();
-        
+
         let timing = TimingMetrics {
             total_ms: total,
             plan_total_ms: plan_total,
             act_total_ms: act_total,
             steps: self.step_timings.clone(),
         };
-        
+
         if let Some(ref error) = self.error {
             AgentResult {
                 task_id: self.task_id.clone(),
@@ -378,12 +402,13 @@ impl AgentLoop {
 
     fn should_generate_tool(&self, goal: &str) -> bool {
         let goal_lower = goal.to_lowercase();
-        
-        let has_generation_keyword = TOOL_GENERATION_KEYWORDS.iter()
+
+        let has_generation_keyword = TOOL_GENERATION_KEYWORDS
+            .iter()
             .any(|kw| goal_lower.contains(kw));
-        
+
         let has_complex_requirement = goal_lower.len() > 100;
-        
+
         let not_many_steps = self.config.max_steps > 5;
 
         has_generation_keyword && has_complex_requirement && not_many_steps
@@ -393,15 +418,19 @@ impl AgentLoop {
     async fn find_similar_tool(&self, goal: &str, registry: &ToolRegistry) -> Option<String> {
         let tools = registry.list().await;
         let goal_lower = goal.to_lowercase();
-        
+
         for tool in tools {
             // Check if tool description is related to the goal
-            if tool.description.to_lowercase().contains(&goal_lower[..goal_lower.len().min(50)]) 
-                || goal_lower.contains(&tool.name.replace('_', " ")) {
+            if tool
+                .description
+                .to_lowercase()
+                .contains(&goal_lower[..goal_lower.len().min(50)])
+                || goal_lower.contains(&tool.name.replace('_', " "))
+            {
                 return Some(tool.name);
             }
         }
-        
+
         None
     }
 
@@ -426,15 +455,18 @@ impl AgentLoop {
 
         // Emit start event
         if let Some(ref callback) = self.stream_callback {
-            callback(serde_json::json!({
-                "type": "start",
-                "task_id": task_id,
-                "goal": goal,
-                "config": {
-                    "max_steps": self.config.max_steps,
-                    "use_tir": self.config.use_tir,
-                }
-            }).to_string());
+            callback(
+                serde_json::json!({
+                    "type": "start",
+                    "task_id": task_id,
+                    "goal": goal,
+                    "config": {
+                        "max_steps": self.config.max_steps,
+                        "use_tir": self.config.use_tir,
+                    }
+                })
+                .to_string(),
+            );
         }
 
         while state.can_continue(&self.config, start_time) {
@@ -443,10 +475,13 @@ impl AgentLoop {
             tracing::debug!(task_id = %task_id, step = step_number, "Executing step");
 
             if let Some(ref callback) = self.stream_callback {
-                callback(serde_json::json!({
-                    "type": "step_start",
-                    "step": step_number
-                }).to_string());
+                callback(
+                    serde_json::json!({
+                        "type": "step_start",
+                        "step": step_number
+                    })
+                    .to_string(),
+                );
             }
 
             let plan_start = Instant::now();
@@ -454,12 +489,15 @@ impl AgentLoop {
             let plan_ms = plan_start.elapsed().as_millis();
 
             if let Some(ref callback) = self.stream_callback {
-                callback(serde_json::json!({
-                    "type": "thought",
-                    "step": step_number,
-                    "content": action,
-                    "duration_ms": plan_ms
-                }).to_string());
+                callback(
+                    serde_json::json!({
+                        "type": "thought",
+                        "step": step_number,
+                        "content": action,
+                        "duration_ms": plan_ms
+                    })
+                    .to_string(),
+                );
             }
 
             let act_start = Instant::now();
@@ -467,12 +505,15 @@ impl AgentLoop {
             let act_ms = act_start.elapsed().as_millis();
 
             if let Some(ref callback) = self.stream_callback {
-                callback(serde_json::json!({
-                    "type": "tool_result",
-                    "step": step_number,
-                    "observation": observation,
-                    "duration_ms": act_ms
-                }).to_string());
+                callback(
+                    serde_json::json!({
+                        "type": "tool_result",
+                        "step": step_number,
+                        "observation": observation,
+                        "duration_ms": act_ms
+                    })
+                    .to_string(),
+                );
             }
 
             let should_continue = self.reflect(&observation, &mut state).await;
@@ -493,12 +534,12 @@ impl AgentLoop {
                 let observation_preview = observation.chars().take(500).collect::<String>();
                 let step_entry = format!(
                     "[Step {}] Action: {}\nObservation: {}\n\n",
-                    step_number,
-                    action_preview,
-                    observation_preview
+                    step_number, action_preview, observation_preview
                 );
                 let current = wm.get_scratchpad().to_string();
-                let _ = wm.update_scratchpad(&format!("{}{}", current, step_entry)).await;
+                let _ = wm
+                    .update_scratchpad(&format!("{}{}", current, step_entry))
+                    .await;
             }
 
             tracing::info!(task_id = %task_id, step = step_number, plan_ms, act_ms, total_ms = step_start.elapsed().as_millis(), "Step complete");
@@ -520,12 +561,12 @@ impl AgentLoop {
         if let Some(ref mut wm) = self.working_memory {
             let summary = format!(
                 "\n\n## Summary\n- Steps executed: {}\n- Total cost: ${:.4}\n- Completed: {}\n",
-                state.current_step,
-                state.total_cost_usd,
-                state.is_complete
+                state.current_step, state.total_cost_usd, state.is_complete
             );
             let current = wm.get_scratchpad().to_string();
-            let _ = wm.update_scratchpad(&format!("{}{}", current, summary)).await;
+            let _ = wm
+                .update_scratchpad(&format!("{}{}", current, summary))
+                .await;
         }
 
         let elapsed = start_time.elapsed();
@@ -537,14 +578,17 @@ impl AgentLoop {
             "Agent loop completed"
         );
 
-        self.emit_stream(serde_json::json!({
-            "type": "complete",
-            "task_id": task_id,
-            "success": state.is_complete,
-            "steps": state.current_step,
-            "cost": state.total_cost_usd,
-            "duration_ms": elapsed.as_millis()
-        }).to_string());
+        self.emit_stream(
+            serde_json::json!({
+                "type": "complete",
+                "task_id": task_id,
+                "success": state.is_complete,
+                "steps": state.current_step,
+                "cost": state.total_cost_usd,
+                "duration_ms": elapsed.as_millis()
+            })
+            .to_string(),
+        );
 
         state.get_result()
     }
@@ -555,31 +599,49 @@ impl AgentLoop {
                 callback(event.clone());
             }
         }
-        
+
         if let Some(ref stream) = self.execution_stream {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(&event) {
                 let step = json.get("step").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
                 let event_type = json.get("type").and_then(|t| t.as_str()).unwrap_or("");
-                
+
                 match event_type {
                     "thought" => {
-                        let content = json.get("content").and_then(|c| c.as_str()).unwrap_or("").to_string();
+                        let content = json
+                            .get("content")
+                            .and_then(|c| c.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let _ = stream.try_emit_thought(step, content);
-                    },
+                    }
                     "tool_call" => {
-                        let tool = json.get("tool").and_then(|t| t.as_str()).unwrap_or("").to_string();
-                        let input = json.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                        let tool = json
+                            .get("tool")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let input = json
+                            .get("input")
+                            .cloned()
+                            .unwrap_or(serde_json::Value::Null);
                         let _ = stream.try_emit_tool_call(step, tool.clone(), input.clone());
-                        
-                        if SENSITIVE_TOOLS.iter().any(|&s| tool.to_lowercase().contains(s)) {
+
+                        if SENSITIVE_TOOLS
+                            .iter()
+                            .any(|&s| tool.to_lowercase().contains(s))
+                        {
                             let action = format!("{}: {:?}", tool, input);
-                            let tier = if tool.to_lowercase().contains("shell") || tool.to_lowercase().contains("exec") {
+                            let tier = if tool.to_lowercase().contains("shell")
+                                || tool.to_lowercase().contains("exec")
+                            {
                                 "T3".to_string()
                             } else {
                                 "T2".to_string()
                             };
-                            
-                            let consequences = if let (Some(url), _) = (&self.config.llama_url, &self.config.llama_model) {
+
+                            let consequences = if let (Some(url), _) =
+                                (&self.config.llama_url, &self.config.llama_model)
+                            {
                                 let url = url.clone();
                                 let action_for_spawn = action.clone();
                                 tokio::spawn(async move {
@@ -594,46 +656,86 @@ impl AgentLoop {
                                     } else {
                                         vec![]
                                     },
-                                    commands_executed: if tool.to_lowercase().contains("shell") || tool.to_lowercase().contains("exec") {
+                                    commands_executed: if tool.to_lowercase().contains("shell")
+                                        || tool.to_lowercase().contains("exec")
+                                    {
                                         vec!["shell command".to_string()]
                                     } else {
                                         vec![]
                                     },
                                     blast_radius: crate::execution_stream::BlastRadius::Limited,
-                                    summary: format!("This {} action may have limited impact", tier),
+                                    summary: format!(
+                                        "This {} action may have limited impact",
+                                        tier
+                                    ),
                                 }
                             };
-                            
+
                             let _ = stream.try_emit_approval(step, tier, action, consequences);
                         }
-                    },
+                    }
                     "tool_result" => {
-                        let tool = json.get("tool").and_then(|t| t.as_str()).unwrap_or("").to_string();
-                        let success = json.get("success").and_then(|s| s.as_bool()).unwrap_or(true);
-                        let output = json.get("observation").or(json.get("output")).and_then(|o| o.as_str()).unwrap_or("").to_string();
+                        let tool = json
+                            .get("tool")
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let success = json
+                            .get("success")
+                            .and_then(|s| s.as_bool())
+                            .unwrap_or(true);
+                        let output = json
+                            .get("observation")
+                            .or(json.get("output"))
+                            .and_then(|o| o.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let _ = stream.try_emit_tool_result(step, tool, success, output);
-                    },
+                    }
                     "error" => {
-                        let message = json.get("message").and_then(|m| m.as_str()).unwrap_or("").to_string();
+                        let message = json
+                            .get("message")
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let _ = stream.try_emit_error(step, message);
-                    },
+                    }
                     "complete" => {
-                        let output = json.get("output").and_then(|o| o.as_str()).unwrap_or("").to_string();
+                        let output = json
+                            .get("output")
+                            .and_then(|o| o.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         let steps = json.get("steps").and_then(|s| s.as_u64()).unwrap_or(0) as u32;
-                        let tools_used = json.get("tools_used").and_then(|t| t.as_array()).map(|arr| {
-                            arr.iter().filter_map(|v| v.as_str().map(String::from)).collect()
-                        }).unwrap_or_default();
+                        let tools_used = json
+                            .get("tools_used")
+                            .and_then(|t| t.as_array())
+                            .map(|arr| {
+                                arr.iter()
+                                    .filter_map(|v| v.as_str().map(String::from))
+                                    .collect()
+                            })
+                            .unwrap_or_default();
                         let _ = stream.try_emit_complete(output, steps, tools_used);
-                    },
+                    }
                     _ => {
-                        let _ = stream.try_emit(ExecutionEvent::Thought { step, content: event });
+                        let _ = stream.try_emit(ExecutionEvent::Thought {
+                            step,
+                            content: event,
+                        });
                     }
                 };
             }
         }
     }
-    
-    pub fn emit_approval_needed(&self, step: u32, tier: String, action: String, consequences: crate::execution_stream::ConsequencePreview) {
+
+    pub fn emit_approval_needed(
+        &self,
+        step: u32,
+        tier: String,
+        action: String,
+        consequences: crate::execution_stream::ConsequencePreview,
+    ) {
         if let Some(ref stream) = self.execution_stream {
             stream.try_emit_approval(step, tier, action, consequences);
         }
@@ -648,7 +750,7 @@ impl AgentLoop {
             .join("\n");
 
         let mut available_tools = self.config.tools.clone();
-        
+
         if self.config.enable_tool_generation {
             if let Some(ref registry) = self.config.tool_registry {
                 let dynamic_tools = registry.list().await;
@@ -659,11 +761,14 @@ impl AgentLoop {
         }
 
         let prompt = if self.config.use_tir {
-            self.emit_stream(serde_json::json!({
-                "type": "mode",
-                "mode": "tir"
-            }).to_string());
-            
+            self.emit_stream(
+                serde_json::json!({
+                    "type": "mode",
+                    "mode": "tir"
+                })
+                .to_string(),
+            );
+
             format!(
                 r#"You are using Tool-Integrated Reasoning (TIR). Interleave your thinking with actions.
 
@@ -697,28 +802,38 @@ History:
             tracing::info!("LLM enabled, attempting to call llama-server");
             if let (Some(url), Some(model)) = (&self.config.llama_url, &self.config.llama_model) {
                 tracing::info!(url = %url, model = %model, "Connecting to LLM");
-                
+
                 if self.config.enable_tool_generation && self.should_generate_tool(&state.goal) {
                     if let Some(ref registry) = self.config.tool_registry {
                         // Check if similar tool already exists (caching)
                         let existing_tool = self.find_similar_tool(&state.goal, registry).await;
-                        
+
                         if let Some(tool_name) = existing_tool {
                             tracing::info!(tool = %tool_name, "Reusing existing dynamic tool");
                             available_tools.push(tool_name);
                         } else {
-                            match crate::dynamic_tools::generate_tool(&state.goal, &context, url, model).await {
+                            match crate::dynamic_tools::generate_tool(
+                                &state.goal,
+                                &context,
+                                url,
+                                model,
+                            )
+                            .await
+                            {
                                 Ok(tool) => {
                                     tracing::info!(tool = %tool.name, "Generated new dynamic tool");
                                     let tool_name = tool.name.clone();
                                     let tool_desc = tool.description.clone();
                                     registry.register(tool).await;
                                     available_tools.push(tool_name.clone());
-                                    self.emit_stream(serde_json::json!({
-                                        "type": "tool_generated",
-                                        "tool": tool_name,
-                                        "description": tool_desc
-                                    }).to_string());
+                                    self.emit_stream(
+                                        serde_json::json!({
+                                            "type": "tool_generated",
+                                            "tool": tool_name,
+                                            "description": tool_desc
+                                        })
+                                        .to_string(),
+                                    );
                                 }
                                 Err(e) => {
                                     tracing::warn!(error = %e, "Failed to generate tool");
@@ -728,7 +843,11 @@ History:
                     }
                 }
 
-                let client = LlamaClient::new(url.clone(), model.clone(), self.config.llama_api_key.clone());
+                let client = LlamaClient::new(
+                    url.clone(),
+                    model.clone(),
+                    self.config.llama_api_key.clone(),
+                );
                 match client
                     .chat(
                         "You are an autonomous agent. Respond with a single action to take.",
@@ -738,21 +857,24 @@ History:
                 {
                     Ok(response) => {
                         tracing::info!(response = %response, "LLM response received");
-                        
+
                         if self.config.use_tir {
                             if let Some(tir_result) = self.parse_tir_response(&response) {
                                 for step in &tir_result.steps {
-                                    self.emit_stream(serde_json::json!({
-                                        "type": step.step_type,
-                                        "content": step.content,
-                                        "tool": step.tool.as_deref(),
-                                        "input": step.input.as_ref()
-                                    }).to_string());
+                                    self.emit_stream(
+                                        serde_json::json!({
+                                            "type": step.step_type,
+                                            "content": step.content,
+                                            "tool": step.tool.as_deref(),
+                                            "input": step.input.as_ref()
+                                        })
+                                        .to_string(),
+                                    );
                                 }
                                 return tir_result.final_action;
                             }
                         }
-                        
+
                         return response;
                     }
                     Err(e) => {
@@ -784,7 +906,11 @@ History:
                     sanitized_action
                 );
 
-                let client = crate::llama::LlamaClient::new(url.clone(), model.clone(), self.config.llama_api_key.clone());
+                let client = crate::llama::LlamaClient::new(
+                    url.clone(),
+                    model.clone(),
+                    self.config.llama_api_key.clone(),
+                );
                 match client
                     .chat("You are a helpful AI assistant.", &prompt)
                     .await
@@ -849,7 +975,9 @@ History:
         }
 
         if state.current_step >= 1 {
-            let is_repeating = state.history.iter()
+            let is_repeating = state
+                .history
+                .iter()
                 .skip(1)
                 .all(|h| h.observation == observation);
             if is_repeating && state.history.len() >= 2 {
@@ -869,10 +997,10 @@ History:
     /// Run a single step for a subtask (simplified for subagent execution)
     async fn run_single_step(&self, goal: &str) -> String {
         let state = AgentState::new("subtask".to_string(), goal.to_string());
-        
+
         let action = self.plan(&state).await;
         let observation = self.act(&action, &state).await;
-        
+
         format!("Action: {}\nObservation: {}", action, observation)
     }
 
@@ -882,23 +1010,25 @@ History:
         // In a full implementation, this would create a proper agent loop
         format!("Executed subtask: {}", description)
     }
-    
+
     /// Check if the current state contains memory-worthy content
     /// Returns Some(suggestion) if memory should be saved, None otherwise
     pub fn suggest_memory_entry(&self, state: &AgentState) -> Option<String> {
         if !self.config.enable_bounded_memory {
             return None;
         }
-        
+
         // Check if task had enough tool calls
-        let tool_calls = state.history.iter()
+        let tool_calls = state
+            .history
+            .iter()
             .filter(|s| matches!(s, AgentStep { action, .. } if !action.is_empty()))
             .count() as u32;
-        
+
         if tool_calls < MIN_TOOL_CALLS_FOR_MEMORY {
             return None;
         }
-        
+
         // Check if the goal or observations contain memory triggers
         let goal_lower = state.goal.to_lowercase();
         for trigger in MEMORY_TRIGGERS {
@@ -910,7 +1040,7 @@ History:
                 ));
             }
         }
-        
+
         // Check observations for patterns
         for step in &state.history {
             let obs_lower = step.observation.to_lowercase();
@@ -924,19 +1054,27 @@ History:
                 }
             }
         }
-        
+
         None
     }
-    
+
     /// Get memory suggestion prompt for the LLM
     pub fn get_memory_prompt(&self, state: &AgentState) -> String {
         let goal = &state.goal;
         let tool_calls = state.history.len();
-        let steps = state.history.iter()
-            .map(|s| format!("- {}: {}", s.action, s.observation.chars().take(50).collect::<String>()))
+        let steps = state
+            .history
+            .iter()
+            .map(|s| {
+                format!(
+                    "- {}: {}",
+                    s.action,
+                    s.observation.chars().take(50).collect::<String>()
+                )
+            })
             .collect::<Vec<_>>()
             .join("\n");
-        
+
         format!(
             r#"Based on your completed task:
 Goal: {goal}

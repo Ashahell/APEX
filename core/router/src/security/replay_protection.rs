@@ -174,7 +174,9 @@ mod redis_backend {
     }
 
     /// Create a Redis-backed ReplayProtection (requires `redis` feature).
-    pub fn create_redis(redis_url: &str) -> Result<Box<dyn ReplayProtection>, deadpool_redis::CreatePoolError> {
+    pub fn create_redis(
+        redis_url: &str,
+    ) -> Result<Box<dyn ReplayProtection>, deadpool_redis::CreatePoolError> {
         RedisReplayProtection::new(redis_url).map(|rp| Box::new(rp) as Box<dyn ReplayProtection>)
     }
 }
@@ -228,7 +230,9 @@ pub fn from_config(backend: &str, redis_url: Option<&str>) -> Box<dyn ReplayProt
                     }
                 }
             } else {
-                tracing::warn!("Redis backend requested but no redis_url configured, using in-memory");
+                tracing::warn!(
+                    "Redis backend requested but no redis_url configured, using in-memory"
+                );
                 Box::new(InMemoryReplayProtection)
             }
         }
@@ -281,7 +285,11 @@ mod tests {
         let sigs = ["sig-a", "sig-b", "sig-c", "sig-d", "sig-e"];
         for sig in &sigs {
             let is_replay = record_and_check(sig);
-            assert!(!is_replay, "distinct signature {} should not be replay", sig);
+            assert!(
+                !is_replay,
+                "distinct signature {} should not be replay",
+                sig
+            );
         }
     }
 

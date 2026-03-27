@@ -22,7 +22,11 @@ async fn get_metrics(State(state): State<AppState>) -> Json<serde_json::Value> {
     let metrics = state.metrics.get_metrics().await;
     let repo = TaskRepository::new(&state.pool);
     let db_total_cost = repo.get_total_cost().await.unwrap_or(0.0);
-    let tasks_completed = metrics.tasks_by_status.get("completed").copied().unwrap_or(0);
+    let tasks_completed = metrics
+        .tasks_by_status
+        .get("completed")
+        .copied()
+        .unwrap_or(0);
     let tasks_failed = metrics.tasks_by_status.get("failed").copied().unwrap_or(0);
     Json(serde_json::json!({
         "tasks": metrics.tasks_total,

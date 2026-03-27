@@ -3,7 +3,12 @@
 //! Minimal Axum router exposing Hands lifecycle endpoints.
 //! Uses an in-memory store for MVP; replace with DB-backed persistence in later patches.
 
-use axum::{extract::Path, http::StatusCode, routing::{get, post}, Json, Router};
+use axum::{
+    extract::Path,
+    http::StatusCode,
+    routing::{get, post},
+    Json, Router,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Mutex, OnceLock};

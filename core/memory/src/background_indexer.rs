@@ -51,13 +51,9 @@ pub struct BackgroundIndexer {
 }
 
 impl BackgroundIndexer {
-    pub fn new(
-        embedder: Arc<Embedder>,
-        pool: Pool<Sqlite>,
-        config: IndexerConfig,
-    ) -> Self {
+    pub fn new(embedder: Arc<Embedder>, pool: Pool<Sqlite>, config: IndexerConfig) -> Self {
         let (tx, rx) = mpsc::channel(100);
-        
+
         let embedder_clone = embedder.clone();
         let pool_clone = pool.clone();
         let config_clone = config.clone();
@@ -79,7 +75,10 @@ impl BackgroundIndexer {
     }
 
     pub async fn initial_scan(&self, memory_dir: &Path) {
-        let _ = self.queue.send(IndexJob::Directory(memory_dir.to_path_buf())).await;
+        let _ = self
+            .queue
+            .send(IndexJob::Directory(memory_dir.to_path_buf()))
+            .await;
     }
 
     async fn run(
@@ -167,7 +166,10 @@ impl BackgroundIndexer {
         Self::delete_chunks_for_file(path, pool).await;
 
         for (idx, chunk_text_content) in chunks {
-            tokio::time::sleep(tokio::time::Duration::from_millis(config.embed_rate_limit_ms)).await;
+            tokio::time::sleep(tokio::time::Duration::from_millis(
+                config.embed_rate_limit_ms,
+            ))
+            .await;
 
             let embedding = match embedder.embed(&chunk_text_content).await {
                 Ok(e) => e,
@@ -183,7 +185,7 @@ impl BackgroundIndexer {
             if let Err(e) = sqlx::query(
                 "INSERT OR REPLACE INTO memory_chunks
                  (id, file_path, chunk_index, content, word_count, memory_type)
-                 VALUES (?, ?, ?, ?, ?, ?)"
+                 VALUES (?, ?, ?, ?, ?, ?)",
             )
             .bind(&chunk_id)
             .bind(path.to_string_lossy().to_string())
@@ -199,13 +201,12 @@ impl BackgroundIndexer {
             }
 
             let embedding_json = serde_json::to_string(&embedding).unwrap_or_default();
-            if let Err(e) = sqlx::query(
-                "INSERT OR REPLACE INTO memory_vec (chunk_id, embedding) VALUES (?, ?)"
-            )
-            .bind(&chunk_id)
-            .bind(&embedding_json)
-            .execute(pool)
-            .await
+            if let Err(e) =
+                sqlx::query("INSERT OR REPLACE INTO memory_vec (chunk_id, embedding) VALUES (?, ?)")
+                    .bind(&chunk_id)
+                    .bind(&embedding_json)
+                    .execute(pool)
+                    .await
             {
                 tracing::warn!("Indexer: failed to insert embedding: {}", e);
             }
@@ -220,7 +221,7 @@ impl BackgroundIndexer {
 
     async fn is_up_to_date(path: &Path, mtime: i64, pool: &Pool<Sqlite>) -> bool {
         let result: Option<(i64, i32)> = sqlx::query_as(
-            "SELECT mtime_unix, chunk_count FROM memory_index_state WHERE file_path = ?"
+            "SELECT mtime_unix, chunk_count FROM memory_index_state WHERE file_path = ?",
         )
         .bind(path.to_string_lossy().to_string())
         .fetch_optional(pool)
@@ -256,7 +257,7 @@ impl BackgroundIndexer {
 
     fn classify_path(path: &Path) -> String {
         let path_str = path.to_string_lossy().to_lowercase();
-        
+
         if path_str.contains("journal") {
             "journal".to_string()
         } else if path_str.contains("knowledge") {
@@ -276,10 +277,11 @@ impl BackgroundIndexer {
             .await
             .map_err(MemoryError::Database)?;
 
-        let indexed_files: (i64,) = sqlx::query_as("SELECT COUNT(DISTINCT file_path) FROM memory_index_state")
-            .fetch_one(&self.pool)
-            .await
-            .map_err(MemoryError::Database)?;
+        let indexed_files: (i64,) =
+            sqlx::query_as("SELECT COUNT(DISTINCT file_path) FROM memory_index_state")
+                .fetch_one(&self.pool)
+                .await
+                .map_err(MemoryError::Database)?;
 
         Ok(IndexStats {
             total_chunks: total_chunks.0 as usize,

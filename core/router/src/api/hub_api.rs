@@ -18,7 +18,7 @@ async fn list_hub_skills(
     Query(params): Query<HubSearchParams>,
 ) -> Result<Json<Vec<HubSkill>>, (axum::http::StatusCode, String)> {
     let client = HubClient::new(state.config.hub.base_url.clone());
-    
+
     let skills = if let Some(query) = &params.q {
         client.search_skills(query).await
     } else if let Some(category) = &params.category {
@@ -27,14 +27,12 @@ async fn list_hub_skills(
         client.get_featured_skills().await
     };
 
-    skills
-        .map(Json)
-        .map_err(|e| match e {
-            HubError::HubUnavailable { status } => {
-                ApiError::internal(format!("Hub unavailable: HTTP {}", status))
-            }
-            _ => ApiError::internal(format!("Hub error: {}", e)),
-        })
+    skills.map(Json).map_err(|e| match e {
+        HubError::HubUnavailable { status } => {
+            ApiError::internal(format!("Hub unavailable: HTTP {}", status))
+        }
+        _ => ApiError::internal(format!("Hub error: {}", e)),
+    })
 }
 
 /// GET /api/v1/hub/skills/:id - Get skill details
@@ -43,17 +41,14 @@ async fn get_hub_skill(
     Path(id): Path<String>,
 ) -> Result<Json<HubSkill>, (axum::http::StatusCode, String)> {
     let client = HubClient::new(state.config.hub.base_url.clone());
-    
-    client.get_skill(&id)
-        .await
-        .map(Json)
-        .map_err(|e| match e {
-            HubError::SkillNotFound { .. } => ApiError::not_found(format!("Skill '{}' not found", id)),
-            HubError::HubUnavailable { status } => {
-                ApiError::internal(format!("Hub unavailable: HTTP {}", status))
-            }
-            _ => ApiError::internal(format!("Hub error: {}", e)),
-        })
+
+    client.get_skill(&id).await.map(Json).map_err(|e| match e {
+        HubError::SkillNotFound { .. } => ApiError::not_found(format!("Skill '{}' not found", id)),
+        HubError::HubUnavailable { status } => {
+            ApiError::internal(format!("Hub unavailable: HTTP {}", status))
+        }
+        _ => ApiError::internal(format!("Hub error: {}", e)),
+    })
 }
 
 /// GET /api/v1/hub/status - Check hub status

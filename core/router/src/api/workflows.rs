@@ -16,10 +16,24 @@ use super::{
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/v1/workflows", get(list_workflows).post(create_workflow))
-        .route("/api/v1/workflows/filter-options", get(get_workflow_filter_options))
-        .route("/api/v1/workflows/:id", get(get_workflow).put(update_workflow).delete(delete_workflow))
-        .route("/api/v1/workflows/:id/executions", get(get_workflow_executions))
+        .route(
+            "/api/v1/workflows",
+            get(list_workflows).post(create_workflow),
+        )
+        .route(
+            "/api/v1/workflows/filter-options",
+            get(get_workflow_filter_options),
+        )
+        .route(
+            "/api/v1/workflows/:id",
+            get(get_workflow)
+                .put(update_workflow)
+                .delete(delete_workflow),
+        )
+        .route(
+            "/api/v1/workflows/:id/executions",
+            get(get_workflow_executions),
+        )
 }
 
 async fn list_workflows(
@@ -30,11 +44,15 @@ async fn list_workflows(
     let workflows = if query.active_only.unwrap_or(false) {
         repo.find_active().await.map_err(|e| e.to_string())?
     } else if let Some(ref cat) = query.category {
-        repo.find_by_category(cat).await.map_err(|e| e.to_string())?
+        repo.find_by_category(cat)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         repo.find_all().await.map_err(|e| e.to_string())?
     };
-    Ok(Json(workflows.into_iter().map(WorkflowResponse::from).collect()))
+    Ok(Json(
+        workflows.into_iter().map(WorkflowResponse::from).collect(),
+    ))
 }
 
 async fn get_workflow_filter_options(
@@ -70,9 +88,7 @@ async fn create_workflow(
         definition: req.definition,
         category: req.category,
     };
-    repo.create(&id, &create)
-        .await
-        .map_err(|e| e.to_string())?;
+    repo.create(&id, &create).await.map_err(|e| e.to_string())?;
     let workflow = repo
         .find_by_id(&id)
         .await
@@ -94,9 +110,7 @@ async fn update_workflow(
         category: req.category,
         is_active: req.is_active,
     };
-    repo.update(&id, &update)
-        .await
-        .map_err(|e| e.to_string())?;
+    repo.update(&id, &update).await.map_err(|e| e.to_string())?;
     let workflow = repo
         .find_by_id(&id)
         .await

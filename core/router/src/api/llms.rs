@@ -1,25 +1,28 @@
-use axum::{
-    extract::State,
-    extract::Query,
-    routing::{get, post, put, delete},
-    Json, Router,
-    extract::Path,
-};
-use serde::{Deserialize, Serialize};
-use ulid::Ulid;
 use crate::api::AppState;
 use crate::unified_config::{AppConfig, LlmConfig, LlmProvider};
 use apex_memory::provider_repo::{
     ModelFallback, ProviderHealth, ProviderModel, ProviderPlugin, ProviderRepository,
     SessionFastMode,
 };
+use axum::{
+    extract::Path,
+    extract::Query,
+    extract::State,
+    routing::{delete, get, post, put},
+    Json, Router,
+};
+use serde::{Deserialize, Serialize};
+use ulid::Ulid;
 
 pub fn create_router() -> Router<AppState> {
     Router::new()
         .route("/api/v1/llms", get(list_llms))
         .route("/api/v1/llms", post(add_llm))
         // More specific routes BEFORE parameterized routes
-        .route("/api/v1/llms/list-models", post(list_provider_models_by_config))
+        .route(
+            "/api/v1/llms/list-models",
+            post(list_provider_models_by_config),
+        )
         .route("/api/v1/llms/providers", get(list_providers))
         .route("/api/v1/llms/default", get(get_default_llm))
         .route("/api/v1/llms/default", put(set_default_llm))
@@ -37,10 +40,19 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/v1/llms/plugins/:id", put(update_provider_plugin))
         .route("/api/v1/llms/plugins/:id", delete(delete_provider_plugin))
         .route("/api/v1/llms/plugins/:id/models", get(list_provider_models))
-        .route("/api/v1/llms/plugins/:id/health", get(get_provider_health_status))
+        .route(
+            "/api/v1/llms/plugins/:id/health",
+            get(get_provider_health_status),
+        )
         // Fast mode (NEW) - session-based only
-        .route("/api/v1/llms/sessions/:session_id/fast-mode", get(get_session_fast_mode))
-        .route("/api/v1/llms/sessions/:session_id/fast-mode", put(set_session_fast_mode))
+        .route(
+            "/api/v1/llms/sessions/:session_id/fast-mode",
+            get(get_session_fast_mode),
+        )
+        .route(
+            "/api/v1/llms/sessions/:session_id/fast-mode",
+            put(set_session_fast_mode),
+        )
         // Model fallbacks (NEW)
         .route("/api/v1/llms/fallbacks/:id", delete(delete_model_fallback))
 }
@@ -116,7 +128,9 @@ pub fn get_provider_info() -> Vec<ProviderInfo> {
         ProviderInfo {
             id: "azure".to_string(),
             name: "Azure OpenAI".to_string(),
-            default_url: "https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT".to_string(),
+            default_url:
+                "https://YOUR_RESOURCE.openai.azure.com/openai/deployments/YOUR_DEPLOYMENT"
+                    .to_string(),
             default_model: "gpt-4o".to_string(),
             requires_api_key: true,
             api_type: "openai".to_string(),
@@ -132,7 +146,8 @@ pub fn get_provider_info() -> Vec<ProviderInfo> {
         ProviderInfo {
             id: "cloudflare".to_string(),
             name: "Cloudflare AI Gateway".to_string(),
-            default_url: "https://gateway.ai.cloudflare.com/v1/account/YOUR_ACCOUNT_ID/gateway".to_string(),
+            default_url: "https://gateway.ai.cloudflare.com/v1/account/YOUR_ACCOUNT_ID/gateway"
+                .to_string(),
             default_model: "@cf/meta/llama-3.1-8b-instruct".to_string(),
             requires_api_key: true,
             api_type: "openai".to_string(),
@@ -472,17 +487,17 @@ async fn add_llm(
 
     let mut config = state.config.clone();
     config.agent.llms.push(new_llm.clone());
-    
+
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
     // Do not touch any global GLOBAL_CONFIG; keep per-request AppState only.
-    
+
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {
         tracing::error!("Failed to persist LLM config to database: {}", e);
         return Err(format!("Failed to persist LLM config: {}", e));
     }
-    
+
     tracing::info!("LLM {} saved to database successfully", new_llm.name);
     Ok(Json(LlmResponse::from(new_llm)))
 }
@@ -493,7 +508,7 @@ async fn handle_update_llm(
     Json(payload): Json<UpdateLlmRequest>,
 ) -> Result<Json<LlmResponse>, String> {
     let mut config = state.config.clone();
-    
+
     let llm = config
         .agent
         .llms
@@ -569,19 +584,21 @@ async fn handle_delete_llm(
 ) -> Result<Json<serde_json::Value>, String> {
     let mut config = state.config.clone();
     config.agent.llms.retain(|llm| llm.id != id);
-    
+
     // Update in-memory state.config (this is what's used for listing!)
     state.config = config.clone();
     // Do not update global config
-    
+
     // Persist entire config to database - MUST succeed or return error
     if let Err(e) = config.save_to_db(&state.config_repo).await {
         tracing::error!("Failed to persist LLM deletion to database: {}", e);
         return Err(format!("Failed to persist LLM deletion: {}", e));
     }
-    
+
     tracing::info!("LLM {} deleted from database successfully", id);
-    Ok(Json(serde_json::json!({ "success": true, "message": "LLM deleted" })))
+    Ok(Json(
+        serde_json::json!({ "success": true, "message": "LLM deleted" }),
+    ))
 }
 
 async fn test_llm(
@@ -590,26 +607,26 @@ async fn test_llm(
 ) -> Result<Json<TestLlmResponse>, String> {
     // Use per-request AppState config as the source of truth
     let llms = state.config.agent.llms.clone();
-    
+
     let llm = llms
         .iter()
         .find(|l| l.id == id)
         .ok_or_else(|| "LLM not found".to_string())?;
 
     let start = std::time::Instant::now();
-    
+
     // Test connection based on provider
     let client = reqwest::Client::new();
     let test_result = match llm.provider {
-        LlmProvider::Local 
-        | LlmProvider::Ollama 
-        | LlmProvider::Vllm 
+        LlmProvider::Local
+        | LlmProvider::Ollama
+        | LlmProvider::Vllm
         | LlmProvider::LmStudio
-        | LlmProvider::OpenAI 
+        | LlmProvider::OpenAI
         | LlmProvider::Azure
-        | LlmProvider::OpenRouter 
+        | LlmProvider::OpenRouter
         | LlmProvider::Cloudflare
-        | LlmProvider::Vercel 
+        | LlmProvider::Vercel
         | LlmProvider::Together
         | LlmProvider::LiteLlama
         | LlmProvider::Mistral
@@ -647,8 +664,11 @@ async fn test_llm(
         }
         LlmProvider::Google | LlmProvider::Vertex => {
             // Google uses REST API
-            let url = format!("{}/models?key={}", llm.url.trim_end_matches('/'), 
-                llm.api_key.as_deref().unwrap_or(""));
+            let url = format!(
+                "{}/models?key={}",
+                llm.url.trim_end_matches('/'),
+                llm.api_key.as_deref().unwrap_or("")
+            );
             let req = client.get(&url);
             req.send().await
         }
@@ -668,9 +688,7 @@ async fn test_llm(
             }
             req.send().await
         }
-        LlmProvider::ZhipuGlm 
-        | LlmProvider::Qianfan 
-        | LlmProvider::Bedrock => {
+        LlmProvider::ZhipuGlm | LlmProvider::Qianfan | LlmProvider::Bedrock => {
             // These have special APIs, just try the URL
             let mut req = client.get(&llm.url);
             if let Some(ref key) = llm.api_key {
@@ -683,27 +701,21 @@ async fn test_llm(
     let latency_ms = start.elapsed().as_millis() as u64;
 
     match test_result {
-        Ok(resp) if resp.status().is_success() => {
-            Ok(Json(TestLlmResponse {
-                success: true,
-                message: "Connection successful".to_string(),
-                latency_ms: Some(latency_ms),
-            }))
-        }
-        Ok(resp) => {
-            Ok(Json(TestLlmResponse {
-                success: false,
-                message: format!("HTTP {}", resp.status()),
-                latency_ms: Some(latency_ms),
-            }))
-        }
-        Err(e) => {
-            Ok(Json(TestLlmResponse {
-                success: false,
-                message: e.to_string(),
-                latency_ms: Some(latency_ms),
-            }))
-        }
+        Ok(resp) if resp.status().is_success() => Ok(Json(TestLlmResponse {
+            success: true,
+            message: "Connection successful".to_string(),
+            latency_ms: Some(latency_ms),
+        })),
+        Ok(resp) => Ok(Json(TestLlmResponse {
+            success: false,
+            message: format!("HTTP {}", resp.status()),
+            latency_ms: Some(latency_ms),
+        })),
+        Err(e) => Ok(Json(TestLlmResponse {
+            success: false,
+            message: e.to_string(),
+            latency_ms: Some(latency_ms),
+        })),
     }
 }
 
@@ -731,15 +743,34 @@ async fn list_provider_models_by_config(
         "anthropic" => {
             // Anthropic doesn't have a list models endpoint, return common models
             return Ok(Json(vec![
-                ModelInfo { id: "claude-sonnet-4-20250514".to_string(), name: "Claude Sonnet 4".to_string() },
-                ModelInfo { id: "claude-opus-4-5-20250514".to_string(), name: "Claude Opus 4".to_string() },
-                ModelInfo { id: "claude-3-5-sonnet-20240620".to_string(), name: "Claude 3.5 Sonnet".to_string() },
-                ModelInfo { id: "claude-3-opus-20240229".to_string(), name: "Claude 3 Opus".to_string() },
-                ModelInfo { id: "claude-3-haiku-20240307".to_string(), name: "Claude 3 Haiku".to_string() },
+                ModelInfo {
+                    id: "claude-sonnet-4-20250514".to_string(),
+                    name: "Claude Sonnet 4".to_string(),
+                },
+                ModelInfo {
+                    id: "claude-opus-4-5-20250514".to_string(),
+                    name: "Claude Opus 4".to_string(),
+                },
+                ModelInfo {
+                    id: "claude-3-5-sonnet-20240620".to_string(),
+                    name: "Claude 3.5 Sonnet".to_string(),
+                },
+                ModelInfo {
+                    id: "claude-3-opus-20240229".to_string(),
+                    name: "Claude 3 Opus".to_string(),
+                },
+                ModelInfo {
+                    id: "claude-3-haiku-20240307".to_string(),
+                    name: "Claude 3 Haiku".to_string(),
+                },
             ]));
         }
         "google" | "vertex" => {
-            format!("{}/models?key={}", payload.url.trim_end_matches('/'), payload.api_key.as_deref().unwrap_or(""))
+            format!(
+                "{}/models?key={}",
+                payload.url.trim_end_matches('/'),
+                payload.api_key.as_deref().unwrap_or("")
+            )
         }
         "huggingface" => {
             format!("{}/models", payload.url.trim_end_matches('/'))
@@ -751,7 +782,7 @@ async fn list_provider_models_by_config(
     };
 
     let mut req = client.get(&model_url);
-    
+
     // Add appropriate headers based on provider
     match payload.provider.as_str() {
         "anthropic" => {
@@ -773,7 +804,10 @@ async fn list_provider_models_by_config(
         }
     };
 
-    let response = req.send().await.map_err(|e| format!("Request failed: {}", e))?;
+    let response = req
+        .send()
+        .await
+        .map_err(|e| format!("Request failed: {}", e))?;
 
     if !response.status().is_success() {
         return Err(format!("HTTP error: {}", response.status()));
@@ -783,7 +817,10 @@ async fn list_provider_models_by_config(
     let models: Vec<ModelInfo> = match payload.provider.as_str() {
         "google" | "vertex" => {
             // Google's model list format
-            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            let body: serde_json::Value = response
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|e| format!("Parse error: {}", e))?;
             body["models"]
                 .as_array()
                 .unwrap_or(&vec![])
@@ -796,7 +833,10 @@ async fn list_provider_models_by_config(
         }
         "huggingface" => {
             // HuggingFace format: array of {id, modelId, ...}
-            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            let body: serde_json::Value = response
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|e| format!("Parse error: {}", e))?;
             body.as_array()
                 .unwrap_or(&vec![])
                 .iter()
@@ -809,7 +849,10 @@ async fn list_provider_models_by_config(
         }
         _ => {
             // OpenAI-compatible format: {data: [{id: "...", ...}]}
-            let body: serde_json::Value = response.json::<serde_json::Value>().await.map_err(|e| format!("Parse error: {}", e))?;
+            let body: serde_json::Value = response
+                .json::<serde_json::Value>()
+                .await
+                .map_err(|e| format!("Parse error: {}", e))?;
             body["data"]
                 .as_array()
                 .unwrap_or(&vec![])
@@ -1015,20 +1058,20 @@ pub struct FastModeResponse {
 }
 
 // Global fast mode (stored in memory for now)
-static GLOBAL_FAST_MODE: std::sync::LazyLock<std::sync::Mutex<GlobalFastMode>> = 
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(GlobalFastMode {
-        enabled: false,
-        fast_model: None,
-    }));
+static GLOBAL_FAST_MODE: std::sync::LazyLock<std::sync::Mutex<GlobalFastMode>> =
+    std::sync::LazyLock::new(|| {
+        std::sync::Mutex::new(GlobalFastMode {
+            enabled: false,
+            fast_model: None,
+        })
+    });
 
 struct GlobalFastMode {
     enabled: bool,
     fast_model: Option<String>,
 }
 
-async fn get_global_fast_mode(
-    State(_state): State<AppState>,
-) -> Json<GlobalFastMode> {
+async fn get_global_fast_mode(State(_state): State<AppState>) -> Json<GlobalFastMode> {
     let guard = GLOBAL_FAST_MODE.lock().unwrap();
     Json(GlobalFastMode {
         enabled: guard.enabled,
@@ -1061,13 +1104,15 @@ async fn get_session_fast_mode(
 
     match fast_mode {
         Some(fm) => {
-            let config: Option<serde_json::Value> = fm.fast_config
+            let config: Option<serde_json::Value> = fm
+                .fast_config
                 .as_ref()
                 .and_then(|c| serde_json::from_str(c).ok());
-            let toggles: Option<serde_json::Value> = fm.toggles
+            let toggles: Option<serde_json::Value> = fm
+                .toggles
                 .as_ref()
                 .and_then(|t| serde_json::from_str(t).ok());
-            
+
             Ok(Json(FastModeResponse {
                 session_id: fm.session_id,
                 fast_enabled: fm.fast_enabled != 0,
@@ -1093,7 +1138,7 @@ async fn set_session_fast_mode(
 ) -> Result<Json<FastModeResponse>, String> {
     let repo = ProviderRepository::new(&state.pool);
     let id = Ulid::new().to_string();
-    
+
     let fast_mode = repo
         .upsert_session_fast_mode(
             &id,
@@ -1106,10 +1151,12 @@ async fn set_session_fast_mode(
         .await
         .map_err(|e| format!("Failed to set fast mode: {}", e))?;
 
-    let config: Option<serde_json::Value> = fast_mode.fast_config
+    let config: Option<serde_json::Value> = fast_mode
+        .fast_config
         .as_ref()
         .and_then(|c| serde_json::from_str(c).ok());
-    let toggles: Option<serde_json::Value> = fast_mode.toggles
+    let toggles: Option<serde_json::Value> = fast_mode
+        .toggles
         .as_ref()
         .and_then(|t| serde_json::from_str(t).ok());
 
@@ -1156,7 +1203,7 @@ async fn add_model_fallback(
     let repo = ProviderRepository::new(&state.pool);
     let id = Ulid::new().to_string();
     let priority = req.priority.unwrap_or(1);
-    
+
     let fallback = repo
         .add_fallback(
             &id,

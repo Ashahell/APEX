@@ -2,14 +2,14 @@
 //!
 //! Provides TOTP verification with optional persistence using SecretStore.
 
+use base32::Alphabet;
+use rand::rngs::StdRng;
+use rand::{RngCore, SeedableRng};
 use serde::{Deserialize, Serialize};
-use totp_rs::{TOTP, Algorithm};
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
-use base32::Alphabet;
-use rand::{RngCore, SeedableRng};
-use rand::rngs::StdRng;
+use totp_rs::{Algorithm, TOTP};
 
 use crate::secret_store::SecretStore;
 
@@ -30,7 +30,7 @@ impl TotpManager {
             persistent_store: None,
         }
     }
-    
+
     /// Create a TOTP manager with persistent storage
     pub fn with_persistence(store: SecretStore) -> Self {
         Self {
@@ -45,16 +45,16 @@ impl TotpManager {
         let mut secret_bytes = [0u8; 20];
         StdRng::from_entropy().fill_bytes(&mut secret_bytes);
         let secret_encoded = base32::encode(Alphabet::Rfc4648 { padding: false }, &secret_bytes);
-        
+
         // Store in memory
         let mut secrets = self.secrets.write().await;
         secrets.insert(user_id.to_string(), secret_encoded.clone());
-        
+
         // Also persist if available
         if let Some(ref store) = self.persistent_store {
             let _ = store.set_totp_secret(user_id, &secret_encoded);
         }
-        
+
         Ok(secret_encoded)
     }
 
@@ -65,7 +65,7 @@ impl TotpManager {
             let secrets = self.secrets.read().await;
             secrets.get(user_id).cloned()
         };
-        
+
         // Fall back to persistent storage
         let secret = if let Some(s) = secret_str {
             s
@@ -77,10 +77,10 @@ impl TotpManager {
         } else {
             return Err("No TOTP secret found for user".to_string());
         };
-        
+
         let secret_bytes = base32::decode(Alphabet::Rfc4648 { padding: false }, &secret)
             .ok_or_else(|| "Invalid base32 secret".to_string())?;
-        
+
         let totp = TOTP::new(
             Algorithm::SHA1,
             6,
@@ -89,12 +89,16 @@ impl TotpManager {
             secret_bytes,
             Some("APEX".to_string()),
             user_id.to_string(),
-        ).map_err(|e| format!("Failed to create TOTP: {}", e))?;
+        )
+        .map_err(|e| format!("Failed to create TOTP: {}", e))?;
 
-        let is_valid = totp.check(token, std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map_err(|e| format!("Time error: {}", e))?
-            .as_secs());
+        let is_valid = totp.check(
+            token,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_err(|e| format!("Time error: {}", e))?
+                .as_secs(),
+        );
 
         Ok(is_valid)
     }
@@ -104,7 +108,7 @@ impl TotpManager {
         // Remove from memory
         let mut secrets = self.secrets.write().await;
         secrets.remove(user_id);
-        
+
         // Remove from persistent storage
         if let Some(ref store) = self.persistent_store {
             let _ = store.delete_totp_secret(user_id);
@@ -120,12 +124,12 @@ impl TotpManager {
                 return true;
             }
         }
-        
+
         // Check persistent storage
         if let Some(ref store) = self.persistent_store {
             return store.has_totp(user_id);
         }
-        
+
         false
     }
 
@@ -180,7 +184,7 @@ mod tests {
     async fn test_generate_secret() {
         let manager = TotpManager::new();
         let secret = manager.generate_secret("test-user").await.unwrap();
-        
+
         assert!(!secret.is_empty());
         assert!(manager.has_secret("test-user").await);
     }
@@ -189,11 +193,11 @@ mod tests {
     async fn test_remove_secret() {
         let manager = TotpManager::new();
         manager.generate_secret("test-user").await.unwrap();
-        
+
         assert!(manager.has_secret("test-user").await);
-        
+
         manager.remove_secret("test-user").await;
-        
+
         assert!(!manager.has_secret("test-user").await);
     }
 
@@ -201,14 +205,14 @@ mod tests {
     async fn test_verify_no_secret() {
         let manager = TotpManager::new();
         let result = manager.verify("nonexistent-user", "123456").await;
-        
+
         assert!(result.is_err());
     }
 
     #[test]
     fn test_generate_otpauth_uri() {
         let uri = TotpManager::generate_otpauth_uri("JBSWY3DPEHPK3PXP", "test-user", "APEX");
-        
+
         assert!(uri.contains("otpauth://totp/"));
         assert!(uri.contains("secret="));
         assert!(uri.contains("issuer=APEX"));

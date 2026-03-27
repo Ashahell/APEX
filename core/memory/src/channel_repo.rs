@@ -26,7 +26,7 @@ impl ChannelRepository {
 
     pub async fn find_all(&self) -> Result<Vec<Channel>, sqlx::Error> {
         sqlx::query_as::<_, Channel>(
-            "SELECT id, name, description, created_at, updated_at FROM channels ORDER BY name"
+            "SELECT id, name, description, created_at, updated_at FROM channels ORDER BY name",
         )
         .fetch_all(&self.pool)
         .await
@@ -34,7 +34,7 @@ impl ChannelRepository {
 
     pub async fn find_by_id(&self, id: &str) -> Result<Option<Channel>, sqlx::Error> {
         sqlx::query_as::<_, Channel>(
-            "SELECT id, name, description, created_at, updated_at FROM channels WHERE id = ?"
+            "SELECT id, name, description, created_at, updated_at FROM channels WHERE id = ?",
         )
         .bind(id)
         .fetch_optional(&self.pool)
@@ -43,7 +43,7 @@ impl ChannelRepository {
 
     pub async fn find_by_name(&self, name: &str) -> Result<Option<Channel>, sqlx::Error> {
         sqlx::query_as::<_, Channel>(
-            "SELECT id, name, description, created_at, updated_at FROM channels WHERE name = ?"
+            "SELECT id, name, description, created_at, updated_at FROM channels WHERE name = ?",
         )
         .bind(name)
         .fetch_optional(&self.pool)
@@ -51,14 +51,12 @@ impl ChannelRepository {
     }
 
     pub async fn create(&self, id: &str, channel: CreateChannel) -> Result<(), sqlx::Error> {
-        sqlx::query(
-            "INSERT INTO channels (id, name, description) VALUES (?, ?, ?)"
-        )
-        .bind(id)
-        .bind(&channel.name)
-        .bind(&channel.description)
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO channels (id, name, description) VALUES (?, ?, ?)")
+            .bind(id)
+            .bind(&channel.name)
+            .bind(&channel.description)
+            .execute(&self.pool)
+            .await?;
         Ok(())
     }
 

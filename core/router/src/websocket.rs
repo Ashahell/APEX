@@ -8,10 +8,10 @@ use axum::{
     Router,
 };
 use futures_util::{SinkExt, StreamExt};
+use std::collections::HashMap;
 use std::sync::Arc as StdArc;
 use tokio::sync::broadcast;
 use tokio::sync::RwLock;
-use std::collections::HashMap;
 
 use crate::api::AppState;
 
@@ -81,7 +81,7 @@ async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
     let (sender, mut receiver) = socket.split();
     let task_id = StdArc::new(RwLock::new(String::new()));
     let (tx, mut rx) = broadcast::channel::<String>(100);
-    
+
     // Subscribe to notification broadcasts
     let mut notification_rx = ws_manager.notification_receiver();
 
@@ -147,11 +147,11 @@ mod tests {
     async fn test_websocket_manager_add_remove_client() {
         let manager = WebSocketManager::new();
         let (tx, _rx) = broadcast::channel(10);
-        
+
         manager.add_client("task-1".to_string(), tx).await;
-        
+
         manager.remove_client("task-1").await;
-        
+
         let clients = manager.clients.read().await;
         assert!(clients.is_empty());
     }
@@ -160,10 +160,10 @@ mod tests {
     async fn test_websocket_manager_broadcast() {
         let manager = WebSocketManager::new();
         let (tx, mut rx) = broadcast::channel(10);
-        
+
         manager.add_client("task-1".to_string(), tx).await;
         manager.broadcast_task_update("task-1", "Hello").await;
-        
+
         let msg = rx.recv().await.unwrap();
         assert_eq!(msg, "Hello");
     }
@@ -173,15 +173,15 @@ mod tests {
         let manager = WebSocketManager::new();
         let (tx1, mut rx1) = broadcast::channel(10);
         let (tx2, mut rx2) = broadcast::channel(10);
-        
+
         manager.add_client("task-1".to_string(), tx1).await;
         manager.add_client("task-2".to_string(), tx2).await;
-        
+
         manager.broadcast_all("Broadcast").await;
-        
+
         let msg1 = rx1.recv().await.unwrap();
         let msg2 = rx2.recv().await.unwrap();
-        
+
         assert_eq!(msg1, "Broadcast");
         assert_eq!(msg2, "Broadcast");
     }

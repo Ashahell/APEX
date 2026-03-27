@@ -103,15 +103,16 @@ impl<'a> SessionControlRepository<'a> {
     }
 
     pub async fn get_yield_log(&self, id: &str) -> Result<SessionYieldLog, sqlx::Error> {
-        sqlx::query_as::<_, SessionYieldLog>(
-            "SELECT * FROM session_yield_log WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(self.pool)
-        .await
+        sqlx::query_as::<_, SessionYieldLog>("SELECT * FROM session_yield_log WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.pool)
+            .await
     }
 
-    pub async fn get_session_yields(&self, session_id: &str) -> Result<Vec<SessionYieldLog>, sqlx::Error> {
+    pub async fn get_session_yields(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<SessionYieldLog>, sqlx::Error> {
         sqlx::query_as::<_, SessionYieldLog>(
             "SELECT * FROM session_yield_log WHERE parent_session = ? OR child_session = ? ORDER BY created_at DESC",
         )
@@ -170,7 +171,10 @@ impl<'a> SessionControlRepository<'a> {
         .await
     }
 
-    pub async fn get_session_resume_history(&self, session_id: &str) -> Result<Vec<SessionResumeHistory>, sqlx::Error> {
+    pub async fn get_session_resume_history(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<SessionResumeHistory>, sqlx::Error> {
         sqlx::query_as::<_, SessionResumeHistory>(
             "SELECT * FROM session_resume_history WHERE session_id = ? ORDER BY created_at DESC",
         )
@@ -218,15 +222,16 @@ impl<'a> SessionControlRepository<'a> {
     }
 
     pub async fn get_attachment(&self, id: &str) -> Result<SessionAttachment, sqlx::Error> {
-        sqlx::query_as::<_, SessionAttachment>(
-            "SELECT * FROM session_attachments WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(self.pool)
-        .await
+        sqlx::query_as::<_, SessionAttachment>("SELECT * FROM session_attachments WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.pool)
+            .await
     }
 
-    pub async fn get_session_attachments(&self, session_id: &str) -> Result<Vec<SessionAttachment>, sqlx::Error> {
+    pub async fn get_session_attachments(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<SessionAttachment>, sqlx::Error> {
         sqlx::query_as::<_, SessionAttachment>(
             "SELECT * FROM session_attachments WHERE session_id = ? ORDER BY created_at DESC",
         )
@@ -277,12 +282,10 @@ impl<'a> SessionControlRepository<'a> {
     }
 
     pub async fn get_session_state(&self, session_id: &str) -> Result<SessionState, sqlx::Error> {
-        sqlx::query_as::<_, SessionState>(
-            "SELECT * FROM session_state WHERE session_id = ?",
-        )
-        .bind(session_id)
-        .fetch_one(self.pool)
-        .await
+        sqlx::query_as::<_, SessionState>("SELECT * FROM session_state WHERE session_id = ?")
+            .bind(session_id)
+            .fetch_one(self.pool)
+            .await
     }
 
     pub async fn delete_session_state(&self, session_id: &str) -> Result<(), sqlx::Error> {
@@ -324,15 +327,16 @@ impl<'a> SessionControlRepository<'a> {
     }
 
     pub async fn get_checkpoint(&self, id: &str) -> Result<SessionCheckpoint, sqlx::Error> {
-        sqlx::query_as::<_, SessionCheckpoint>(
-            "SELECT * FROM session_checkpoints WHERE id = ?",
-        )
-        .bind(id)
-        .fetch_one(self.pool)
-        .await
+        sqlx::query_as::<_, SessionCheckpoint>("SELECT * FROM session_checkpoints WHERE id = ?")
+            .bind(id)
+            .fetch_one(self.pool)
+            .await
     }
 
-    pub async fn get_session_checkpoints(&self, session_id: &str) -> Result<Vec<SessionCheckpoint>, sqlx::Error> {
+    pub async fn get_session_checkpoints(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<SessionCheckpoint>, sqlx::Error> {
         sqlx::query_as::<_, SessionCheckpoint>(
             "SELECT * FROM session_checkpoints WHERE session_id = ? ORDER BY created_at DESC",
         )
@@ -341,7 +345,11 @@ impl<'a> SessionControlRepository<'a> {
         .await
     }
 
-    pub async fn get_checkpoint_by_name(&self, session_id: &str, name: &str) -> Result<SessionCheckpoint, sqlx::Error> {
+    pub async fn get_checkpoint_by_name(
+        &self,
+        session_id: &str,
+        name: &str,
+    ) -> Result<SessionCheckpoint, sqlx::Error> {
         sqlx::query_as::<_, SessionCheckpoint>(
             "SELECT * FROM session_checkpoints WHERE session_id = ? AND checkpoint_name = ?",
         )

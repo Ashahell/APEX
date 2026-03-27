@@ -1,8 +1,8 @@
 use axum::{
-    extract::State,
-    extract::Query,
     extract::Path,
-    routing::{get, post, delete},
+    extract::Query,
+    extract::State,
+    routing::{delete, get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
@@ -21,29 +21,64 @@ pub fn router() -> Router<AppState> {
     Router::new()
         // Yield
         .route("/api/v1/sessions/:session_id/yield", post(yield_session))
-        .route("/api/v1/sessions/:session_id/yields", get(get_session_yields))
-        
+        .route(
+            "/api/v1/sessions/:session_id/yields",
+            get(get_session_yields),
+        )
         // Resume
         .route("/api/v1/sessions/resume", post(resume_session))
-        .route("/api/v1/sessions/:session_id/resume-history", get(get_resume_history))
-        
+        .route(
+            "/api/v1/sessions/:session_id/resume-history",
+            get(get_resume_history),
+        )
         // Attachments
-        .route("/api/v1/sessions/:session_id/attachments", get(list_attachments))
-        .route("/api/v1/sessions/:session_id/attachments", post(upload_attachment))
-        .route("/api/v1/sessions/:session_id/attachments/:attachment_id", get(get_attachment))
-        .route("/api/v1/sessions/:session_id/attachments/:attachment_id", delete(delete_attachment))
-        
+        .route(
+            "/api/v1/sessions/:session_id/attachments",
+            get(list_attachments),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/attachments",
+            post(upload_attachment),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/attachments/:attachment_id",
+            get(get_attachment),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/attachments/:attachment_id",
+            delete(delete_attachment),
+        )
         // State persistence
         .route("/api/v1/sessions/:session_id/state", get(get_session_state))
-        .route("/api/v1/sessions/:session_id/state", post(save_session_state))
-        .route("/api/v1/sessions/:session_id/state", delete(delete_session_state))
-        
+        .route(
+            "/api/v1/sessions/:session_id/state",
+            post(save_session_state),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/state",
+            delete(delete_session_state),
+        )
         // Checkpoints
-        .route("/api/v1/sessions/:session_id/checkpoints", get(list_checkpoints))
-        .route("/api/v1/sessions/:session_id/checkpoints", post(create_checkpoint))
-        .route("/api/v1/sessions/:session_id/checkpoints/:checkpoint_id", get(get_checkpoint))
-        .route("/api/v1/sessions/:session_id/checkpoints/:checkpoint_id", delete(delete_checkpoint))
-        .route("/api/v1/sessions/:session_id/checkpoints/by-name/:name", get(get_checkpoint_by_name))
+        .route(
+            "/api/v1/sessions/:session_id/checkpoints",
+            get(list_checkpoints),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/checkpoints",
+            post(create_checkpoint),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/checkpoints/:checkpoint_id",
+            get(get_checkpoint),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/checkpoints/:checkpoint_id",
+            delete(delete_checkpoint),
+        )
+        .route(
+            "/api/v1/sessions/:session_id/checkpoints/by-name/:name",
+            get(get_checkpoint_by_name),
+        )
 }
 
 // ============ Request/Response Types ============
@@ -147,28 +182,32 @@ async fn yield_session(
     Json(req): Json<YieldRequest>,
 ) -> Result<Json<YieldResponse>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     // Create child session ID
     let child_session_id = Ulid::new().to_string();
     let yield_id = Ulid::new().to_string();
-    
-    repo
-        .log_yield(
-            &yield_id,
-            &session_id,
-            &child_session_id,
-            req.reason.as_deref(),
-            req.yield_payload.as_deref(),
-        )
-        .await
-        .map_err(|e| format!("Failed to log yield: {}", e))?;
-    
+
+    repo.log_yield(
+        &yield_id,
+        &session_id,
+        &child_session_id,
+        req.reason.as_deref(),
+        req.yield_payload.as_deref(),
+    )
+    .await
+    .map_err(|e| format!("Failed to log yield: {}", e))?;
+
     // NOTE: Inter-worker signaling requires NATS or shared state
     // The yield is logged for the subagent to check on next iteration
-    
+
     Ok(Json(YieldResponse {
         yield_id,
-        status: if req.skip_tool_work.unwrap_or(false) { "skipped" } else { "yielded" }.to_string(),
+        status: if req.skip_tool_work.unwrap_or(false) {
+            "skipped"
+        } else {
+            "yielded"
+        }
+        .to_string(),
         child_session_id,
     }))
 }
@@ -178,12 +217,12 @@ async fn get_session_yields(
     Path(session_id): Path<String>,
 ) -> Result<Json<Vec<SessionYieldLog>>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let yields = repo
         .get_session_yields(&session_id)
         .await
         .map_err(|e| format!("Failed to get yields: {}", e))?;
-    
+
     Ok(Json(yields))
 }
 
@@ -194,7 +233,7 @@ async fn resume_session(
     Json(req): Json<ResumeRequest>,
 ) -> Result<Json<ResumeResponse>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     // Determine what to resume from
     let (resumed_from, session_id) = if let Some(id) = req.resume_session_id {
         // Resume from an existing session
@@ -202,25 +241,24 @@ async fn resume_session(
     } else if let Some(original_id) = req.original_session_id {
         // Resume from an archived/original session
         let new_session_id = Ulid::new().to_string();
-        
+
         // Log the resume
         let resume_id = Ulid::new().to_string();
-        repo
-            .log_resume(
-                &resume_id,
-                &new_session_id,
-                &original_id,
-                &req.resume_type,
-                req.context_summary.as_deref(),
-            )
-            .await
-            .map_err(|e| format!("Failed to log resume: {}", e))?;
-        
+        repo.log_resume(
+            &resume_id,
+            &new_session_id,
+            &original_id,
+            &req.resume_type,
+            req.context_summary.as_deref(),
+        )
+        .await
+        .map_err(|e| format!("Failed to log resume: {}", e))?;
+
         (original_id, new_session_id)
     } else {
         return Err("Must provide either resume_session_id or original_session_id".to_string());
     };
-    
+
     Ok(Json(ResumeResponse {
         session_id: session_id.to_string(),
         resumed_from: resumed_from,
@@ -233,12 +271,12 @@ async fn get_resume_history(
     Path(session_id): Path<String>,
 ) -> Result<Json<Vec<SessionResumeHistory>>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let history = repo
         .get_session_resume_history(&session_id)
         .await
         .map_err(|e| format!("Failed to get resume history: {}", e))?;
-    
+
     Ok(Json(history))
 }
 
@@ -249,12 +287,12 @@ async fn list_attachments(
     Path(session_id): Path<String>,
 ) -> Result<Json<Vec<AttachmentResponse>>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let attachments = repo
         .get_session_attachments(&session_id)
         .await
         .map_err(|e| format!("Failed to list attachments: {}", e))?;
-    
+
     Ok(Json(attachments.into_iter().map(|a| a.into()).collect()))
 }
 
@@ -264,7 +302,7 @@ async fn upload_attachment(
     Json(req): Json<UploadAttachmentRequest>,
 ) -> Result<Json<AttachmentResponse>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let id = Ulid::new().to_string();
     let attachment = repo
         .add_attachment(
@@ -280,7 +318,7 @@ async fn upload_attachment(
         )
         .await
         .map_err(|e| format!("Failed to upload attachment: {}", e))?;
-    
+
     Ok(Json(attachment.into()))
 }
 
@@ -289,12 +327,12 @@ async fn get_attachment(
     Path((_session_id, attachment_id)): Path<(String, String)>,
 ) -> Result<Json<AttachmentResponse>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let attachment = repo
         .get_attachment(&attachment_id)
         .await
         .map_err(|e| format!("Failed to get attachment: {}", e))?;
-    
+
     Ok(Json(attachment.into()))
 }
 
@@ -303,12 +341,11 @@ async fn delete_attachment(
     Path((_session_id, attachment_id)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
-    repo
-        .delete_attachment(&attachment_id)
+
+    repo.delete_attachment(&attachment_id)
         .await
         .map_err(|e| format!("Failed to delete attachment: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -319,12 +356,12 @@ async fn get_session_state(
     Path(session_id): Path<String>,
 ) -> Result<Json<Option<StateResponse>>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     match repo.get_session_state(&session_id).await {
         Ok(state) => {
-            let state_data: serde_json::Value = serde_json::from_str(&state.state_data)
-                .unwrap_or(serde_json::json!({}));
-            
+            let state_data: serde_json::Value =
+                serde_json::from_str(&state.state_data).unwrap_or(serde_json::json!({}));
+
             Ok(Json(Some(StateResponse {
                 session_id: state.session_id,
                 state_data,
@@ -343,7 +380,7 @@ async fn save_session_state(
     Json(req): Json<SaveStateRequest>,
 ) -> Result<Json<StateResponse>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let id = format!("state_{}", session_id);
     let state = repo
         .save_session_state(
@@ -354,10 +391,10 @@ async fn save_session_state(
         )
         .await
         .map_err(|e| format!("Failed to save session state: {}", e))?;
-    
-    let state_data: serde_json::Value = serde_json::from_str(&state.state_data)
-        .unwrap_or(serde_json::json!({}));
-    
+
+    let state_data: serde_json::Value =
+        serde_json::from_str(&state.state_data).unwrap_or(serde_json::json!({}));
+
     Ok(Json(StateResponse {
         session_id: state.session_id,
         state_data,
@@ -371,12 +408,11 @@ async fn delete_session_state(
     Path(session_id): Path<String>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
-    repo
-        .delete_session_state(&session_id)
+
+    repo.delete_session_state(&session_id)
         .await
         .map_err(|e| format!("Failed to delete session state: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }
 
@@ -387,12 +423,12 @@ async fn list_checkpoints(
     Path(session_id): Path<String>,
 ) -> Result<Json<Vec<SessionCheckpoint>>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let checkpoints = repo
         .get_session_checkpoints(&session_id)
         .await
         .map_err(|e| format!("Failed to list checkpoints: {}", e))?;
-    
+
     Ok(Json(checkpoints))
 }
 
@@ -402,7 +438,7 @@ async fn create_checkpoint(
     Json(req): Json<CreateCheckpointRequest>,
 ) -> Result<Json<SessionCheckpoint>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let id = Ulid::new().to_string();
     let checkpoint = repo
         .create_checkpoint(
@@ -414,7 +450,7 @@ async fn create_checkpoint(
         )
         .await
         .map_err(|e| format!("Failed to create checkpoint: {}", e))?;
-    
+
     Ok(Json(checkpoint))
 }
 
@@ -423,12 +459,12 @@ async fn get_checkpoint(
     Path((_session_id, checkpoint_id)): Path<(String, String)>,
 ) -> Result<Json<SessionCheckpoint>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let checkpoint = repo
         .get_checkpoint(&checkpoint_id)
         .await
         .map_err(|e| format!("Failed to get checkpoint: {}", e))?;
-    
+
     Ok(Json(checkpoint))
 }
 
@@ -437,12 +473,12 @@ async fn get_checkpoint_by_name(
     Path((session_id, name)): Path<(String, String)>,
 ) -> Result<Json<SessionCheckpoint>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
+
     let checkpoint = repo
         .get_checkpoint_by_name(&session_id, &name)
         .await
         .map_err(|e| format!("Failed to get checkpoint: {}", e))?;
-    
+
     Ok(Json(checkpoint))
 }
 
@@ -451,11 +487,10 @@ async fn delete_checkpoint(
     Path((_session_id, checkpoint_id)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>, String> {
     let repo = SessionControlRepository::new(&state.pool);
-    
-    repo
-        .delete_checkpoint(&checkpoint_id)
+
+    repo.delete_checkpoint(&checkpoint_id)
         .await
         .map_err(|e| format!("Failed to delete checkpoint: {}", e))?;
-    
+
     Ok(Json(serde_json::json!({ "deleted": true })))
 }

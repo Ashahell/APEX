@@ -1,10 +1,10 @@
 use axum::{
     extract::{Query, State},
+    http::StatusCode,
     response::IntoResponse,
     response::Json as AxumJson,
     routing::{get, post},
     Json, Router,
-    http::StatusCode,
 };
 use serde::{Deserialize, Serialize};
 
@@ -130,7 +130,9 @@ pub struct TrustResponse {
     pub assessment: String,
 }
 
-async fn get_moltbook_status(State(state): State<AppState>) -> Result<AxumJson<MoltbookStatusResponse>, (StatusCode, String)> {
+async fn get_moltbook_status(
+    State(state): State<AppState>,
+) -> Result<AxumJson<MoltbookStatusResponse>, (StatusCode, String)> {
     match &state.moltbook {
         Some(client) => {
             let connected = client.is_connected().await;
@@ -158,7 +160,9 @@ async fn get_moltbook_status(State(state): State<AppState>) -> Result<AxumJson<M
     }
 }
 
-async fn connect_moltbook(State(state): State<AppState>) -> Result<AxumJson<MoltbookConnectResponse>, (StatusCode, String)> {
+async fn connect_moltbook(
+    State(state): State<AppState>,
+) -> Result<AxumJson<MoltbookConnectResponse>, (StatusCode, String)> {
     match &state.moltbook {
         Some(client) => {
             if !client.is_enabled() {
@@ -167,7 +171,7 @@ async fn connect_moltbook(State(state): State<AppState>) -> Result<AxumJson<Molt
                     message: "Moltbook is not enabled in configuration".to_string(),
                 }));
             }
-            
+
             match client.connect_ref().await {
                 Ok(_) => Ok(AxumJson(MoltbookConnectResponse {
                     success: true,
@@ -186,20 +190,20 @@ async fn connect_moltbook(State(state): State<AppState>) -> Result<AxumJson<Molt
     }
 }
 
-async fn disconnect_moltbook(State(state): State<AppState>) -> Result<AxumJson<MoltbookConnectResponse>, (StatusCode, String)> {
+async fn disconnect_moltbook(
+    State(state): State<AppState>,
+) -> Result<AxumJson<MoltbookConnectResponse>, (StatusCode, String)> {
     match &state.moltbook {
-        Some(client) => {
-            match client.disconnect().await {
-                Ok(_) => Ok(AxumJson(MoltbookConnectResponse {
-                    success: true,
-                    message: "Disconnected from Moltbook".to_string(),
-                })),
-                Err(e) => Ok(AxumJson(MoltbookConnectResponse {
-                    success: false,
-                    message: format!("Failed to disconnect: {}", e),
-                })),
-            }
-        }
+        Some(client) => match client.disconnect().await {
+            Ok(_) => Ok(AxumJson(MoltbookConnectResponse {
+                success: true,
+                message: "Disconnected from Moltbook".to_string(),
+            })),
+            Err(e) => Ok(AxumJson(MoltbookConnectResponse {
+                success: false,
+                message: format!("Failed to disconnect: {}", e),
+            })),
+        },
         None => Ok(AxumJson(MoltbookConnectResponse {
             success: false,
             message: "Moltbook client not initialized".to_string(),
@@ -207,14 +211,18 @@ async fn disconnect_moltbook(State(state): State<AppState>) -> Result<AxumJson<M
     }
 }
 
-async fn list_agents(State(state): State<AppState>) -> Result<AxumJson<Vec<AgentResponse>>, (StatusCode, String)> {
+async fn list_agents(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Vec<AgentResponse>>, (StatusCode, String)> {
     match &state.moltbook {
         Some(client) => {
             if !client.is_connected().await {
                 return Ok(AxumJson(vec![]));
             }
             match client.get_agent_directory().await {
-                Ok(agents) => Ok(AxumJson(agents.into_iter().map(AgentResponse::from).collect())),
+                Ok(agents) => Ok(AxumJson(
+                    agents.into_iter().map(AgentResponse::from).collect(),
+                )),
                 Err(_) => Ok(AxumJson(vec![])),
             }
         }
@@ -222,7 +230,9 @@ async fn list_agents(State(state): State<AppState>) -> Result<AxumJson<Vec<Agent
     }
 }
 
-async fn get_social_profile(State(state): State<AppState>) -> Result<AxumJson<Option<SocialProfileResponse>>, (StatusCode, String)> {
+async fn get_social_profile(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Option<SocialProfileResponse>>, (StatusCode, String)> {
     match &state.moltbook {
         Some(client) => {
             if !client.is_connected().await {
@@ -250,25 +260,41 @@ async fn create_post(
     match &state.moltbook {
         Some(client) => {
             if !client.is_connected().await {
-                return Err((StatusCode::BAD_REQUEST, "Not connected to Moltbook".to_string()));
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Not connected to Moltbook".to_string(),
+                ));
             }
             match client.post_update(&payload.content).await {
                 Ok(post) => Ok(AxumJson(PostResponse::from(post))),
-                Err(e) => Err((StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to post: {}", e))),
+                Err(e) => Err((
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    format!("Failed to post: {}", e),
+                )),
             }
         }
-        None => Err((StatusCode::SERVICE_UNAVAILABLE, "Moltbook not available".to_string())),
+        None => Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "Moltbook not available".to_string(),
+        )),
     }
 }
 
-async fn get_notifications(State(state): State<AppState>) -> Result<AxumJson<Vec<NotificationResponse>>, (StatusCode, String)> {
+async fn get_notifications(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Vec<NotificationResponse>>, (StatusCode, String)> {
     match &state.moltbook {
         Some(client) => {
             if !client.is_connected().await {
                 return Ok(AxumJson(vec![]));
             }
             match client.check_notifications().await {
-                Ok(notifications) => Ok(AxumJson(notifications.into_iter().map(NotificationResponse::from).collect())),
+                Ok(notifications) => Ok(AxumJson(
+                    notifications
+                        .into_iter()
+                        .map(NotificationResponse::from)
+                        .collect(),
+                )),
                 Err(_) => Ok(AxumJson(vec![])),
             }
         }
@@ -287,7 +313,9 @@ async fn search_agents(
             }
             let search_term = query.q.as_deref().unwrap_or("");
             match client.search_agents(search_term).await {
-                Ok(agents) => Ok(AxumJson(agents.into_iter().map(AgentResponse::from).collect())),
+                Ok(agents) => Ok(AxumJson(
+                    agents.into_iter().map(AgentResponse::from).collect(),
+                )),
                 Err(_) => Ok(AxumJson(vec![])),
             }
         }
@@ -295,7 +323,9 @@ async fn search_agents(
     }
 }
 
-async fn get_agent_directory(State(state): State<AppState>) -> Result<AxumJson<Vec<AgentResponse>>, (StatusCode, String)> {
+async fn get_agent_directory(
+    State(state): State<AppState>,
+) -> Result<AxumJson<Vec<AgentResponse>>, (StatusCode, String)> {
     list_agents(State(state)).await
 }
 
