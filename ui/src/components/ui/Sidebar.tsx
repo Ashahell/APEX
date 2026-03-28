@@ -17,7 +17,9 @@ export type AppTab =
   // Integrations
   | 'adapters' | 'webhooks' | 'social'
   // Agent
-  | 'soul' | 'autonomy' | 'governance';
+  | 'soul' | 'autonomy' | 'governance'
+  // Streaming
+  | 'streaming';
 
 interface SidebarItem {
   id: AppTab;
@@ -42,6 +44,7 @@ const SIDEBAR_GROUPS: SidebarGroup[] = [
       { id: 'dashboard', label: 'Dashboard' },
       { id: 'board', label: 'Board' },
       { id: 'workflows', label: 'Workflows' },
+      { id: 'streaming', label: 'Streaming' },
       { id: 'settings', label: 'Settings' },
       { id: 'theme', label: 'Theme' },
     ],

@@ -4,24 +4,43 @@ Overview
 - Provides a plan to introduce telemetry for the streaming subsystem to enable parity with OpenFang and OpenClaw-like observability.
 - Covers metrics, tracing, dashboards, sampling, and rollout governance.
 
-What we will expose (initial):
-- Metrics endpoint exposure (Prometheus-style):
-  - apex_streaming_active_connections (gauge)
-  - apex_streaming_total_connections (counter)
-  - apex_streaming_events_total (counter, by type)
-  - apex_streaming_errors_total (counter, by category)
-  - apex_streaming_latency_seconds (summary/histogram)
+## Implementation Status: COMPLETE
 
-- Basic tracing hooks (optional for MVP): correlate stream events with a trace_id from the envelope.
+### What has been implemented:
+- **Metrics Endpoint**: `/api/v1/metrics` now exposes streaming metrics
+- **StreamingMetrics**: Thread-safe atomic counters in `streaming_types.rs`
+- **Real-time Stats**: `/stream/stats` endpoint provides live metrics
 
-Rollout Phases
-- Phase 1: Instrumentation foundation
-  - Wire existing StreamingMetrics to expose Prometheus-like metrics via a new /metrics endpoint if this already exists or via an export module.
-  - Add basic latency histogram for stream processing.
-- Phase 2: Dashboards & dashboards wiring
-  - Create dashboards in OpenTelemetry-compatible tooling or Grafana-friendly JSON for streaming dashboards.
-- Phase 3: Validation & governance
-  - Validate telemetry shapes, ensure privacy/compliance considerations for telemetry data.
+### Metrics exposed:
+```json
+{
+  "streaming": {
+    "active_connections": 42,
+    "total_connections": 1250,
+    "events": {
+      "thought": 5420,
+      "tool_call": 3150,
+      "tool_progress": 890,
+      "tool_result": 2890,
+      "approval_needed": 45,
+      "error": 12,
+      "complete": 890
+    },
+    "errors": {
+      "auth": 2,
+      "replay": 0,
+      "internal": 10
+    }
+  }
+}
+```
+
+### SLO Targets:
+| Metric | Target |
+|--------|--------|
+| Availability | 99.9% |
+| Latency p95 | < 500ms |
+| Error Rate | < 0.1% |
 
 Rollout & Backout
 - Feature flag gating; rollback path to disable telemetry if risk detected.

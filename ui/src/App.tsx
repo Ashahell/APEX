@@ -40,6 +40,7 @@ const SystemHealthPanel = lazy(() => import('./components/metrics/SystemHealthPa
 const TotpSetup = lazy(() => import('./components/auth/TotpSetup').then(m => ({ default: m.TotpSetup })));
 const ClientAuthManager = lazy(() => import('./components/auth/ClientAuthManager').then(m => ({ default: m.ClientAuthManager })));
 const ThemeEditor = lazy(() => import('./components/settings/ThemeEditor').then(m => ({ default: m.ThemeEditor })));
+const StreamingDashboard = lazy(() => import('./components/streaming/StreamingDashboard').then(m => ({ default: m.StreamingDashboard })));
 
 const TAB_ORDER: AppTab[] = [
   'chat', 'dashboard', 'board', 'workflows', 'settings', 'theme',
@@ -49,7 +50,8 @@ const TAB_ORDER: AppTab[] = [
   'metrics', 'monitoring', 'health', 'vm',
   'totp', 'clients',
   'adapters', 'webhooks', 'social',
-  'soul', 'autonomy', 'governance'
+  'soul', 'autonomy', 'governance',
+  'streaming'
 ];
 
 function AppContent() {
@@ -150,6 +152,7 @@ function AppContent() {
       case 'soul': return <Suspense fallback={fallback}><SoulEditor /></Suspense>;
       case 'autonomy': return <Suspense fallback={fallback}><AutonomyControls /></Suspense>;
       case 'governance': return <Suspense fallback={fallback}><GovernanceControls /></Suspense>;
+      case 'streaming': return <Suspense fallback={fallback}><StreamingDashboard /></Suspense>;
       default:
         return <div className="p-6">Select an option from the sidebar</div>;
     }

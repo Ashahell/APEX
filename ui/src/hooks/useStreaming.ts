@@ -77,14 +77,28 @@ export function useStreaming(
   }, []);
 
   // Generate signed URL for SSE (browser-friendly auth)
-  // Note: In production, this should call a backend endpoint to get a signed URL
+  // Calls backend endpoint to get a signed URL with HMAC query params
   const getSignedUrl = useCallback(async (path: string): Promise<string> => {
     const baseUrl = getBaseUrl();
     
-    // For development, we'll try without auth first
-    // In production, this should call: await fetch('/api/v1/streams/sign?path=' + path)
-    // And use the returned signed URL
-    return `${baseUrl}${path}`;
+    try {
+      // Use api.ts helper for authenticated request
+      const { apiGet } = await import('../lib/api');
+      const response = await apiGet(`/api/v1/streams/sign?path=${encodeURIComponent(path)}`);
+      
+      if (!response.ok) {
+        console.warn('Failed to get signed URL, falling back to unsigned:', response.status);
+        return `${baseUrl}${path}`;
+      }
+      
+      const data = await response.json();
+      // The backend returns { url, signature, timestamp, expires_in }
+      // The URL already includes the query params
+      return `${baseUrl}${data.url}`;
+    } catch (err) {
+      console.warn('Error getting signed URL, falling back to unsigned:', err);
+      return `${baseUrl}${path}`;
+    }
   }, [getBaseUrl]);
 
   // Connect to SSE endpoint

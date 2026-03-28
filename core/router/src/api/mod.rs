@@ -637,6 +637,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(privacy_api::create_privacy_router()) // NEW - Privacy (Feature 6)
         .merge(context_scope_api::create_context_scope_router()) // NEW - Context Scope (Feature 3)
         .merge(crate::streaming::create_streaming_router(state.clone())) // NEW - Patch 11: SSE streaming for Hands and MCP
+        .merge(crate::streaming_sign::create_stream_sign_router()) // NEW - Signed URL for streaming
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

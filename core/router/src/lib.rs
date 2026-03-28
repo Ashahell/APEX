@@ -47,6 +47,7 @@ pub mod story_engine; // Feature 7: Story Engine
 pub mod streaming; // Patch 11: SSE streaming endpoints for Hands and MCP
 pub mod streaming_types;
 pub mod streaming_mcp_tinysse; // MCP TinySSE surface
+pub mod streaming_sign; // Signed URL for streaming endpoints
 pub mod subagent;
 pub mod system_component;
 pub mod system_health;

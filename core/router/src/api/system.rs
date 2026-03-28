@@ -28,6 +28,28 @@ async fn get_metrics(State(state): State<AppState>) -> Json<serde_json::Value> {
         .copied()
         .unwrap_or(0);
     let tasks_failed = metrics.tasks_by_status.get("failed").copied().unwrap_or(0);
+    
+    // Get streaming metrics
+    let streaming = state.streaming_metrics.as_ref();
+    let streaming_metrics_json = serde_json::json!({
+        "active_connections": streaming.active_connections.load(std::sync::atomic::Ordering::Relaxed),
+        "total_connections": streaming.total_connections.load(std::sync::atomic::Ordering::Relaxed),
+        "events": {
+            "thought": streaming.events_thought.load(std::sync::atomic::Ordering::Relaxed),
+            "tool_call": streaming.events_tool_call.load(std::sync::atomic::Ordering::Relaxed),
+            "tool_progress": streaming.events_tool_progress.load(std::sync::atomic::Ordering::Relaxed),
+            "tool_result": streaming.events_tool_result.load(std::sync::atomic::Ordering::Relaxed),
+            "approval_needed": streaming.events_approval.load(std::sync::atomic::Ordering::Relaxed),
+            "error": streaming.events_error.load(std::sync::atomic::Ordering::Relaxed),
+            "complete": streaming.events_complete.load(std::sync::atomic::Ordering::Relaxed),
+        },
+        "errors": {
+            "auth": streaming.errors_auth.load(std::sync::atomic::Ordering::Relaxed),
+            "replay": streaming.errors_replay.load(std::sync::atomic::Ordering::Relaxed),
+            "internal": streaming.errors_internal.load(std::sync::atomic::Ordering::Relaxed),
+        }
+    });
+    
     Json(serde_json::json!({
         "tasks": metrics.tasks_total,
         "by_tier": metrics.tasks_by_tier,
@@ -35,6 +57,7 @@ async fn get_metrics(State(state): State<AppState>) -> Json<serde_json::Value> {
         "total_cost_usd": db_total_cost,
         "tasks_completed": tasks_completed,
         "tasks_failed": tasks_failed,
+        "streaming": streaming_metrics_json,
     }))
 }
 

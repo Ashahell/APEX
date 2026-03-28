@@ -64,3 +64,60 @@ Ownership
 
 Notes
 - The runbooks will evolve as UI wiring progresses and feedback is gathered from internal users.
+
+---
+
+## Service Level Objectives (SLOs)
+
+### Streaming Endpoints SLOs
+
+| Metric | Target | Description |
+|--------|--------|-------------|
+| **Availability** | 99.9% | `/stream/*` endpoints respond within 1s |
+| **Latency p95** | < 500ms | Time from event generation to SSE delivery |
+| **Error Rate** | < 0.1% | Failed auth, invalid payloads, server errors |
+| **Connection Duration** | < 5 min avg | Average SSE connection lifecycle |
+
+### UI Streaming SLOs
+
+| Metric | Target | Description |
+|--------|--------|-------------|
+| **Reconnection Success** | > 99% | Auto-reconnect after transient failures |
+| **Event Delivery** | > 99.9% | Events received by UI without drops |
+| **First Byte Time** | < 2s | Time to first SSE event on page load |
+
+### Alerting Rules
+
+| Alert | Condition | Severity |
+|-------|-----------|----------|
+| High Error Rate | `errors_total / events_total > 0.01` for 5m | Critical |
+| High Latency | `latency_p95 > 1s` for 5m | Warning |
+| Connection Failures | `connection_failures > 10` in 5m | Warning |
+| Active Connections Drop | `active_connections < expected * 0.5` | Critical |
+
+### Monitoring Dashboard
+
+The `/api/v1/metrics` endpoint now exposes streaming metrics:
+
+```json
+{
+  "streaming": {
+    "active_connections": 42,
+    "total_connections": 1250,
+    "events": {
+      "thought": 5420,
+      "tool_call": 3150,
+      "tool_progress": 890,
+      "tool_result": 2890,
+      "approval_needed": 45,
+      "error": 12,
+      "complete": 890
+    },
+    "errors": {
+      "auth": 2,
+      "replay": 0,
+      "internal": 10
+    }
+  }
+}
+```
