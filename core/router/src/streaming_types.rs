@@ -16,6 +16,11 @@ pub enum StreamEventType {
     Stats,
     Heartbeat,
     Error,
+    // Phase 1: Richer event types
+    SessionStart,
+    SessionEnd,
+    Checkpoint,
+    UserIntervention,
 }
 
 impl StreamEventType {
@@ -29,6 +34,11 @@ impl StreamEventType {
             StreamEventType::Stats => "stats",
             StreamEventType::Heartbeat => "heartbeat",
             StreamEventType::Error => "error",
+            // Phase 1: Richer event types
+            StreamEventType::SessionStart => "session_start",
+            StreamEventType::SessionEnd => "session_end",
+            StreamEventType::Checkpoint => "checkpoint",
+            StreamEventType::UserIntervention => "user_intervention",
         }
     }
 }
@@ -89,9 +99,18 @@ pub struct StreamingMetrics {
     pub events_approval: AtomicU64,
     pub events_error: AtomicU64,
     pub events_complete: AtomicU64,
+    // Phase 1: Additional event types
+    pub events_session_start: AtomicU64,
+    pub events_session_end: AtomicU64,
+    pub events_checkpoint: AtomicU64,
+    pub events_user_intervention: AtomicU64,
+    // Error counters
     pub errors_auth: AtomicU64,
     pub errors_replay: AtomicU64,
     pub errors_internal: AtomicU64,
+    // Phase 1: Performance metrics
+    pub connection_duration_total_ms: AtomicU64,
+    pub events_per_second_sum: AtomicU64,
 }
 
 // TinySSE scaffolding removed in favor of adapter-based lines using SSEItem only
@@ -150,6 +169,40 @@ impl StreamingMetrics {
             }
         }
     }
+
+    /// Track connection duration in milliseconds
+    pub fn on_disconnect_duration(&self, duration_ms: u64) {
+        self.connection_duration_total_ms
+            .fetch_add(duration_ms, Ordering::Relaxed);
+    }
+
+    /// Track events per second
+    pub fn on_events_per_second(&self, rate: u64) {
+        self.events_per_second_sum
+            .fetch_add(rate, Ordering::Relaxed);
+    }
+
+    /// Increment Phase 1 event type counter
+    pub fn on_stream_event(&self, event_type: StreamEventType) {
+        match event_type {
+            StreamEventType::SessionStart => {
+                let _ = self.events_session_start.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamEventType::SessionEnd => {
+                let _ = self.events_session_end.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamEventType::Checkpoint => {
+                let _ = self.events_checkpoint.fetch_add(1, Ordering::Relaxed);
+            }
+            StreamEventType::UserIntervention => {
+                let _ = self
+                    .events_user_intervention
+                    .fetch_add(1, Ordering::Relaxed);
+            }
+            // Legacy events handled by ExecutionEvent::on_event
+            _ => {}
+        }
+    }
 }
 
 /// Snapshot of streaming metrics for API responses.
@@ -159,6 +212,8 @@ pub struct StreamingStats {
     pub total_connections: u64,
     pub events: EventCounts,
     pub errors: ErrorCounts,
+    // Phase 1: Performance metrics
+    pub performance: PerformanceMetrics,
 }
 
 #[derive(Debug, Default, Serialize)]
@@ -170,6 +225,11 @@ pub struct EventCounts {
     pub approval_needed: u64,
     pub error: u64,
     pub complete: u64,
+    // Phase 1: Additional event types
+    pub session_start: u64,
+    pub session_end: u64,
+    pub checkpoint: u64,
+    pub user_intervention: u64,
     pub total: u64,
 }
 
@@ -181,6 +241,15 @@ pub struct ErrorCounts {
     pub total: u64,
 }
 
+/// Phase 1: Performance metrics for SLO tracking
+#[derive(Debug, Default, Serialize)]
+pub struct PerformanceMetrics {
+    pub connection_duration_total_ms: u64,
+    pub events_per_second_sum: u64,
+    /// Calculated average connection duration in ms
+    pub avg_connection_duration_ms: u64,
+}
+
 impl From<&StreamingMetrics> for StreamingStats {
     fn from(m: &StreamingMetrics) -> Self {
         let thought = m.events_thought.load(Ordering::Relaxed);
@@ -190,17 +259,42 @@ impl From<&StreamingMetrics> for StreamingStats {
         let approval = m.events_approval.load(Ordering::Relaxed);
         let error = m.events_error.load(Ordering::Relaxed);
         let complete = m.events_complete.load(Ordering::Relaxed);
-        let total_events =
-            thought + tool_call + tool_progress + tool_result + approval + error + complete;
+        // Phase 1: Additional events
+        let session_start = m.events_session_start.load(Ordering::Relaxed);
+        let session_end = m.events_session_end.load(Ordering::Relaxed);
+        let checkpoint = m.events_checkpoint.load(Ordering::Relaxed);
+        let user_intervention = m.events_user_intervention.load(Ordering::Relaxed);
+
+        let total_events = thought
+            + tool_call
+            + tool_progress
+            + tool_result
+            + approval
+            + error
+            + complete
+            + session_start
+            + session_end
+            + checkpoint
+            + user_intervention;
 
         let auth = m.errors_auth.load(Ordering::Relaxed);
         let replay = m.errors_replay.load(Ordering::Relaxed);
         let internal = m.errors_internal.load(Ordering::Relaxed);
         let total_errors = auth + replay + internal;
 
+        // Phase 1: Performance metrics
+        let connection_duration_total_ms = m.connection_duration_total_ms.load(Ordering::Relaxed);
+        let events_per_second_sum = m.events_per_second_sum.load(Ordering::Relaxed);
+        let total_conns = m.total_connections.load(Ordering::Relaxed);
+        let avg_duration_ms = if total_conns > 0 {
+            connection_duration_total_ms / total_conns
+        } else {
+            0
+        };
+
         StreamingStats {
             active_connections: m.active_connections.load(Ordering::Relaxed),
-            total_connections: m.total_connections.load(Ordering::Relaxed),
+            total_connections: total_conns,
             events: EventCounts {
                 thought,
                 tool_call,
@@ -209,6 +303,10 @@ impl From<&StreamingMetrics> for StreamingStats {
                 approval_needed: approval,
                 error,
                 complete,
+                session_start,
+                session_end,
+                checkpoint,
+                user_intervention,
                 total: total_events,
             },
             errors: ErrorCounts {
@@ -216,6 +314,11 @@ impl From<&StreamingMetrics> for StreamingStats {
                 replay,
                 internal,
                 total: total_errors,
+            },
+            performance: PerformanceMetrics {
+                connection_duration_total_ms,
+                events_per_second_sum,
+                avg_connection_duration_ms: avg_duration_ms,
             },
         }
     }

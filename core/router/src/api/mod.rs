@@ -132,6 +132,7 @@ use crate::skill_pool::SkillPool;
 use crate::soul::loader::SoulLoader;
 use crate::subagent::SubAgentPool;
 use crate::system_health::SystemMonitor;
+use crate::telemetry_middleware::TelemetryLayer;
 use crate::totp::TotpManager;
 use crate::unified_config::AppConfig;
 use crate::user_profile::UserProfileManager;
@@ -643,6 +644,7 @@ pub fn create_router(state: AppState) -> Router {
         .route("/api/v1/deep", post(execute_deep_task))
         .layer(cors)
         .layer(TraceLayer::new_for_http())
+        .layer(TelemetryLayer::new(state.metrics.clone()))
         .with_state(state)
 }
 

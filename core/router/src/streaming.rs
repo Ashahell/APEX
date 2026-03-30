@@ -163,7 +163,9 @@ impl StreamingAuth {
         let path = request.uri().path();
         let method = request.method().as_str();
         if !verify_request(&self.secret, method, path, &[], &signature, timestamp) {
-            return Err(StreamingError::InvalidSignature("HMAC verification failed".to_string()));
+            return Err(StreamingError::InvalidSignature(
+                "HMAC verification failed".to_string(),
+            ));
         }
 
         Ok(())
@@ -178,21 +180,25 @@ impl Default for StreamingAuth {
 
 // Re-export needed types from streaming_types for API compatibility
 pub use crate::streaming_types::{
-    ConnectionPayload, ErrorCounts, EventCounts, HeartbeatPayload, 
-    SseEnvelope, StreamingMetrics, StreamingStats, StreamEventType,
+    ConnectionPayload, ErrorCounts, EventCounts, HeartbeatPayload, SseEnvelope, StreamEventType,
+    StreamingMetrics, StreamingStats,
 };
 
 /// Extract the raw Request for auth validation
-fn extract_request() -> impl Fn(axum::extract::Request) -> futures_util::future::Ready<Result<Request<Body>, StreamingError>> {
-    |req: axum::extract::Request| {
-        futures_util::future::ready(Ok(req))
-    }
+fn extract_request(
+) -> impl Fn(axum::extract::Request) -> futures_util::future::Ready<Result<Request<Body>, StreamingError>>
+{
+    |req: axum::extract::Request| futures_util::future::ready(Ok(req))
 }
 
 pub async fn get_stream_stats(_state: State<AppState>) -> impl IntoResponse {
     let metrics = get_streaming_metrics();
     let stats = StreamingStats::from(&*metrics);
-    tracing::debug!(active = stats.active_connections, total = stats.total_connections, "Streaming stats requested");
+    tracing::debug!(
+        active = stats.active_connections,
+        total = stats.total_connections,
+        "Streaming stats requested"
+    );
     Json(stats)
 }
 
@@ -225,7 +231,7 @@ macro_rules! streaming_endpoint {
             // Track connection with observability
             let metrics = get_streaming_metrics();
             metrics.on_connect();
-            
+
             let connection_id = uuid::Uuid::new_v4().to_string();
             tracing::info!(
                 connection_id = %connection_id,
@@ -256,10 +262,10 @@ macro_rules! streaming_endpoint {
 /// Create a heartbeat event for keep-alive
 pub fn create_heartbeat_event() -> SSEItem {
     use crate::streaming_types::{HeartbeatPayload, SseEnvelope, StreamEventType};
-    
+
     let metrics = get_streaming_metrics();
     let stats = StreamingStats::from(&*metrics);
-    
+
     let payload = HeartbeatPayload {
         server_time: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -267,13 +273,11 @@ pub fn create_heartbeat_event() -> SSEItem {
             .unwrap_or(0),
         active_connections: stats.active_connections,
     };
-    
+
     let envelope = SseEnvelope::new(StreamEventType::Heartbeat, payload);
     let json = serde_json::to_string(&envelope).unwrap_or_default();
-    
-    Ok(Event::default()
-        .event("heartbeat")
-        .data(json))
+
+    Ok(Event::default().event("heartbeat").data(json))
 }
 
 streaming_endpoint!(stream_hands, "hands");
@@ -305,12 +309,12 @@ mod tests {
             secret: Arc::new("test".to_string()),
             disabled: true,
         };
-        
+
         let req = Request::builder()
             .uri("/stream/hands/test-task")
             .body(Body::empty())
             .unwrap();
-        
+
         // Should pass when disabled
         assert!(auth.validate(&req).is_ok());
     }
@@ -321,12 +325,12 @@ mod tests {
             secret: Arc::new("test-secret".to_string()),
             disabled: false,
         };
-        
+
         let req = Request::builder()
             .uri("/stream/hands/test-task")
             .body(Body::empty())
             .unwrap();
-        
+
         let result = auth.validate(&req);
         assert!(result.is_err());
         match result {
@@ -340,11 +344,11 @@ mod tests {
         let err = StreamingError::AuthRequired("test".to_string());
         let resp = err.into_response();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-        
+
         let err = StreamingError::InvalidSignature("test".to_string());
         let resp = err.into_response();
         assert_eq!(resp.status(), StatusCode::UNAUTHORIZED);
-        
+
         let err = StreamingError::StreamingDisabled;
         let resp = err.into_response();
         assert_eq!(resp.status(), StatusCode::FORBIDDEN);
@@ -359,14 +363,14 @@ mod tests {
     async fn test_concurrent_metrics_isolation() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         use std::sync::Arc;
-        
+
         // Get global metrics
         let metrics = get_streaming_metrics();
-        
+
         // Reset counters for this test
         let initial_active = metrics.active_connections.load(Ordering::Relaxed);
         let initial_total = metrics.total_connections.load(Ordering::Relaxed);
-        
+
         // Simulate multiple concurrent connections
         let handles: Vec<_> = (0..10)
             .map(|_| {
@@ -379,16 +383,16 @@ mod tests {
                 })
             })
             .collect();
-        
+
         // Wait for all to complete
         for handle in handles {
             handle.await.unwrap();
         }
-        
+
         // Verify metrics were updated correctly
         let final_active = metrics.active_connections.load(Ordering::Relaxed);
         let final_total = metrics.total_connections.load(Ordering::Relaxed);
-        
+
         // Total should have increased by 10
         assert_eq!(final_total, initial_total + 10);
         // Active should be back to initial (all disconnected)
@@ -398,16 +402,16 @@ mod tests {
     #[tokio::test]
     async fn test_metrics_error_tracking() {
         let metrics = get_streaming_metrics();
-        
+
         // Record various error types
         metrics.on_error("auth");
         metrics.on_error("auth");
         metrics.on_error("replay");
         metrics.on_error("internal");
-        
+
         // Verify error counts (requires accessing internal state, but we can verify via stats)
         let stats = StreamingStats::from(&*metrics);
-        
+
         assert_eq!(stats.errors.auth, 2);
         assert_eq!(stats.errors.replay, 1);
         assert_eq!(stats.errors.internal, 1);
@@ -415,17 +419,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_sse_envelope_serialization() {
-        use crate::streaming_types::{SseEnvelope, StreamEventType, ConnectionPayload};
-        
+        use crate::streaming_types::{ConnectionPayload, SseEnvelope, StreamEventType};
+
         let payload = ConnectionPayload {
             task_id: "test-task".to_string(),
             connection_id: "test-conn".to_string(),
             message: "connected".to_string(),
         };
-        
+
         let envelope = SseEnvelope::new(StreamEventType::Connected, payload);
         let json = serde_json::to_string(&envelope).unwrap();
-        
+
         // Verify JSON structure
         assert!(json.contains("\"type\":\"connected\""));
         assert!(json.contains("test-task"));
@@ -435,7 +439,7 @@ mod tests {
     #[tokio::test]
     async fn test_heartbeat_event() {
         let heartbeat = create_heartbeat_event();
-        
+
         // Just verify the heartbeat event can be created without panic
         assert!(heartbeat.is_ok());
     }

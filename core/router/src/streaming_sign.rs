@@ -1,9 +1,4 @@
-use axum::{
-    extract::Query,
-    routing::get,
-    Json,
-    Router,
-};
+use axum::{extract::Query, routing::get, Json, Router};
 use serde::Deserialize;
 
 /// Query parameters for streaming sign endpoint
@@ -63,8 +58,7 @@ pub async fn sign_stream_endpoint(
 
 /// Create the streaming sign router
 pub fn create_stream_sign_router() -> Router<crate::api::AppState> {
-    Router::new()
-        .route("/api/v1/streams/sign", get(sign_stream_endpoint))
+    Router::new().route("/api/v1/streams/sign", get(sign_stream_endpoint))
 }
 
 #[cfg(test)]

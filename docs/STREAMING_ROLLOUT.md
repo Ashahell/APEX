@@ -111,13 +111,105 @@ The `/api/v1/metrics` endpoint now exposes streaming metrics:
       "tool_result": 2890,
       "approval_needed": 45,
       "error": 12,
-      "complete": 890
+      "complete": 890,
+      "session_start": 120,
+      "session_end": 115,
+      "checkpoint": 340,
+      "user_intervention": 8
     },
     "errors": {
       "auth": 2,
       "replay": 0,
       "internal": 10
+    },
+    "performance": {
+      "connection_duration_total_ms": 15234000,
+      "events_per_second_sum": 45600,
+      "avg_connection_duration_ms": 12187
     }
   }
 }
 ```
+
+---
+
+## Phase 1 Acceptance Criteria (Streaming UX Parity Expansion)
+
+### Gate 1.1: Rich Event Types
+
+| Event Type | Implemented | Description |
+|------------|-------------|-------------|
+| session_start | ✅ | Session initialization event |
+| session_end | ✅ | Session completion/termination event |
+| checkpoint | ✅ | Periodic state checkpoint event |
+| user_intervention | ✅ | User input required event |
+
+**Verification**: Check `StreamEventType` enum in `streaming_types.rs` has all four new variants.
+
+### Gate 1.2: Rich Streaming Metrics
+
+| Metric | Implemented | Description |
+|--------|-------------|-------------|
+| connection_duration_total_ms | ✅ | Cumulative connection duration in ms |
+| events_per_second_sum | ✅ | Cumulative events per second rate |
+| avg_connection_duration_ms | ✅ | Calculated average duration |
+
+**Verification**: `/api/v1/metrics` returns `performance` object with all metrics.
+
+### Gate 1.3: Signed URL Surface
+
+| Feature | Status | Description |
+|---------|--------|-------------|
+| Query param auth | ✅ | `?sig=...&ts=...` support for SSE |
+| Timestamp validation | ✅ | Max 5 minute age check |
+| HMAC verification | ✅ | Signature verification |
+
+**Verification**: 
+```bash
+# Generate signed URL
+TS=$(date +%s)
+SIG=$(echo -n "${TS}GET/api/v1/stream/hands/test-task" | openssl dgst -sha256 -hmac "dev-secret-change-in-production" | cut -d' ' -f2)
+curl "http://localhost:3000/api/v1/stream/hands/test-task?sig=${SIG}&ts=${TS}"
+```
+
+### Gate 1.4: UI StreamingDashboard
+
+| Panel | Status | Description |
+|-------|--------|-------------|
+| Hands | Pending | Real-time Hands agent events |
+| MCP | Pending | MCP protocol events |
+| Task | Pending | Task execution events |
+| Stats | Pending | System statistics |
+
+**Verification**: UI renders all four panels with live streaming data.
+
+### Gate 1.5: E2E Streaming Tests
+
+| Test Category | Target | Current |
+|---------------|--------|---------|
+| Auth flow | 3+ | 3 |
+| Event delivery | 3+ | 2 |
+| Reconnection | 2+ | 1 |
+| Signed URL | 2+ | 1 |
+| **Total** | **10+** | **7** |
+
+**Verification**: `cargo test streaming_integration` passes with 10+ tests.
+
+### Gate 1.6: Documentation
+
+| Document | Status |
+|----------|--------|
+| STREAMING_ROLLOUT.md updated | ✅ |
+| Phase 1 runbook exists | Pending |
+| API contract updated | Pending |
+
+---
+
+## Phase 1 SLO Targets
+
+| Metric | Baseline Target | Phase 1 Target |
+|--------|-----------------|----------------|
+| Availability | 99.5% | 99.9% |
+| Latency p95 | < 800ms | < 500ms |
+| Error Rate | < 0.5% | < 0.1% |
+| Reconnection Success | > 95% | > 99% |

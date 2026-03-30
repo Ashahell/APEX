@@ -10,13 +10,29 @@ pub enum McpEvent {
     /// Tool discovery event
     ToolDiscovery { tools: Vec<String> },
     /// Tool execution started
-    ToolStart { tool: String, id: String, input: serde_json::Value },
+    ToolStart {
+        tool: String,
+        id: String,
+        input: serde_json::Value,
+    },
     /// Tool execution progress
-    ToolProgress { tool: String, id: String, progress: serde_json::Value },
+    ToolProgress {
+        tool: String,
+        id: String,
+        progress: serde_json::Value,
+    },
     /// Tool execution completed
-    ToolResult { tool: String, id: String, result: serde_json::Value },
+    ToolResult {
+        tool: String,
+        id: String,
+        result: serde_json::Value,
+    },
     /// Tool execution failed
-    ToolError { tool: String, id: String, error: String },
+    ToolError {
+        tool: String,
+        id: String,
+        error: String,
+    },
     /// Server connected
     Connected { server_name: String },
     /// Server disconnected
@@ -53,7 +69,7 @@ impl TinySseMcpSurface {
             server_name: self.server_name.clone(),
         };
         let json = serde_json::to_string(&connected).map_err(|e| e.to_string());
-        
+
         match json {
             Ok(data) => {
                 let events = vec![Ok(data)];
@@ -73,7 +89,11 @@ impl TinySseMcpSurface {
     }
 
     /// Create a tool start event
-    pub fn tool_start_event(tool: &str, id: &str, input: serde_json::Value) -> Result<String, String> {
+    pub fn tool_start_event(
+        tool: &str,
+        id: &str,
+        input: serde_json::Value,
+    ) -> Result<String, String> {
         let event = McpEvent::ToolStart {
             tool: tool.to_string(),
             id: id.to_string(),
@@ -83,7 +103,11 @@ impl TinySseMcpSurface {
     }
 
     /// Create a tool result event
-    pub fn tool_result_event(tool: &str, id: &str, result: serde_json::Value) -> Result<String, String> {
+    pub fn tool_result_event(
+        tool: &str,
+        id: &str,
+        result: serde_json::Value,
+    ) -> Result<String, String> {
         let event = McpEvent::ToolResult {
             tool: tool.to_string(),
             id: id.to_string(),
@@ -117,7 +141,7 @@ mod tests {
     fn test_tool_discovery_event() {
         let tools = vec!["tool1".to_string(), "tool2".to_string()];
         let event = TinySseMcpSurface::tool_discovery_event(tools.clone()).unwrap();
-        
+
         assert!(event.contains("tooldiscovery"));
         assert!(event.contains("tool1"));
         assert!(event.contains("tool2"));
@@ -127,7 +151,7 @@ mod tests {
     fn test_tool_start_event() {
         let input = serde_json::json!({"arg": "value"});
         let event = TinySseMcpSurface::tool_start_event("my_tool", "uuid-123", input).unwrap();
-        
+
         assert!(event.contains("toolstart"));
         assert!(event.contains("my_tool"));
         assert!(event.contains("uuid-123"));
@@ -137,15 +161,17 @@ mod tests {
     fn test_tool_result_event() {
         let result = serde_json::json!({"output": "success"});
         let event = TinySseMcpSurface::tool_result_event("my_tool", "uuid-123", result).unwrap();
-        
+
         assert!(event.contains("toolresult"));
         assert!(event.contains("success"));
     }
 
     #[test]
     fn test_tool_error_event() {
-        let event = TinySseMcpSurface::tool_error_event("my_tool", "uuid-123", "Something went wrong").unwrap();
-        
+        let event =
+            TinySseMcpSurface::tool_error_event("my_tool", "uuid-123", "Something went wrong")
+                .unwrap();
+
         assert!(event.contains("toolerror"));
         assert!(event.contains("Something went wrong"));
     }
@@ -154,7 +180,7 @@ mod tests {
     async fn test_mcp_surface_stream() {
         let surface = TinySseMcpSurface::new("test-server");
         let stream = surface.stream();
-        
+
         // Just verify the stream can be created without panic
         // The actual iteration would require async iteration setup
         assert!(std::mem::size_of_val(&stream) > 0);

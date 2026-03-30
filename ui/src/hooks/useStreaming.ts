@@ -4,8 +4,24 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // Types - SSE Envelope and Payloads (mirrored from StreamingDashboard)
 // ============================================================================
 
+// Phase 1: Extended event types
+export type StreamEventType = 
+  | 'connected' 
+  | 'disconnected' 
+  | 'hands' 
+  | 'mcp' 
+  | 'task' 
+  | 'stats' 
+  | 'heartbeat' 
+  | 'error'
+  // Phase 1: Richer event types
+  | 'session_start'
+  | 'session_end'
+  | 'checkpoint'
+  | 'user_intervention';
+
 export interface SseEnvelope<T> {
-  type: 'connected' | 'disconnected' | 'hands' | 'mcp' | 'task' | 'stats' | 'heartbeat' | 'error';
+  type: StreamEventType;
   timestamp: number;
   trace_id?: string;
   payload: T;

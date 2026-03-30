@@ -6,8 +6,24 @@ import { apiGet } from '../../lib/api';
 // Types - SSE Envelope and Payloads
 // ============================================================================
 
+// Phase 1: Extended event types
+export type StreamEventType = 
+  | 'connected' 
+  | 'disconnected' 
+  | 'hands' 
+  | 'mcp' 
+  | 'task' 
+  | 'stats' 
+  | 'heartbeat' 
+  | 'error'
+  // Phase 1: Richer event types
+  | 'session_start'
+  | 'session_end'
+  | 'checkpoint'
+  | 'user_intervention';
+
 export interface SseEnvelope<T> {
-  type: 'connected' | 'disconnected' | 'hands' | 'mcp' | 'task' | 'stats' | 'heartbeat' | 'error';
+  type: StreamEventType;
   timestamp: number;
   trace_id?: string;
   payload: T;
@@ -58,6 +74,11 @@ export interface StatsPayload {
     approval_needed: number;
     error: number;
     complete: number;
+    // Phase 1: Additional event types
+    session_start: number;
+    session_end: number;
+    checkpoint: number;
+    user_intervention: number;
     total: number;
   };
   errors: {
@@ -66,6 +87,43 @@ export interface StatsPayload {
     internal: number;
     total: number;
   };
+  // Phase 1: Performance metrics
+  performance: {
+    connection_duration_total_ms: number;
+    events_per_second_sum: number;
+    avg_connection_duration_ms: number;
+  };
+}
+
+// Phase 1: New payload types for richer events
+export interface SessionStartPayload {
+  session_id: string;
+  task_id: string;
+  started_at: number;
+}
+
+export interface SessionEndPayload {
+  session_id: string;
+  task_id: string;
+  ended_at: number;
+  duration_ms: number;
+  final_status: 'completed' | 'failed' | 'cancelled';
+}
+
+export interface CheckpointPayload {
+  session_id: string;
+  checkpoint_id: string;
+  step: number;
+  timestamp: number;
+  state_summary?: Record<string, unknown>;
+}
+
+export interface UserInterventionPayload {
+  session_id: string;
+  intervention_type: 'approval' | 'input' | 'choice';
+  message: string;
+  options?: string[];
+  pending: boolean;
 }
 
 // ============================================================================

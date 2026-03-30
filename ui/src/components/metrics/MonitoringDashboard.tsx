@@ -17,6 +17,28 @@ interface CacheStats {
   active_entries: number;
 }
 
+interface TelemetryEndpoint {
+  count: number;
+  avg_ms: number;
+  min_ms: number;
+  max_ms: number;
+  p50_ms: number;
+  p95_ms: number;
+  p99_ms: number;
+}
+
+interface TelemetryError {
+  requests: number;
+  errors: number;
+  error_rate_pct: number;
+  error_types: Record<string, number>;
+}
+
+interface TelemetryData {
+  endpoint_latencies: Record<string, TelemetryEndpoint>;
+  endpoint_errors: Record<string, TelemetryError>;
+}
+
 interface Metrics {
   tasks: Record<string, number>;
   by_tier: Record<string, number>;
@@ -24,6 +46,7 @@ interface Metrics {
   total_cost_usd: number;
   tasks_completed: number;
   tasks_failed: number;
+  telemetry?: TelemetryData;
 }
 
 function formatUptime(seconds: number): string {
@@ -41,7 +64,7 @@ export function MonitoringDashboard() {
   const [cache, setCache] = useState<CacheStats | null>(null);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activePanel, setActivePanel] = useState<'overview' | 'health' | 'cache' | 'tasks'>('overview');
+  const [activePanel, setActivePanel] = useState<'overview' | 'health' | 'cache' | 'tasks' | 'telemetry'>('overview');
 
   useEffect(() => {
     loadAllData();
@@ -109,7 +132,7 @@ export function MonitoringDashboard() {
             </div>
           </div>
           <div className="flex gap-1 border border-[var(--color-border)] rounded-lg p-1 bg-[var(--color-panel)]">
-            {(['overview', 'health', 'cache', 'tasks'] as const).map((panel) => (
+            {(['overview', 'health', 'cache', 'tasks', 'telemetry'] as const).map((panel) => (
               <button
                 key={panel}
                 onClick={() => setActivePanel(panel)}
@@ -267,6 +290,110 @@ export function MonitoringDashboard() {
             </h3>
             <p className="text-sm text-[var(--color-text-muted)]">{health.last_error}</p>
           </div>
+        )}
+
+        {/* Telemetry Panel (Phase 2) */}
+        {activePanel === 'telemetry' && (
+          <>
+            {/* Endpoint Latencies */}
+            <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)]">
+              <div className="border-b border-[var(--color-border)] p-3 flex items-center justify-between">
+                <h3 className="font-semibold">Endpoint Latencies</h3>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  {Object.keys(metrics?.telemetry?.endpoint_latencies || {}).length} endpoints
+                </span>
+              </div>
+              <div className="p-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
+                      <th className="text-left py-2 px-3">Endpoint</th>
+                      <th className="text-right py-2 px-3">Count</th>
+                      <th className="text-right py-2 px-3">Avg</th>
+                      <th className="text-right py-2 px-3">P50</th>
+                      <th className="text-right py-2 px-3">P95</th>
+                      <th className="text-right py-2 px-3">P99</th>
+                      <th className="text-right py-2 px-3">Min</th>
+                      <th className="text-right py-2 px-3">Max</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(metrics?.telemetry?.endpoint_latencies || {})
+                      .sort(([, a], [, b]) => b.avg_ms - a.avg_ms)
+                      .map(([endpoint, stats]) => (
+                        <tr key={endpoint} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-muted)]/20">
+                          <td className="py-2 px-3 font-mono text-xs">{endpoint}</td>
+                          <td className="text-right py-2 px-3">{stats.count}</td>
+                          <td className="text-right py-2 px-3">{stats.avg_ms}ms</td>
+                          <td className="text-right py-2 px-3">{stats.p50_ms}ms</td>
+                          <td className="text-right py-2 px-3">
+                            <span className={stats.p95_ms > 500 ? 'text-yellow-500' : ''}>
+                              {stats.p95_ms}ms
+                            </span>
+                          </td>
+                          <td className="text-right py-2 px-3">
+                            <span className={stats.p99_ms > 1000 ? 'text-red-500' : ''}>
+                              {stats.p99_ms}ms
+                            </span>
+                          </td>
+                          <td className="text-right py-2 px-3 text-green-500">{stats.min_ms}ms</td>
+                          <td className="text-right py-2 px-3">{stats.max_ms}ms</td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Endpoint Error Rates */}
+            <div className="border border-[var(--color-border)] rounded-xl bg-[var(--color-panel)]">
+              <div className="border-b border-[var(--color-border)] p-3 flex items-center justify-between">
+                <h3 className="font-semibold">Endpoint Error Rates</h3>
+                <span className="text-xs text-[var(--color-text-muted)]">
+                  {Object.keys(metrics?.telemetry?.endpoint_errors || {}).length} endpoints
+                </span>
+              </div>
+              <div className="p-4 overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-[var(--color-text-muted)] border-b border-[var(--color-border)]">
+                      <th className="text-left py-2 px-3">Endpoint</th>
+                      <th className="text-right py-2 px-3">Requests</th>
+                      <th className="text-right py-2 px-3">Errors</th>
+                      <th className="text-right py-2 px-3">Error Rate</th>
+                      <th className="text-left py-2 px-3">Error Types</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(metrics?.telemetry?.endpoint_errors || {})
+                      .filter(([, stats]) => stats.requests > 0)
+                      .sort(([, a], [, b]) => b.error_rate_pct - a.error_rate_pct)
+                      .map(([endpoint, stats]) => (
+                        <tr key={endpoint} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-muted)]/20">
+                          <td className="py-2 px-3 font-mono text-xs">{endpoint}</td>
+                          <td className="text-right py-2 px-3">{stats.requests}</td>
+                          <td className="text-right py-2 px-3">{stats.errors}</td>
+                          <td className="text-right py-2 px-3">
+                            <span className={stats.error_rate_pct > 5 ? 'text-red-500' : stats.error_rate_pct > 1 ? 'text-yellow-500' : 'text-green-500'}>
+                              {stats.error_rate_pct.toFixed(2)}%
+                            </span>
+                          </td>
+                          <td className="py-2 px-3">
+                            <div className="flex gap-1 flex-wrap">
+                              {Object.entries(stats.error_types).map(([type, count]) => (
+                                <span key={type} className="text-xs bg-red-500/10 text-red-500 px-2 py-0.5 rounded">
+                                  {type}: {count}
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
         )}
 
         {/* Last Updated */}

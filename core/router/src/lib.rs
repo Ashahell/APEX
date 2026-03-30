@@ -45,12 +45,13 @@ pub mod skill_worker;
 pub mod soul;
 pub mod story_engine; // Feature 7: Story Engine
 pub mod streaming; // Patch 11: SSE streaming endpoints for Hands and MCP
-pub mod streaming_types;
 pub mod streaming_mcp_tinysse; // MCP TinySSE surface
 pub mod streaming_sign; // Signed URL for streaming endpoints
+pub mod streaming_types;
 pub mod subagent;
 pub mod system_component;
 pub mod system_health;
+pub mod telemetry_middleware; // Phase 2: Telemetry middleware
 pub mod tool_sandbox; // Feature 1: Tool Sandbox
 pub mod tool_validator; // Feature 1: Tool Maker Validation
 pub mod totp;

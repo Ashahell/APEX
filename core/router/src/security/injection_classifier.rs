@@ -72,7 +72,6 @@ static INJECTION_PATTERNS: LazyLock<Vec<(Regex, &'static str, InjectionType, Thr
              "JSON prompt injection", InjectionType::PromptInjection, ThreatLevel::Medium),
             (Regex::new(r"(?i)(<script|<iframe|javascript:|<embed)").unwrap(),
              "XSS attempt", InjectionType::TemplateInjection, ThreatLevel::Critical),
-            
             // Command injection - Critical severity
             (Regex::new(r"[\;&\`\$\|]\s*(rm\s+-rf|del\s+/[fq]|format\s+)").unwrap(),
              "Destructive command", InjectionType::CommandInjection, ThreatLevel::Critical),
@@ -82,19 +81,16 @@ static INJECTION_PATTERNS: LazyLock<Vec<(Regex, &'static str, InjectionType, Thr
              "Download and execute", InjectionType::CommandInjection, ThreatLevel::Critical),
             (Regex::new(r"(?i)(exec|spawn|child_process|eval|settimeout)\s*\(").unwrap(),
              "Code execution attempt", InjectionType::CodeInjection, ThreatLevel::High),
-            
             // Path traversal - High severity
             (Regex::new(r"(\.\.[\\/]){2,}").unwrap(),
              "Path traversal attempt", InjectionType::PathTraversal, ThreatLevel::High),
             (Regex::new(r"(?i)(/etc/passwd|/etc/shadow|/windows/system32|\\\\.\\)").unwrap(),
              "Sensitive file access", InjectionType::PathTraversal, ThreatLevel::Critical),
-            
             // SQL injection - High severity
             (Regex::new(r"(?i)(union\s+select|drop\s+table|insert\s+into|delete\s+from|truncate\s+table)").unwrap(),
              "SQL injection attempt", InjectionType::SqlInjection, ThreatLevel::High),
             (Regex::new(r#"(?i)(['"])\s*(or|and)\s*['"]\s*=\s*['"]"#).unwrap(),
              "SQL OR injection", InjectionType::SqlInjection, ThreatLevel::Medium),
-            
             // Template injection - Medium severity
             (Regex::new(r"\{\{.*\}\}").unwrap(),
              "Handlebars/Smarty injection", InjectionType::TemplateInjection, ThreatLevel::Medium),
