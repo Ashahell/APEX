@@ -18,7 +18,17 @@ services:
       - APEX_DATABASE_URL=sqlite:/data/apex.db
     volumes:
       - apex-data:/data
-      - apex-soul:/root/.apex/soul
+      - apex-soul:/home/apex/.apex/soul
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=100M
+      - /home/apex/.cache:noexec,nosuid,size=50M
+    security_opt:
+      - seccomp:./infra/seccomp-router.json
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
@@ -39,6 +49,17 @@ services:
     depends_on:
       router:
         condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=50M
+      - /var/cache/nginx:noexec,nosuid,size=50M
+      - /var/log/nginx:noexec,nosuid,size=50M
+    security_opt:
+      - seccomp:./infra/seccomp-ui.json
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
     restart: unless-stopped
     networks:
       - apex-network

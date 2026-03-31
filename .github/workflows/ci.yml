@@ -131,4 +131,52 @@ jobs:
 
       - name: Run cargo audit
         working-directory: core
-        run: cargo audit || true
+        run: cargo audit
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        working-directory: ui
+        run: pnpm install --frozen-lockfile
+
+      - name: Run npm audit
+        working-directory: ui
+        run: pnpm audit --audit-level=high
+
+  container-scan:
+    name: Container Image Scan
+    runs-on: ubuntu-latest
+    needs: ui-build
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build Docker images
+        run: |
+          docker build -t apex-router:latest -f Dockerfile.router .
+          docker build -t apex-ui:latest -f ui/Dockerfile ui/
+
+      - name: Run Trivy vulnerability scanner (router)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: apex-router:latest
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy vulnerability scanner (UI)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: apex-ui:latest
+          format: table
+          exit-code: 1
+          ignore-unfixed: true
+          severity: CRITICAL,HIGH

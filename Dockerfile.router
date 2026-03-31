@@ -29,9 +29,20 @@ RUN cd core && cargo build --release --bin apex-router-bin
 # Runtime image
 FROM debian:bookworm-slim
 
+# Create non-root user
+RUN groupadd -r apex && useradd -r -g apex -d /home/apex -s /sbin/nologin apex
+
 RUN apt-get update && apt-get install -y curl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/core/target/release/apex-router-bin /usr/local/bin/apex-router
+
+# Create data directory with proper permissions
+RUN mkdir -p /data /home/apex/.apex/soul && chown -R apex:apex /data /home/apex
+
+# Switch to non-root user
+USER apex
+
+WORKDIR /home/apex
 
 EXPOSE 3000
 
