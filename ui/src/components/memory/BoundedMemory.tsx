@@ -8,6 +8,14 @@ import {
   addUserEntry,
   removeMemoryEntry,
   removeUserEntry,
+  searchMemory,
+  getBoundedMemorySnapshot,
+  getMemoryIndexStats,
+  rebuildMemoryIndex,
+  getMemoryTTLConfig,
+  updateMemoryTTLConfig,
+  getConsolidationCandidates,
+  approveConsolidation,
   BoundedMemoryStats,
   BoundedMemoryEntry,
 } from '../../lib/api';
@@ -162,11 +170,28 @@ function AddEntryForm({ storeType, onSubmit, remaining: _remaining }: AddEntryFo
 
 export function BoundedMemory() {
   const { addToast } = useAppStore();
-  const [activeTab, setActiveTab] = useState<'memory' | 'user'>('memory');
+  const [activeTab, setActiveTab] = useState<'memory' | 'user' | 'search' | 'ttl' | 'consolidation' | 'snapshot'>('memory');
   const [stats, setStats] = useState<BoundedMemoryStats | null>(null);
   const [memoryEntries, setMemoryEntries] = useState<BoundedMemoryEntry[]>([]);
   const [userEntries, setUserEntries] = useState<BoundedMemoryEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Phase 5: Search state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [indexStats, setIndexStats] = useState<any>(null);
+  
+  // Phase 5: TTL state
+  const [ttlConfig, setTtlConfig] = useState<any>(null);
+  const [isEditingTTL, setIsEditingTTL] = useState(false);
+  
+  // Phase 5: Consolidation state
+  const [consolidationCandidates, setConsolidationCandidates] = useState<any[]>([]);
+  const [isLoadingConsolidation, setIsLoadingConsolidation] = useState(false);
+  
+  // Phase 5: Snapshot state
+  const [snapshot, setSnapshot] = useState<any>(null);
   
   const loadData = useCallback(async () => {
     try {
@@ -191,6 +216,44 @@ export function BoundedMemory() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+  
+  // Load index stats when search tab is active
+  useEffect(() => {
+    if (activeTab === 'search') {
+      getMemoryIndexStats()
+        .then(setIndexStats)
+        .catch(() => {});
+    }
+  }, [activeTab]);
+  
+  // Load TTL config when TTL tab is active
+  useEffect(() => {
+    if (activeTab === 'ttl') {
+      getMemoryTTLConfig()
+        .then(setTtlConfig)
+        .catch(() => {});
+    }
+  }, [activeTab]);
+  
+  // Load consolidation candidates when consolidation tab is active
+  useEffect(() => {
+    if (activeTab === 'consolidation') {
+      setIsLoadingConsolidation(true);
+      getConsolidationCandidates()
+        .then(setConsolidationCandidates)
+        .catch(() => {})
+        .finally(() => setIsLoadingConsolidation(false));
+    }
+  }, [activeTab]);
+  
+  // Load snapshot when snapshot tab is active
+  useEffect(() => {
+    if (activeTab === 'snapshot') {
+      getBoundedMemorySnapshot()
+        .then(setSnapshot)
+        .catch(() => {});
+    }
+  }, [activeTab]);
   
   const handleAddMemory = async (content: string) => {
     await addMemoryEntry(content);
@@ -230,6 +293,69 @@ export function BoundedMemory() {
     }
   };
   
+  // Phase 5: Search handler
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    
+    setIsSearching(true);
+    try {
+      const results = await searchMemory(searchQuery, 20, 0, true);
+      setSearchResults(results.results || []);
+    } catch (err) {
+      addToast({
+        type: 'error',
+        message: `Search failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+  
+  // Phase 5: Rebuild index
+  const handleRebuildIndex = async () => {
+    try {
+      const result = await rebuildMemoryIndex();
+      addToast({ type: 'success', message: `Index rebuilt: ${result.indexed} entries indexed` });
+      getMemoryIndexStats().then(setIndexStats);
+    } catch (err) {
+      addToast({
+        type: 'error',
+        message: `Rebuild failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    }
+  };
+  
+  // Phase 5: Update TTL config
+  const handleUpdateTTL = async (newConfig: any) => {
+    try {
+      await updateMemoryTTLConfig(newConfig);
+      setTtlConfig(newConfig);
+      setIsEditingTTL(false);
+      addToast({ type: 'success', message: 'TTL configuration updated' });
+    } catch (err) {
+      addToast({
+        type: 'error',
+        message: `Update failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    }
+  };
+  
+  // Phase 5: Approve consolidation
+  const handleApproveConsolidation = async (candidate: any) => {
+    try {
+      await approveConsolidation(candidate);
+      setConsolidationCandidates(prev => prev.filter(c => c !== candidate));
+      await loadData();
+      addToast({ type: 'success', message: 'Consolidation approved' });
+    } catch (err) {
+      addToast({
+        type: 'error',
+        message: `Consolidation failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+      });
+    }
+  };
+  
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -248,7 +374,7 @@ export function BoundedMemory() {
       <div>
         <h2 className="text-xl font-bold text-[var(--color-text)]">Bounded Memory</h2>
         <p className="text-sm text-[var(--color-text-muted)] mt-1">
-          Hermes-style curated memory with character limits
+          Hermes-style curated memory with character limits, search, TTL, and consolidation
         </p>
       </div>
       
@@ -281,70 +407,329 @@ export function BoundedMemory() {
       </div>
       
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-[var(--color-border)]">
-        <button
-          onClick={() => setActiveTab('memory')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'memory'
-              ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          Memory ({memoryEntries.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('user')}
-          className={`px-4 py-2 text-sm font-medium transition-colors ${
-            activeTab === 'user'
-              ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)]'
-              : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
-          }`}
-        >
-          User Profile ({userEntries.length})
-        </button>
+      <div className="flex gap-2 border-b border-[var(--color-border)] flex-wrap">
+        {(['memory', 'user', 'search', 'ttl', 'consolidation', 'snapshot'] as const).map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-sm font-medium transition-colors capitalize ${
+              activeTab === tab
+                ? 'text-[var(--color-primary)] border-b-2 border-[var(--color-primary)]'
+                : 'text-[var(--color-text-muted)] hover:text-[var(--color-text)]'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
       </div>
       
-      {/* Add Entry Form */}
-      <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
-        <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
-          Add New Entry
-        </h3>
-        {remaining < 100 ? (
-          <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-amber-400 text-sm">
-            ⚠️ Memory is almost full ({remaining} chars remaining). Remove some entries first.
-          </div>
-        ) : (
-          <AddEntryForm
-            storeType={activeTab}
-            onSubmit={activeTab === 'memory' ? handleAddMemory : handleAddUser}
-            remaining={remaining}
-          />
-        )}
-      </div>
-      
-      {/* Entry List */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-medium text-[var(--color-text)]">
-          {activeTab === 'memory' ? 'Memory Entries' : 'User Preferences'}
-        </h3>
-        {currentEntries.length === 0 ? (
-          <div className="p-8 text-center text-[var(--color-text-muted)] bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
-            <p>No entries yet.</p>
-            <p className="text-sm mt-1">Add your first entry above.</p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {currentEntries.map((entry) => (
-              <MemoryEntryCard
-                key={entry.id}
-                entry={entry}
-                onDelete={activeTab === 'memory' ? handleDeleteMemory : handleDeleteUser}
-                canEdit={true}
+      {/* Memory/User Entry Tabs */}
+      {(activeTab === 'memory' || activeTab === 'user') && (
+        <>
+          {/* Add Entry Form */}
+          <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+              Add New Entry
+            </h3>
+            {remaining < 100 ? (
+              <div className="p-3 bg-amber-500/20 border border-amber-500/30 rounded-lg text-amber-400 text-sm">
+                ⚠️ Memory is almost full ({remaining} chars remaining). Remove some entries first.
+              </div>
+            ) : (
+              <AddEntryForm
+                storeType={activeTab}
+                onSubmit={activeTab === 'memory' ? handleAddMemory : handleAddUser}
+                remaining={remaining}
               />
-            ))}
+            )}
           </div>
-        )}
-      </div>
+          
+          {/* Entry List */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-[var(--color-text)]">
+              {activeTab === 'memory' ? 'Memory Entries' : 'User Preferences'}
+            </h3>
+            {currentEntries.length === 0 ? (
+              <div className="p-8 text-center text-[var(--color-text-muted)] bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+                <p>No entries yet.</p>
+                <p className="text-sm mt-1">Add your first entry above.</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {currentEntries.map((entry) => (
+                  <MemoryEntryCard
+                    key={entry.id}
+                    entry={entry}
+                    onDelete={activeTab === 'memory' ? handleDeleteMemory : handleDeleteUser}
+                    canEdit={true}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+      
+      {/* Phase 5: Search Tab */}
+      {activeTab === 'search' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+              Search Memory
+            </h3>
+            <form onSubmit={handleSearch} className="flex gap-2">
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search memory entries..."
+                className="flex-1 p-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-sm"
+              />
+              <button
+                type="submit"
+                disabled={isSearching || !searchQuery.trim()}
+                className="px-4 py-2 bg-[var(--color-primary)] text-white rounded text-sm disabled:opacity-50"
+              >
+                {isSearching ? 'Searching...' : 'Search'}
+              </button>
+            </form>
+          </div>
+          
+          {/* Index Stats */}
+          {indexStats && (
+            <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+              <h3 className="text-sm font-medium text-[var(--color-text)] mb-2">
+                Index Statistics
+              </h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-[var(--color-text-muted)]">FTS Enabled:</span>
+                  <span className="ml-2 text-[var(--color-text)]">{indexStats.fts_enabled ? 'Yes' : 'No'}</span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Total Indexed:</span>
+                  <span className="ml-2 text-[var(--color-text)]">{indexStats.total_indexed}</span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Index Size:</span>
+                  <span className="ml-2 text-[var(--color-text)]">{indexStats.index_size_kb} KB</span>
+                </div>
+                <div>
+                  <span className="text-[var(--color-text-muted)]">Last Indexed:</span>
+                  <span className="ml-2 text-[var(--color-text)]">{indexStats.last_indexed_at}</span>
+                </div>
+              </div>
+              <button
+                onClick={handleRebuildIndex}
+                className="mt-3 px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm"
+              >
+                Rebuild Index
+              </button>
+            </div>
+          )}
+          
+          {/* Search Results */}
+          {searchResults.length > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-[var(--color-text)]">
+                Results ({searchResults.length})
+              </h3>
+              {searchResults.map((result, idx) => (
+                <div
+                  key={idx}
+                  className="p-3 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]"
+                >
+                  <p className="text-sm text-[var(--color-text)]">{result.text}</p>
+                  <div className="flex gap-4 mt-2 text-xs text-[var(--color-text-muted)]">
+                    <span>Score: {result.score?.toFixed(3)}</span>
+                    <span>Source: {result.source}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      
+      {/* Phase 5: TTL Tab */}
+      {activeTab === 'ttl' && ttlConfig && (
+        <div className="space-y-4">
+          <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+              TTL Configuration
+            </h3>
+            {isEditingTTL ? (
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-[var(--color-text-muted)]">Memory TTL (hours)</label>
+                  <input
+                    type="number"
+                    value={ttlConfig.memory_ttl_hours}
+                    onChange={(e) => setTtlConfig({...ttlConfig, memory_ttl_hours: parseInt(e.target.value)})}
+                    className="w-full p-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--color-text-muted)]">User TTL (hours)</label>
+                  <input
+                    type="number"
+                    value={ttlConfig.user_ttl_hours}
+                    onChange={(e) => setTtlConfig({...ttlConfig, user_ttl_hours: parseInt(e.target.value)})}
+                    className="w-full p-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={ttlConfig.auto_cleanup_enabled}
+                    onChange={(e) => setTtlConfig({...ttlConfig, auto_cleanup_enabled: e.target.checked})}
+                  />
+                  <span className="text-sm">Auto-cleanup enabled</span>
+                </div>
+                <div>
+                  <label className="text-xs text-[var(--color-text-muted)]">Cleanup Interval (hours)</label>
+                  <input
+                    type="number"
+                    value={ttlConfig.cleanup_interval_hours}
+                    onChange={(e) => setTtlConfig({...ttlConfig, cleanup_interval_hours: parseInt(e.target.value)})}
+                    className="w-full p-2 bg-[var(--color-bg)] border border-[var(--color-border)] rounded text-sm"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleUpdateTTL(ttlConfig)}
+                    className="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditingTTL(false)}
+                    className="px-3 py-1 bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-sm"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-[var(--color-text-muted)]">Memory TTL:</span>
+                    <span className="ml-2 text-[var(--color-text)]">{ttlConfig.memory_ttl_hours} hours</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)]">User TTL:</span>
+                    <span className="ml-2 text-[var(--color-text)]">{ttlConfig.user_ttl_hours} hours</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)]">Auto-cleanup:</span>
+                    <span className="ml-2 text-[var(--color-text)]">{ttlConfig.auto_cleanup_enabled ? 'Enabled' : 'Disabled'}</span>
+                  </div>
+                  <div>
+                    <span className="text-[var(--color-text-muted)]">Cleanup Interval:</span>
+                    <span className="ml-2 text-[var(--color-text)]">{ttlConfig.cleanup_interval_hours} hours</span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEditingTTL(true)}
+                  className="mt-3 px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm"
+                >
+                  Edit Configuration
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Phase 5: Consolidation Tab */}
+      {activeTab === 'consolidation' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+              Memory Consolidation
+            </h3>
+            {isLoadingConsolidation ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="animate-spin w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full" />
+              </div>
+            ) : consolidationCandidates.length === 0 ? (
+              <p className="text-sm text-[var(--color-text-muted)] text-center py-4">
+                No consolidation candidates found. Memory is well-organized.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {consolidationCandidates.map((candidate, idx) => (
+                  <div
+                    key={idx}
+                    className="p-3 bg-[var(--color-bg)] rounded border border-[var(--color-border)]"
+                  >
+                    <p className="text-sm text-[var(--color-text)] mb-2">
+                      <strong>Suggested Summary:</strong> {candidate.suggested_summary}
+                    </p>
+                    <div className="flex gap-4 text-xs text-[var(--color-text-muted)] mb-3">
+                      <span>Entries: {candidate.entries?.length || 0}</span>
+                      <span>Char Savings: {candidate.char_savings}</span>
+                      <span>Confidence: {(candidate.confidence * 100).toFixed(0)}%</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleApproveConsolidation(candidate)}
+                        className="px-3 py-1 bg-green-600 text-white rounded text-sm"
+                      >
+                        Approve
+                      </button>
+                      <button
+                        onClick={() => setConsolidationCandidates(prev => prev.filter((_, i) => i !== idx))}
+                        className="px-3 py-1 bg-[var(--color-panel)] border border-[var(--color-border)] rounded text-sm"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      
+      {/* Phase 5: Snapshot Tab */}
+      {activeTab === 'snapshot' && (
+        <div className="space-y-4">
+          <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
+            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
+              Frozen Snapshot (System Prompt)
+            </h3>
+            {snapshot ? (
+              <div className="space-y-4">
+                <div>
+                  <h4 className="text-xs font-medium text-[var(--color-text-muted)] mb-1">MEMORY.md Snapshot</h4>
+                  <pre className="p-3 bg-[var(--color-bg)] rounded text-xs text-[var(--color-text)] whitespace-pre-wrap overflow-auto max-h-48">
+                    {snapshot.memory_snapshot || 'No memory snapshot available'}
+                  </pre>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-[var(--color-text-muted)] mb-1">USER.md Snapshot</h4>
+                  <pre className="p-3 bg-[var(--color-bg)] rounded text-xs text-[var(--color-text)] whitespace-pre-wrap overflow-auto max-h-48">
+                    {snapshot.user_snapshot || 'No user snapshot available'}
+                  </pre>
+                </div>
+                <div>
+                  <h4 className="text-xs font-medium text-[var(--color-text-muted)] mb-1">Combined Snapshot</h4>
+                  <pre className="p-3 bg-[var(--color-bg)] rounded text-xs text-[var(--color-text)] whitespace-pre-wrap overflow-auto max-h-64">
+                    {snapshot.combined || 'No combined snapshot available'}
+                  </pre>
+                </div>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)] text-center py-4">
+                Loading snapshot...
+              </p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

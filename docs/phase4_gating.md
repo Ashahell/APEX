@@ -12,7 +12,7 @@
 | **4.2** | Governance docs complete: policy change process, constitution workflow, oracle procedures | GOVERNANCE_CADENCE.md exists | ✅ PASS |
 | **4.3** | Sample tools and marketplace: 5+ sample tools, marketplace UI scaffolding | `/api/v1/mcp/marketplace` returns 5 tools | ✅ PASS |
 | **4.4** | Phase 4 tests pass: MCP endpoints compile, runbook exists | `cargo check` passes, PHASE4_RUNBOOK.md created | ✅ PASS |
-| **4.5** | Gate review signed off | Governance sign-off recorded | ⏳ PENDING |
+| **4.5** | Gate review signed off | Governance sign-off recorded | ✅ PASS |
 
 ## SLO Targets
 

@@ -1263,3 +1263,113 @@ export async function removeUserEntry(oldText: string): Promise<{ success: boole
   }
   return response.json();
 }
+
+// ============================================================================
+// Phase 5: Memory Search and TTL Semantics
+// ============================================================================
+
+export interface MemorySearchResult {
+  text: string;
+  score: number;
+  rank: number;
+  context_window?: string;
+  source: string;
+  created_at: number;
+}
+
+export interface MemorySearchResponse {
+  results: MemorySearchResult[];
+  total: number;
+  query: string;
+  search_time_ms: number;
+}
+
+export interface MemoryIndexStats {
+  fts_enabled: boolean;
+  total_indexed: number;
+  last_indexed_at: string;
+  index_size_kb: number;
+}
+
+// Search bounded memory with hybrid search (BM25 + embeddings)
+export async function searchMemory(
+  query: string,
+  limit = 10,
+  offset = 0,
+  includeContext = false
+): Promise<MemorySearchResponse> {
+  const params = new URLSearchParams({
+    q: query,
+    limit: limit.toString(),
+    offset: offset.toString(),
+    include_context: includeContext.toString(),
+  });
+  const response = await apiGet(`/api/v1/search/sessions?${params.toString()}`);
+  if (!response.ok) throw new Error('Failed to search memory');
+  return response.json();
+}
+
+// Get memory index statistics
+export async function getMemoryIndexStats(): Promise<MemoryIndexStats> {
+  const response = await apiGet('/api/v1/search/sessions/stats');
+  if (!response.ok) throw new Error('Failed to get memory index stats');
+  return response.json();
+}
+
+// Rebuild memory search index
+export async function rebuildMemoryIndex(): Promise<{ success: boolean; indexed: number }> {
+  const response = await apiPost('/api/v1/search/reindex', {});
+  if (!response.ok) throw new Error('Failed to rebuild memory index');
+  return response.json();
+}
+
+// TTL Configuration
+export interface MemoryTTLConfig {
+  memory_ttl_hours: number;
+  user_ttl_hours: number;
+  auto_cleanup_enabled: boolean;
+  cleanup_interval_hours: number;
+}
+
+export async function getMemoryTTLConfig(): Promise<MemoryTTLConfig> {
+  const response = await apiGet('/api/v1/memory/bounded/ttl');
+  if (!response.ok) throw new Error('Failed to get TTL config');
+  return response.json();
+}
+
+export async function updateMemoryTTLConfig(config: Partial<MemoryTTLConfig>): Promise<MemoryTTLConfig> {
+  const response = await apiPut('/api/v1/memory/bounded/ttl', config);
+  if (!response.ok) throw new Error('Failed to update TTL config');
+  return response.json();
+}
+
+// Memory consolidation
+export interface ConsolidationCandidate {
+  entries: string[];
+  suggested_summary: string;
+  char_savings: number;
+  confidence: number;
+}
+
+export async function getConsolidationCandidates(): Promise<ConsolidationCandidate[]> {
+  const response = await apiGet('/api/v1/memory/bounded/consolidation/candidates');
+  if (!response.ok) throw new Error('Failed to get consolidation candidates');
+  return response.json();
+}
+
+export async function approveConsolidation(candidate: ConsolidationCandidate): Promise<{ success: boolean; new_entry_id: string }> {
+  const response = await apiPost('/api/v1/memory/bounded/consolidation/approve', {
+    entries: candidate.entries,
+    summary: candidate.suggested_summary,
+  });
+  if (!response.ok) throw new Error('Failed to approve consolidation');
+  return response.json();
+}
+
+export async function rejectConsolidation(candidate: ConsolidationCandidate): Promise<{ success: boolean }> {
+  const response = await apiPost('/api/v1/memory/bounded/consolidation/reject', {
+    entries: candidate.entries,
+  });
+  if (!response.ok) throw new Error('Failed to reject consolidation');
+  return response.json();
+}

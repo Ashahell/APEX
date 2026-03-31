@@ -16,6 +16,7 @@ pub mod journal;
 pub mod llms;
 pub mod mcp;
 pub mod memory;
+pub mod memory_ttl_api; // NEW - Phase 5 Memory TTL and Consolidation
 pub mod moltbook;
 pub mod notifications;
 pub mod pdf; // NEW
@@ -629,6 +630,7 @@ pub fn create_router(state: AppState) -> Router {
         .merge(skill_manager_api::router()) // NEW - Hermes-style Auto-Created Skills
         .merge(user_profile_api::router()) // NEW - Hermes-style User Profile
         .merge(session_search_api::router()) // NEW - Hermes-style Session Search
+        .merge(memory_ttl_api::router()) // NEW - Phase 5 Memory TTL and Consolidation
         .merge(hub_api::router()) // NEW - Hermes-style Skills Hub
         .merge(tool_validation::create_tool_validation_router()) // NEW - Tool Validation (Feature 1)
         .merge(persona_api::create_persona_router()) // NEW - Persona Assembly (Feature 2)

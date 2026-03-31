@@ -31,11 +31,11 @@ Owner: TBD
   - Status: Completed
 
 - Axis: Memory
-  - Feature Coverage: [ ]
-  - Quality: [ ]
-  - Observability: [ ]
-  - Evidence: [ ]
-  - Status: [Not Started|In Progress|Completed]
+  - Feature Coverage: ✅ Memory viewer (6 tabs), semantic search, TTL, consolidation, snapshots
+  - Quality: ✅ 9 integration tests passing
+  - Observability: ✅ Index stats, TTL config, consolidation candidates
+  - Evidence: BoundedMemory.tsx, memory_ttl_api.rs, memory_integration_phase5.rs, PHASE5_RUNBOOK.md
+  - Status: Completed
 
 - Axis: MCP/Tools
   - Feature Coverage: ✅ Tool discovery, server health, marketplace scaffolding, 5 sample tools
