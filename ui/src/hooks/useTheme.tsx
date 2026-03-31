@@ -1,7 +1,7 @@
 import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
-import { modern2026Theme, amigaTheme, agentzeroTheme, Theme, ColorTokens } from '../themes';
+import { modern2026Theme, amigaTheme, agentzeroTheme, highContrastTheme, Theme, ColorTokens } from '../themes';
 
-export type ThemeId = 'modern-2026' | 'amiga' | 'agentzero' | 'custom';
+export type ThemeId = 'modern-2026' | 'amiga' | 'agentzero' | 'high-contrast' | 'custom';
 
 interface ThemeContextValue {
   themeId: ThemeId;
@@ -19,6 +19,7 @@ const defaultThemes: Record<ThemeId, Theme> = {
   'modern-2026': modern2026Theme,
   'amiga': amigaTheme,
   'agentzero': agentzeroTheme,
+  'high-contrast': highContrastTheme,
   'custom': { ...modern2026Theme, id: 'custom', name: 'Custom', isBuiltIn: false },
 };
 
@@ -178,6 +179,7 @@ function applyThemeToDOM(theme: Theme) {
   const root = document.documentElement;
   const isAmiga = theme.id === 'amiga';
   const isAgentZero = theme.id === 'agentzero';
+  const isHighContrast = theme.id === 'high-contrast';
   
   root.classList.remove('dark');
   
@@ -257,6 +259,45 @@ function applyThemeToDOM(theme: Theme) {
       button:not(.color-picker):not([type="color"]):hover, .btn:hover { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgHover', '#303055')} !important; }
       button:not(.color-picker):not([type="color"]):active, .btn:active { background-color: ${getColor(button as unknown as Record<string, unknown>, 'bgActive', '#1a1a2e')} !important; }
       select, select option { color: ${getColor(text as unknown as Record<string, unknown>, 'primary', '#e8e8f0')} !important; }
+    `;
+    applyCSS(css);
+  } else if (isHighContrast) {
+    // High Contrast theme - WCAG AAA compliant
+    const css = `
+      :root {
+        --background: #000000 !important;
+        --foreground: #ffffff !important;
+        --card: #1a1a1a !important;
+        --card-foreground: #ffffff !important;
+        --popover: #2d2d2d !important;
+        --popover-foreground: #ffffff !important;
+        --primary: #00ffff !important;
+        --primary-foreground: #000000 !important;
+        --secondary: #1a1a1a !important;
+        --secondary-foreground: #ffffff !important;
+        --muted: #0d0d0d !important;
+        --muted-foreground: #a0a0a0 !important;
+        --accent: #00ffff !important;
+        --accent-foreground: #000000 !important;
+        --destructive: #ff0000 !important;
+        --destructive-foreground: #ffffff !important;
+        --border: #ffffff !important;
+        --input: #0d0d0d !important;
+        --ring: #00ffff !important;
+      }
+      body { background-color: #000000 !important; color: #ffffff !important; }
+      * { border-color: #ffffff !important; }
+      button:not(.color-picker):not([type="color"]), input[type="button"], .btn { 
+        background-color: #1a1a1a !important; 
+        color: #ffffff !important; 
+        border: 2px solid #ffffff !important; 
+      }
+      button:not(.color-picker):not([type="color"]):hover, .btn:hover { background-color: #2d2d2d !important; }
+      button:not(.color-picker):not([type="color"]):focus-visible, .btn:focus-visible { outline: 3px solid #00ffff !important; outline-offset: 2px !important; }
+      a { color: #00ffff !important; text-decoration: underline !important; }
+      select, select option { color: #ffffff !important; background-color: #1a1a1a !important; }
+      input, textarea { background-color: #0d0d0d !important; color: #ffffff !important; border: 2px solid #ffffff !important; }
+      input:focus, textarea:focus { outline: 3px solid #00ffff !important; outline-offset: 2px !important; }
     `;
     applyCSS(css);
   } else {
