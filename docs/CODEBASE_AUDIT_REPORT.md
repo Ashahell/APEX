@@ -197,7 +197,8 @@ User → UI (React) → Gateway (Fastify) → Router (Axum) → Memory (SQLite)
 | Integration Tests | ✅ Good | Covers critical paths |
 | E2E Tests | ⚠️ Basic | Only 2 tests, need expansion |
 | Security Tests | ✅ Excellent | 40+ comprehensive tests |
-| Performance Tests | ✅ Added | Criterion benchmarks for injection, telemetry, replay, validation |
+| Performance Benchmarks | ✅ Added | Criterion benchmarks for injection, telemetry, replay, validation |
+| Chaos Engineering Tests | ❌ Missing | No failure injection tests |
 
 ---
 

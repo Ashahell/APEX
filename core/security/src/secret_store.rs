@@ -221,7 +221,6 @@ impl SecretStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::TempDir;
 
     fn temp_store() -> (SecretStore, TempDir) {

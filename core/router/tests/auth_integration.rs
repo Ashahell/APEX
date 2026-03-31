@@ -19,7 +19,7 @@ use apex_router::vm_pool::VmPool;
 use apex_router::websocket::WebSocketManager;
 use axum::{
     body::Body,
-    http::{header, HeaderMap, HeaderValue, Request, StatusCode},
+    http::{header, Request, StatusCode},
 };
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
@@ -66,6 +66,7 @@ fn generate_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64)
 }
 
 /// Helper to generate INVALID HMAC headers (wrong signature)
+#[allow(dead_code)]
 fn generate_invalid_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64) {
     let timestamp = chrono::Utc::now().timestamp();
     let signature = sign_request("wrong-secret", method, path, body, timestamp); // Wrong secret!
@@ -74,6 +75,7 @@ fn generate_invalid_auth_headers(method: &str, path: &str, body: &[u8]) -> (Stri
 }
 
 /// Helper to generate EXPIRED HMAC headers (timestamp too old)
+#[allow(dead_code)]
 fn generate_expired_auth_headers(method: &str, path: &str, body: &[u8]) -> (String, i64) {
     let timestamp = chrono::Utc::now().timestamp() - 400; // 400 seconds old (> 300s limit)
     let signature = sign_request(TEST_SECRET, method, path, body, timestamp);
@@ -82,6 +84,7 @@ fn generate_expired_auth_headers(method: &str, path: &str, body: &[u8]) -> (Stri
 }
 
 /// Helper to generate headers WITHOUT auth headers
+#[allow(dead_code)]
 fn generate_missing_auth_headers() -> (String, i64) {
     ("".to_string(), 0)
 }

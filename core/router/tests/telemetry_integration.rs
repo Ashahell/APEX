@@ -3,11 +3,9 @@
 //! Integration tests for per-endpoint latency and error rate tracking.
 
 use apex_router::metrics::{
-    EndpointErrorTracker, EndpointLatencyTracker, ErrorStats, LatencyStats, RouterMetrics,
+    EndpointErrorTracker, EndpointLatencyTracker, RouterMetrics,
     TelemetrySurface,
 };
-use std::sync::Arc;
-use tokio::sync::RwLock;
 
 // ============================================================================
 // Test 1: EndpointLatencyTracker records and computes stats

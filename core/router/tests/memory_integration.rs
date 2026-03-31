@@ -26,7 +26,7 @@ fn test_memory_store_add_entry() {
     let result = store.add_entry("Test memory entry".to_string());
     assert!(result.is_ok(), "Should be able to add entry");
 
-    let id = result.unwrap();
+    let _id = result.unwrap();
     assert_eq!(
         store.entry_count(),
         1,

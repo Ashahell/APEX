@@ -592,7 +592,7 @@ mod tests {
         }
 
         // Should be throttled now
-        let result = limiter.check_limit("/api/v1/tasks", "client1").await;
+        let _result = limiter.check_limit("/api/v1/tasks", "client1").await;
 
         // Reset throttle
         limiter.reset_throttle("client1").await;

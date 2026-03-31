@@ -351,7 +351,7 @@ mod tests {
 
     #[test]
     fn from_values_mapping() {
-        let mut sm = StreamingMetrics::default();
+        let sm = StreamingMetrics::default();
         sm.active_connections.fetch_add(3, Ordering::Relaxed);
         sm.total_connections.fetch_add(3, Ordering::Relaxed);
         sm.events_thought.fetch_add(2, Ordering::Relaxed);

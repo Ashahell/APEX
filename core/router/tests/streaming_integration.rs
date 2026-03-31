@@ -7,8 +7,6 @@
 //! Note: These are integration tests that run against the in-memory SQLite test
 //! database. They require the full AppState so they go in `tests/` not `src/`.
 
-use apex_memory::db::Database;
-use apex_router::api::create_router;
 use apex_router::api::AppState;
 use apex_router::circuit_breaker::CircuitBreakerRegistry;
 use apex_router::execution_stream::ExecutionStreamManager;
@@ -23,13 +21,10 @@ use apex_router::unified_config::AppConfig;
 use apex_router::websocket::WebSocketManager;
 
 use axum::{
-    body::Body,
-    http::{Request, StatusCode},
     response::IntoResponse,
 };
 use hmac::Hmac;
 use sha2::Sha256;
-use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 type HmacSha256 = Hmac<Sha256>;
 

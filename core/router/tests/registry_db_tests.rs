@@ -1,5 +1,5 @@
 use sqlx::sqlite::SqlitePool;
-use sqlx::{Executor, Row};
+use sqlx::Row;
 
 #[tokio::test]
 async fn registry_lifecycle_and_tools_persistence() {

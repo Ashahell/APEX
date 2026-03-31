@@ -448,7 +448,7 @@ mod tests {
         assert!(entry2.verify());
 
         // If we modify entry1, entry2's chain is broken
-        let mut tampered_entry1 = AuditEntry {
+        let tampered_entry1 = AuditEntry {
             id: 1,
             prev_hash: "0".to_string(),
             hash: entry1.hash.clone(),
