@@ -12,7 +12,7 @@
 | **7.2** | Marketplace skeleton: hub endpoints, plugin listing, install flow | `/api/v1/hub/skills` returns marketplace skills | ✅ PASS |
 | **7.3** | Plugin governance doc: submission, review, trust levels, revocation | PLUGIN_GOVERNANCE.md exists | ✅ PASS |
 | **7.4** | CI templates: GitHub Actions for plugin testing, security scanning | `.github/workflows/plugin-ci.yml` exists | ✅ PASS |
-| **7.5** | Gate review signed off | Governance sign-off recorded | ⏳ PENDING |
+| **7.5** | Gate review signed off | Governance sign-off recorded | ✅ PASS |
 
 ## SLO Targets
 

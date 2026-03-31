@@ -12,7 +12,7 @@
 | **5.2** | TTL semantics: configurable TTL per store, auto-cleanup, persistence | `/api/v1/memory/bounded/ttl` returns/accepts config | ✅ PASS |
 | **5.3** | Indexer surface testable: 9+ tests for TTL, consolidation, search | `cargo test memory_integration_phase5` passes | ✅ PASS |
 | **5.4** | Phase 5 documentation complete: runbook exists, parity scorecard updated | PHASE5_RUNBOOK.md created, scorecard filled | ✅ PASS |
-| **5.5** | Gate review signed off | Governance sign-off recorded | ⏳ PENDING |
+| **5.5** | Gate review signed off | Governance sign-off recorded | ✅ PASS |
 
 ## SLO Targets
 
