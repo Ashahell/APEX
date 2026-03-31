@@ -197,7 +197,7 @@ User → UI (React) → Gateway (Fastify) → Router (Axum) → Memory (SQLite)
 | Integration Tests | ✅ Good | Covers critical paths |
 | E2E Tests | ⚠️ Basic | Only 2 tests, need expansion |
 | Security Tests | ✅ Excellent | 40+ comprehensive tests |
-| Performance Tests | ❌ Missing | No benchmarks or load tests |
+| Performance Tests | ✅ Added | Criterion benchmarks for injection, telemetry, replay, validation |
 
 ---
 
@@ -245,9 +245,12 @@ User → UI (React) → Gateway (Fastify) → Router (Axum) → Memory (SQLite)
 | Input Validation | 40+ | ✅ Excellent |
 | Audit Logging | 7 | ✅ Good |
 | Execution Isolation | 3 | ⚠️ Basic |
-| Permission Tiers | 0 | ❌ Missing |
+| Permission Tiers | 19+ (governance.rs) | ✅ Good |
 | Injection Detection | 15+ | ✅ Good |
 | Replay Protection | 9 | ✅ Good |
+| Auth Integration | 10 | ✅ Good |
+| MCP Validation | 50+ | ✅ Excellent |
+| Audit Chain | 17 | ✅ Excellent |
 
 ---
 

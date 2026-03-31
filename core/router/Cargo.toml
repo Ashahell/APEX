@@ -58,6 +58,11 @@ path = "src/bin/apex_router_bin.rs"
 http = "1"
 hyper = "1"
 reqwest = { version = "0.12", features = ["json"] }
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[[bench]]
+name = "performance"
+harness = false
 
 [features]
 default = []
