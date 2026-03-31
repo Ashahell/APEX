@@ -1,17 +1,81 @@
 version: '3.8'
 
 services:
-  # Note: NATS removed - using tokio broadcast channels for single-node message bus
-  # NATS can be enabled for multi-node deployments if needed
-  # nats:
-  #   image: nats:latest
-  #   ports:
-  #     - "4222:4222"
-  #   command: ["--js", "--store-dir=/data"]
-  #   volumes:
-  #     - nats_data:/data
+  # APEX Router (Rust core)
+  router:
+    build:
+      context: .
+      dockerfile: Dockerfile.router
+    ports:
+      - "3000:3000"
+    environment:
+      - APEX_PORT=3000
+      - APEX_HOST=0.0.0.0
+      - APEX_AUTH_DISABLED=${APEX_AUTH_DISABLED:-1}
+      - APEX_SHARED_SECRET=${APEX_SHARED_SECRET:-dev-secret-change-in-production}
+      - APEX_USE_LLM=${APEX_USE_LLM:-0}
+      - APEX_EXECUTION_ISOLATION=docker
+      - APEX_DATABASE_URL=sqlite:/data/apex.db
+    volumes:
+      - apex-data:/data
+      - apex-soul:/root/.apex/soul
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - apex-network
 
-  # LocalStack for S3-compatible storage (optional, for file artifacts)
+  # APEX UI (React)
+  ui:
+    build:
+      context: ./ui
+      dockerfile: ../Dockerfile.ui
+    ports:
+      - "8083:80"
+    depends_on:
+      router:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - apex-network
+
+  # Embedding Server (for memory search)
+  embedding:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./models:/models
+    command: >
+      --model /models/nomic-embed-text-v1.5.Q4_K_M.gguf
+      --embedding
+      --port 8081
+      --host 0.0.0.0
+    restart: unless-stopped
+    networks:
+      - apex-network
+
+  # LLM Server (optional)
+  llama:
+    image: ghcr.io/ggerganov/llama.cpp:server
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./models:/models
+    command: >
+      --model /models/Qwen3-4B-Instruct-2507-Q4_K_M.gguf
+      --port 8080
+      --host 0.0.0.0
+      -c 4096
+    restart: unless-stopped
+    networks:
+      - apex-network
+
+  # LocalStack for S3-compatible storage (optional)
   localstack:
     image: localstack/localstack:latest
     ports:
@@ -26,7 +90,7 @@ services:
     profiles:
       - optional
 
-  # Prometheus for metrics (optional, for observability)
+  # Prometheus for metrics (optional)
   prometheus:
     image: prom/prometheus:latest
     ports:
@@ -53,5 +117,13 @@ services:
       - optional
 
 volumes:
+  apex-data:
+    driver: local
+  apex-soul:
+    driver: local
   localstack_data:
   prometheus_data:
+
+networks:
+  apex-network:
+    driver: bridge
