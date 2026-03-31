@@ -38,11 +38,11 @@ Owner: TBD
   - Status: [Not Started|In Progress|Completed]
 
 - Axis: MCP/Tools
-  - Feature Coverage: [ ]
-  - Quality: [ ]
-  - Observability: [ ]
-  - Evidence: [ ]
-  - Status: [Not Started|In Progress|Completed]
+  - Feature Coverage: ✅ Tool discovery, server health, marketplace scaffolding, 5 sample tools
+  - Quality: ✅ Compiles clean, endpoints functional
+  - Observability: ✅ Health scores, tool metrics, error tracking
+  - Evidence: mcp.rs (enriched), PHASE4_RUNBOOK.md, GOVERNANCE_CADENCE.md
+  - Status: Completed
 
 - Axis: UI
   - Feature Coverage: [ ]
