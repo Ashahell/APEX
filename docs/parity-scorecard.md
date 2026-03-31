@@ -58,10 +58,17 @@ Owner: TBD
   - Evidence: security_integration.rs, PHASE3_RUNBOOK.md, phase3_gating.md
   - Status: Completed
 
+- Axis: Ecosystem/Plugins
+  - Feature Coverage: ✅ Plugin signing (ed25519), marketplace hub, governance docs
+  - Quality: ✅ Signing API functional, trust levels defined, revocation policy
+  - Observability: ✅ Signature stats, verification endpoints, hub status
+  - Evidence: skill_signer.rs, signing_api.rs, hub_client.rs, PLUGIN_GOVERNANCE.md
+  - Status: Completed
+
 - Phase Readiness
-  - Gate Pass Criteria: [ ]
-  - Sign-off: [ ]
-  - Evidence: [ ]
+  - Gate Pass Criteria: ✅ All 7 phases complete
+  - Sign-off: ✅ Phases 0-6 signed off
+  - Evidence: CODEBASE_AUDIT_REPORT.md, parity-scorecard.md, phase*_gating.md
 
 Notes
 - This is a living artifact; fill progressively after each parity phase.
