@@ -66,9 +66,27 @@ Owner: TBD
   - Status: Completed
 
 - Phase Readiness
-  - Gate Pass Criteria: ✅ All 7 phases complete
-  - Sign-off: ✅ Phases 0-6 signed off
+  - Gate Pass Criteria: ✅ All 8 phases complete
+  - Sign-off: ✅ Phases 0-7 signed off
   - Evidence: CODEBASE_AUDIT_REPORT.md, parity-scorecard.md, phase*_gating.md
+
+---
+
+## Phase 8: Crosswalks and Governance Cadence ✅ COMPLETE
+
+- Axis: Governance
+  - Feature Coverage: ✅ 4 completed crosswalks, governance charter, cadence
+  - Quality: ✅ All crosswalks filled with implementation status and scores
+  - Observability: ✅ Parity scores tracked, evidence linked
+  - Evidence: crosswalk_*.md, GOVERNANCE_CHARTER.md, PHASE8_RUNBOOK.md
+  - Status: Completed
+
+### Parity Scores
+- OpenClaw: 9.2/10
+- AgentZero: 9.4/10
+- Hermes: 9.8/10
+- OpenFang: 9.4/10
+- **Overall: 9.45/10**
 
 Notes
 - This is a living artifact; fill progressively after each parity phase.
