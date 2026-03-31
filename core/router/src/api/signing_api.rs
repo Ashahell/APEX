@@ -65,7 +65,7 @@ pub fn create_signing_router() -> Router<AppState> {
 }
 
 /// Get verification key
-async fn get_verify_key(State(state): State<AppState>) -> Json<VerifyKeyResponse> {
+async fn get_verify_key(State(_state): State<AppState>) -> Json<VerifyKeyResponse> {
     let signer = SkillSigner::new(std::path::PathBuf::from(KEYS_DIR));
     let public_key = signer
         .get_public_key()
@@ -108,8 +108,8 @@ async fn sign_skill(
 
 /// Verify a skill's signature
 async fn verify_skill(
-    State(state): State<AppState>,
-    Path(skill_name): Path<String>,
+    State(_state): State<AppState>,
+    Path(_skill_name): Path<String>,
     Json(req): Json<VerifySkillRequest>,
 ) -> Json<VerificationResult> {
     let signer = SkillSigner::new(std::path::PathBuf::from(KEYS_DIR));

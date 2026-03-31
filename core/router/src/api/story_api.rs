@@ -205,8 +205,8 @@ async fn make_choice(
 
 /// Roll dice
 async fn roll_dice(
-    State(state): State<AppState>,
-    Path(id): Path<String>,
+    State(_state): State<AppState>,
+    Path(_id): Path<String>,
     Json(req): Json<RollDiceRequest>,
 ) -> Json<DiceRollResponse> {
     let result = DiceRoller::roll(&req.dice).unwrap_or(DiceRoll {

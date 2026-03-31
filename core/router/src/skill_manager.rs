@@ -153,7 +153,7 @@ impl SkillManager {
         };
 
         // Parse tags from metadata section
-        let tags = Self::extract_frontmatter_section(&frontmatter, "tags").unwrap_or_default();
+        let _tags = Self::extract_frontmatter_section(&frontmatter, "tags").unwrap_or_default();
 
         Ok(SkillMetadata {
             name,

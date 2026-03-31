@@ -48,7 +48,7 @@ pub struct PersonaResponse {
 }
 
 impl From<Persona> for PersonaResponse {
-    fn from(mut p: Persona) -> Self {
+    fn from(p: Persona) -> Self {
         let assembled = p.assemble_prompt();
         Self {
             id: p.id,

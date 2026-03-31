@@ -1,6 +1,6 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool};
+use sqlx::SqlitePool;
 
 /// Provider plugin configuration
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
@@ -86,10 +86,10 @@ impl<'a> ProviderRepository<'a> {
         enabled_only: bool,
     ) -> Result<Vec<ProviderPlugin>, sqlx::Error> {
         let sql = match (provider_type, enabled_only) {
-            (Some(pt), true) => {
+            (Some(_pt), true) => {
                 "SELECT * FROM provider_plugins WHERE provider_type = ? AND enabled = 1 ORDER BY priority DESC"
             }
-            (Some(pt), false) => {
+            (Some(_pt), false) => {
                 "SELECT * FROM provider_plugins WHERE provider_type = ? ORDER BY priority DESC"
             }
             (None, true) => {

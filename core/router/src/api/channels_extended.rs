@@ -194,7 +194,7 @@ async fn create_channel_settings(
         .credentials
         .map(|c| serde_json::to_string(&c).unwrap_or_default());
 
-    let settings = repo
+    let _settings = repo
         .create_settings(&id, &req.channel_type, &req.channel_id, &settings_json)
         .await
         .map_err(|e| format!("Failed to create channel: {}", e))?;

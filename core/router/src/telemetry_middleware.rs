@@ -61,7 +61,6 @@ where
     fn call(&mut self, req: Request<Body>) -> Self::Future {
         let metrics = self.metrics.clone();
         let endpoint = req.uri().path().to_string();
-        let method = req.method().clone();
         let start = Instant::now();
 
         let future = self.inner.call(req);

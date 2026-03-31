@@ -52,11 +52,11 @@ Owner: TBD
   - Status: [Not Started|In Progress|Completed]
 
 - Axis: Security & Governance
-  - Feature Coverage: [ ]
-  - Quality: [ ]
-  - Observability: [ ]
-  - Evidence: [ ]
-  - Status: [Not Started|In Progress|Completed]
+  - Feature Coverage: ✅ 40 security integration tests (injection, replay, config)
+  - Quality: ✅ All tests pass, no false positives on safe inputs
+  - Observability: ✅ InjectionClassifier, replay protection, config validation
+  - Evidence: security_integration.rs, PHASE3_RUNBOOK.md, phase3_gating.md
+  - Status: Completed
 
 - Phase Readiness
   - Gate Pass Criteria: [ ]

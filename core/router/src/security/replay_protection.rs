@@ -43,9 +43,9 @@ pub trait ReplayProtection: Send + Sync {
 // In-memory backend (default)
 // ---------------------------------------------------------------------------
 
-/// Thread-local in-memory store of observed HMAC signatures/nonces.
-/// Each thread gets its own HashSet via RefCell for interior mutability,
-/// eliminating parallel test race conditions.
+// Thread-local in-memory store of observed HMAC signatures/nonces.
+// Each thread gets its own HashSet via RefCell for interior mutability,
+// eliminating parallel test race conditions.
 thread_local! {
     static SEEN_SIGNATURES: std::cell::RefCell<HashSet<String>> = std::cell::RefCell::new(HashSet::new());
 }
@@ -211,7 +211,7 @@ pub fn count() -> usize {
 }
 
 /// Create the appropriate ReplayProtection backend from config.
-pub fn from_config(backend: &str, redis_url: Option<&str>) -> Box<dyn ReplayProtection> {
+pub fn from_config(backend: &str, _redis_url: Option<&str>) -> Box<dyn ReplayProtection> {
     match backend {
         #[cfg(feature = "redis")]
         "redis" => {

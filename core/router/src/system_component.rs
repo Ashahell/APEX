@@ -222,6 +222,7 @@ pub trait SystemComponent: Send + Sync + 'static {
 /// Extension trait for working with component references
 pub trait ComponentExt: SystemComponent {
     /// Wait until the component is healthy
+    #[allow(async_fn_in_trait)]
     async fn wait_healthy(&self, timeout_secs: u64) -> Result<(), ComponentError> {
         let start = std::time::Instant::now();
         while self.health().await != HealthStatus::Healthy {

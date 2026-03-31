@@ -147,7 +147,7 @@ impl Persona {
 
     /// Assemble the full system prompt from pieces
     pub fn assemble_prompt(&self) -> String {
-        let mut parts: Vec<String> = self
+        let parts: Vec<String> = self
             .prompt_pieces
             .iter()
             .filter(|p| p.enabled)

@@ -215,7 +215,7 @@ pub fn get_streaming_metrics() -> &'static StreamingMetrics {
 macro_rules! streaming_endpoint {
     ($name:ident, $event_type:expr) => {
         pub async fn $name(
-            State(state): State<AppState>,
+            State(_state): State<AppState>,
             Path(task_id): Path<String>,
             request: Request<Body>,
         ) -> Result<Sse<DynEventStream>, StreamingError> {
