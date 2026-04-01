@@ -215,7 +215,13 @@ cd ui && npm run build
 - [x] Technical Debt (benchmarks, clippy clean, audit report)
 
 ### Next 🚧
-- [ ] GitHub Actions CI/CD pipeline
+- [x] GitHub Actions CI/CD pipeline (Phase 2 planning drafted; outreach in progress)
+- [ ] Outreach to external security firms (Phase 1) - finalize shortlist and send initial RFPs
+- [ ] Docker Compose for production deployment
+- [ ] External security audit
+- [ ] Performance benchmarking suite
+- [ ] Chaos engineering tests
+- [ ] Production hardening (seccomp, AppArmor, SIEM)
 - [ ] Docker Compose for production deployment
 - [ ] External security audit
 - [ ] Performance benchmarking suite

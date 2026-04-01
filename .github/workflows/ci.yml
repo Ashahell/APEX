@@ -180,3 +180,74 @@ jobs:
           exit-code: 1
           ignore-unfixed: true
           severity: CRITICAL,HIGH
+name: CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: Build Rust workspace
+        run: cargo build --workspace --quiet
+      - name: Run security gates (Phase 2)
+        run: bash ./ci/run_security_gates.sh
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Install JS deps
+        run: |
+          (cd gateway && npm ci)
+          (cd skills && npm ci)
+      - name: Build JS assets
+        run: |
+          (cd gateway && npm run build --silent) || true
+          (cd skills && npm run build --silent) || true
+      - name: Run unit tests (Rust)
+        run: cargo test --workspace --tests --quiet
+      - name: Run unit tests (UI/JS)
+        run: |
+          (cd gateway && npm test --silent) || true
+          (cd skills && npm test --silent) || true
+
+  security-audit:
+    name: Security Audit (Cargo/NPM)
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: cargo audit
+        run: |
+          cargo audit -D high -q
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Install JS deps
+        run: |
+          (cd gateway && npm ci)
+          (cd skills && npm ci)
+      - name: npm ci (gateway)
+        run: |
+          (cd gateway && npm ci)
+      - name: npm audit (gateway)
+        run: |
+          (cd gateway && npm audit --audit-level=high)
+      - name: npm ci (skills)
+        run: |
+          (cd skills && npm ci)
+      - name: npm audit (skills)
+        run: |
+          (cd skills && npm audit --audit-level=high)

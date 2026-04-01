@@ -1,0 +1,39 @@
+version: '3.8'
+services:
+  router:
+    image: apex-router-prod:latest
+    container_name: apex_router_prod
+    restart: unless-stopped
+    read_only: true
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges
+    environment:
+      - APEX_ENV=production
+    depends_on:
+      - db
+  ui:
+    image: apex-ui-prod:latest
+    container_name: apex_ui_prod
+    restart: unless-stopped
+    read_only: true
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      - router
+  db:
+    image: postgres:15
+    container_name: apex_db_prod
+    restart: unless-stopped
+    volumes:
+      - apex_db_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_PASSWORD=change-me
+      - POSTGRES_USER=apex
+      - POSTGRES_DB=apex
+volumes:
+  apex_db_data:
+    driver: local
