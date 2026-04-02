@@ -10,6 +10,13 @@ Phases overview
 - Phase D: Observability, DR, and runbooks
 - Phase E: Governance, crosswalks, and handover
 - Phase F: Production pilot and sign-off
+ - Phase G: Incident response tabletop and final audit wrap-up
+- Phase A: Security Audit (external) and remediation
+- Phase B: CI/CD hardening and artifact governance
+- Phase C: Production deployment hardening (Docker Compose, non-root, read-only FS, seccomp/AppArmor)
+- Phase D: Observability, DR, and runbooks
+- Phase E: Governance, crosswalks, and handover
+- Phase F: Production pilot and sign-off
 
 Key deliverables
 - Updated CI pipelines with security gates and artifact signing
