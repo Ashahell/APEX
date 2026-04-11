@@ -101,6 +101,7 @@ if [ "$DRY_RUN" = "true" ]; then
 fi
 
 REPORT_PATH="${OUT_DIR%/}/security_gate_report.json"
+SUMMARY_PATH="${OUT_DIR%/}/security_gate_summary.txt"
 cat > "$REPORT_PATH" <<JSON
 {
   "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
@@ -112,6 +113,17 @@ cat > "$REPORT_PATH" <<JSON
 }
 JSON
 echo "[CI] Security gate report written to $REPORT_PATH"
+
+# Write a concise summary for quick inspection
+cat > "$SUMMARY_PATH" <<TXT
+Cargo audit: $CARGO_STATUS; Gateway: $GATEWAY_STATUS; Skills: $SKILLS_STATUS; Overall: $OVERALL
+TXT
+echo "[CI] Security gate summary written to $SUMMARY_PATH"
+
+# Optionally run a post-run validation against a consolidated report
+if command -v python3 >/dev/null 2>&1; then
+  python3 ci/parse_gate_report.py || true
+fi
 
 if [ "$DRY_RUN" = "false" ]; then
   if [ "$OVERALL" = "FAIL" ]; then

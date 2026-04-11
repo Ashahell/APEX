@@ -1,0 +1,30 @@
+name: Phase 3 Smoke Tests
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+jobs:
+  phase3-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker
+        uses: docker/setup-qemu-action@v2
+      - name: Docker Compose config test
+        run: docker-compose -f docker-compose.prod.yml config
+      - name: Bring up prod stack
+        run: |
+          docker-compose -f docker-compose.prod.yml up -d --build
+          sleep 40
+      - name: Run prod smoke tests
+        run: |
+          bash scripts/prod_smoke.sh
+      - name: Tear down prod stack
+        if: always()
+        run: |
+          docker-compose -f docker-compose.prod.yml down -v
+      - name: Upload smoke report
+        uses: actions/upload-artifact@v3
+        with:
+          name: phase3-smoke-artifacts
+          path: ci/phase3_smoke_report.txt

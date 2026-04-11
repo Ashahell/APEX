@@ -199,6 +199,11 @@ jobs:
         run: cargo build --workspace --quiet
       - name: Run security gates (Phase 2)
         run: bash ./ci/run_security_gates.sh
+      - name: Upload security gate artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-gate-artifacts
+          path: ci_artifacts/**
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:

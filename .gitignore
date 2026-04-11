@@ -42,5 +42,11 @@ env/
 *.swp
 *.swo
 
+# Secrets (never commit)
+secrets/
+*.pem
+*.key
+*.crt
+
 # OS
 Thumbs.db

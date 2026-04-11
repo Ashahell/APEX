@@ -17,8 +17,8 @@ services:
     cpus: 0.5
     environment:
       - APEX_ENV=production
-    ports:
-      - "3000:3000"
+    expose:
+      - "3000"
     depends_on:
       db:
         condition: service_healthy
@@ -50,8 +50,8 @@ services:
     cpus: 0.25
     environment:
       - NODE_ENV=production
-    ports:
-      - "3001:80"
+    expose:
+      - "80"
     depends_on:
       - router
     healthcheck:
@@ -95,6 +95,41 @@ services:
         max-file: "3"
     secrets:
       - db_password
+  nginx:
+    image: nginx:alpine
+    container_name: apex_nginx_prod
+    restart: unless-stopped
+    read_only: true
+    user: "101:101"
+    security_opt:
+      - no-new-privileges
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=5m,mode=1777
+      - /var/run:size=5m,mode=1777
+    mem_limit: 64m
+    cpus: 0.1
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - router
+      - ui
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 volumes:
   apex_db_data:
     driver: local

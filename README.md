@@ -214,7 +214,13 @@ cd ui && npm run build
 - [x] Migration Plan (4 pilot phases, rollback procedures)
 - [x] Technical Debt (benchmarks, clippy clean, audit report)
 
+[x] Phase 2 gating implemented; Phase 3 deployment hardened; Phase 4 DR; Phase 5 Governance; Phase 6 Release packaging
 ### Next 🚧
+- Validate Phase 2 gating in CI with real PRs and dry-runs
+- Harden Phase 3 production deployment and run smoke tests
+- Exercise Phase 4 DR runbooks and backups
+- Finalize Phase 5 governance cadence and crosswalks
+- Create and publish Phase 6 release packaging artifacts
 - [x] GitHub Actions CI/CD pipeline (Phase 2 planning drafted; outreach in progress)
 - [ ] Outreach to external security firms (Phase 1) - finalize shortlist and send initial RFPs
 - [ ] Docker Compose for production deployment
