@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       
       - name: Set up Docker
-        uses: docker/setup-docker-action@v3
+        uses: docker/setup-docker-action@v4
         
       - name: Install Docker Compose
         run: |
@@ -59,7 +59,7 @@ jobs:
           
       - name: Upload smoke report
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: phase3-smoke-artifacts
           path: phase3_smoke_report.txt
