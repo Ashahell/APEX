@@ -3,16 +3,36 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+/// Database configuration with pool optimization
+pub struct DatabaseConfig {
+    pub max_connections: u32,
+    pub min_connections: u32,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        Self {
+            max_connections: 10,  // Increased from 5
+            min_connections: 2,  // NEW: minimum connections
+        }
+    }
+}
+
 pub struct Database {
     pool: SqlitePool,
 }
 
 impl Database {
     pub async fn new(db_path: &Path) -> Result<Self, sqlx::Error> {
+        Self::with_config(db_path, DatabaseConfig::default()).await
+    }
+
+    pub async fn with_config(db_path: &Path, config: DatabaseConfig) -> Result<Self, sqlx::Error> {
         let connection_string = format!("sqlite:{}?mode=rwc", db_path.display());
 
         let pool = SqlitePoolOptions::new()
-            .max_connections(5)
+            .max_connections(config.max_connections)
+            .min_connections(config.min_connections)  // NEW: minimum connections
             .connect(&connection_string)
             .await?;
 

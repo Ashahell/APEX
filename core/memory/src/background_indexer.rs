@@ -3,6 +3,7 @@ use crate::embedder::Embedder;
 use crate::MemoryError;
 use chrono::Utc;
 use sqlx::{Pool, Sqlite};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -13,6 +14,10 @@ pub struct IndexerConfig {
     pub embed_rate_limit_ms: u64,
     pub chunk_config: ChunkerConfig,
     pub embedding_dim: usize,
+    /// Maximum concurrent embedding requests (optimization)
+    pub max_concurrent_embeddings: usize,
+    /// Enable in-memory cache for recently indexed files (optimization)
+    pub cache_recent_files: bool,
 }
 
 impl Default for IndexerConfig {
@@ -22,6 +27,8 @@ impl Default for IndexerConfig {
             embed_rate_limit_ms: 50,
             chunk_config: ChunkerConfig::default(),
             embedding_dim: 768,
+            max_concurrent_embeddings: 4,  // NEW: concurrent processing
+            cache_recent_files: true,  // NEW: cache optimization
         }
     }
 }
@@ -33,6 +40,8 @@ impl Clone for IndexerConfig {
             embed_rate_limit_ms: self.embed_rate_limit_ms,
             chunk_config: self.chunk_config.clone(),
             embedding_dim: self.embedding_dim,
+            max_concurrent_embeddings: self.max_concurrent_embeddings,
+            cache_recent_files: self.cache_recent_files,
         }
     }
 }
@@ -48,6 +57,9 @@ pub struct BackgroundIndexer {
     embedder: Arc<Embedder>,
     pool: Pool<Sqlite>,
     config: IndexerConfig,
+    /// In-memory cache for recently indexed files: path -> (mtime, index_time)
+    #[allow(clippy::ptr_arg)]
+    recent_cache: HashMap<String, (i64, u64)>,
 }
 
 impl BackgroundIndexer {
@@ -67,6 +79,7 @@ impl BackgroundIndexer {
             embedder,
             pool,
             config,
+            recent_cache: HashMap::new(),
         }
     }
 
