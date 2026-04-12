@@ -14,6 +14,7 @@ use axum::{
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
 use super::api_error::ApiError;
 use super::AppState;
@@ -137,6 +138,8 @@ pub fn router() -> Router<AppState> {
             put(replace_user_entry),
         )
         .route("/api/v1/memory/bounded/user", delete(remove_user_entry))
+        // Consolidation AI
+        .route("/api/v1/memory/bounded/consolidate", post(analyze_consolidation))
 }
 
 // ============================================================================
@@ -191,6 +194,47 @@ pub struct EntryResponse {
     pub content: String,
     pub created_at: i64,
     pub updated_at: i64,
+}
+
+// ============================================================================
+// Consolidation AI Types
+// ============================================================================
+
+/// Request to analyze memory for consolidation opportunities
+#[derive(Debug, Deserialize)]
+pub struct ConsolidationAnalyzeRequest {
+    /// Maximum number of suggestions to return (default: 5)
+    pub max_suggestions: Option<usize>,
+    /// Store type to analyze (default: "memory")
+    pub store_type: Option<String>,
+}
+
+/// A single consolidation suggestion
+#[derive(Debug, Serialize)]
+pub struct ConsolidationSuggestion {
+    /// Unique ID for this suggestion
+    pub id: String,
+    /// Type of consolidation: "merge", "remove", "update"
+    pub suggestion_type: String,
+    /// Entry IDs involved in this suggestion
+    pub entry_ids: Vec<String>,
+    /// Original content snippets
+    pub original_contents: Vec<String>,
+    /// Suggested merged/updated content (for merge/update suggestions)
+    pub suggested_content: Option<String>,
+    /// Explanation from the AI
+    pub reasoning: String,
+    /// Estimated chars saved (for merge suggestions)
+    pub chars_saved: Option<usize>,
+}
+
+/// Response with consolidation suggestions
+#[derive(Debug, Serialize)]
+pub struct ConsolidationAnalyzeResponse {
+    pub suggestions: Vec<ConsolidationSuggestion>,
+    pub total_entries_analyzed: usize,
+    pub store_type: String,
+    pub analysis_version: String,
 }
 
 // ============================================================================
@@ -758,4 +802,201 @@ mod tests {
         assert!(expected_percent > 0.0);
         assert!(expected_percent < 100.0);
     }
+}
+
+// ============================================================================
+// Handler: Consolidation AI
+// ============================================================================
+
+/// POST /api/v1/memory/bounded/consolidate
+async fn analyze_consolidation(
+    State(state): State<AppState>,
+    Json(payload): Json<ConsolidationAnalyzeRequest>,
+) -> Result<Json<ConsolidationAnalyzeResponse>, (axum::http::StatusCode, String)> {
+    let store_type = payload.store_type.unwrap_or_else(|| "memory".to_string());
+    let max_suggestions = payload.max_suggestions.unwrap_or(5);
+
+    // Get entries from the appropriate store
+    let entries = if store_type == "user" {
+        state.bounded_memory.user_store.lock().await.entries().to_vec()
+    } else {
+        state.bounded_memory.memory_store.lock().await.entries().to_vec()
+    };
+
+    let store_type_str = store_type.clone();
+    let total_entries = entries.len();
+
+    // Need at least 2 entries to find consolidation opportunities
+    if total_entries < 2 {
+        return Ok(Json(ConsolidationAnalyzeResponse {
+            suggestions: vec![],
+            total_entries_analyzed: total_entries,
+            store_type: store_type_str,
+            analysis_version: "1.0".to_string(),
+        }));
+    }
+
+    // Build prompt for LLM to analyze and find consolidation opportunities
+    let entries_text: Vec<String> = entries
+        .iter()
+        .enumerate()
+        .map(|(i, e)| format!("{}. [{}] {}", i + 1, e.id, e.content))
+        .collect();
+
+    let entries_for_analysis = entries_text.join("\n\n");
+
+    let analysis_prompt = format!(
+        r#"You are a memory consolidation AI. Analyze these {} memory entries and find opportunities to consolidate or merge them.
+
+Entries:
+{}
+
+Find opportunities to:
+1. MERGE: Entries that are redundant, overlapping, or could be combined into one concise entry
+2. REMOVE: Entries that are outdated, no longer relevant, or superseded
+3. UPDATE: Entries that could be improved with additional context
+
+For each suggestion, respond in ONLY the following JSON format (no other text):
+{{"id": "suggestion-1", "type": "merge|remove|update", "entry_ids": ["id1", "id2"], "original_contents": ["content1", "content2"], "suggested_content": "merged content or null", "reasoning": "why this makes sense", "chars_saved": number}}
+
+If no consolidation opportunities exist, respond with an empty JSON array: []
+
+Return a JSON array of suggestions, maximum {} items."#,
+        store_type, entries_for_analysis, max_suggestions
+    );
+
+    // Try to use LLM for analysis - fall back to rule-based if unavailable
+    let suggestions = match crate::llama::LlamaClient::from_env().chat(
+        "You are a helpful memory consolidation assistant.",
+        &analysis_prompt,
+    ).await {
+        Ok(response) => {
+            // Parse LLM response for JSON suggestions
+            parse_llm_suggestions(&response, &entries)
+        }
+        Err(e) => {
+            tracing::warn!(error = %e, "LLM unavailable, using rule-based fallback");
+            // Fallback: simple rule-based consolidation detection
+            find_rule_based_suggestions(&entries)
+        }
+    };
+
+    Ok(Json(ConsolidationAnalyzeResponse {
+        suggestions,
+        total_entries_analyzed: total_entries,
+        store_type: store_type_str,
+        analysis_version: "1.0".to_string(),
+    }))
+}
+
+/// Parse JSON suggestions from LLM response
+fn parse_llm_suggestions(response: &str, entries: &[crate::memory_stores::MemoryEntry]) -> Vec<ConsolidationSuggestion> {
+    // Try to extract JSON from response
+    let json_start = response.find('[').or_else(|| response.find('{'));
+    let json_end = response.rfind(']').or_else(|| response.rfind('}'));
+
+    if let (Some(start), Some(end)) = (json_start, json_end) {
+        let json_str = &response[start..=end.min(response.len() - 1)];
+        if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_str) {
+            // Handle both array and single object responses
+            let suggestions_array = if parsed.is_array() {
+                parsed.as_array().unwrap().clone()
+            } else if parsed.is_object() {
+                vec![parsed]
+            } else {
+                return vec![];
+            };
+
+            return suggestions_array
+                .iter()
+                .filter_map(|v| {
+                    let obj = v.as_object()?;
+                    let id = obj.get("id")?.as_str()?.to_string();
+                    let suggestion_type = obj.get("type")?.as_str()?.to_string();
+                    let entry_ids: Vec<String> = obj.get("entry_ids")?
+                        .as_array()?
+                        .iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect();
+                    let original_contents: Vec<String> = obj.get("original_contents")?
+                        .as_array()?
+                        .iter()
+                        .filter_map(|v| v.as_str().map(String::from))
+                        .collect();
+                    let suggested_content = obj.get("suggested_content")
+                        .and_then(|v| v.as_str())
+                        .map(String::from);
+                    let reasoning = obj.get("reasoning")?.as_str()?.to_string();
+                    let chars_saved = obj.get("chars_saved")
+                        .and_then(|v| v.as_i64())
+                        .map(|v| v as usize);
+
+                    Some(ConsolidationSuggestion {
+                        id,
+                        suggestion_type,
+                        entry_ids,
+                        original_contents,
+                        suggested_content,
+                        reasoning,
+                        chars_saved,
+                    })
+                })
+                .collect();
+        }
+    }
+
+    vec![]
+}
+
+/// Find suggestions using rule-based analysis (fallback when LLM unavailable)
+fn find_rule_based_suggestions(entries: &[crate::memory_stores::MemoryEntry]) -> Vec<ConsolidationSuggestion> {
+    let mut suggestions = Vec::new();
+    let n = entries.len();
+
+    // Simple duplicate detection
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let content_i = &entries[i].content;
+            let content_j = &entries[j].content;
+
+            // Check for near-duplicates (70% similarity threshold)
+            let similarity = calculate_similarity(content_i, content_j);
+
+            if similarity > 0.7 {
+                let merged = format!("{} {}", content_i.trim_end_matches('.'), content_j.trim_start_matches('.'));
+                let chars_saved = content_i.len() + content_j.len() - merged.len();
+
+                suggestions.push(ConsolidationSuggestion {
+                    id: format!("suggestion-{}", suggestions.len() + 1),
+                    suggestion_type: "merge".to_string(),
+                    entry_ids: vec![entries[i].id.clone(), entries[j].id.clone()],
+                    original_contents: vec![content_i.clone(), content_j.clone()],
+                    suggested_content: Some(merged),
+                    reasoning: "High similarity detected between entries - could be merged".to_string(),
+                    chars_saved: Some(chars_saved),
+                });
+            }
+
+            if suggestions.len() >= 3 {
+                return suggestions;
+            }
+        }
+    }
+
+    suggestions
+}
+
+/// Calculate simple text similarity (Jaccard-based)
+fn calculate_similarity(a: &str, b: &str) -> f64 {
+    let words_a: std::collections::HashSet<_> = a.split_whitespace().collect();
+    let words_b: std::collections::HashSet<_> = b.split_whitespace().collect();
+
+    let intersection = words_a.intersection(&words_b).count();
+    let union = words_a.union(&words_b).count();
+
+    if union == 0 {
+        return 0.0;
+    }
+
+    intersection as f64 / union as f64
 }

@@ -1373,3 +1373,38 @@ export async function rejectConsolidation(candidate: ConsolidationCandidate): Pr
   if (!response.ok) throw new Error('Failed to reject consolidation');
   return response.json();
 }
+
+// AI-Powered Consolidation Analysis (new endpoint)
+export interface ConsolidationSuggestion {
+  id: string;
+  suggestion_type: 'merge' | 'remove' | 'update';
+  entry_ids: string[];
+  original_contents: string[];
+  suggested_content?: string;
+  reasoning: string;
+  chars_saved?: number;
+}
+
+export interface ConsolidationAnalyzeRequest {
+  max_suggestions?: number;
+  store_type?: 'memory' | 'user';
+}
+
+export interface ConsolidationAnalyzeResponse {
+  suggestions: ConsolidationSuggestion[];
+  total_entries_analyzed: number;
+  store_type: string;
+  analysis_version: string;
+}
+
+export async function analyzeConsolidation(
+  storeType: 'memory' | 'user' = 'memory',
+  maxSuggestions: number = 5
+): Promise<ConsolidationAnalyzeResponse> {
+  const response = await apiPost('/api/v1/memory/bounded/consolidate', {
+    store_type: storeType,
+    max_suggestions: maxSuggestions,
+  });
+  if (!response.ok) throw new Error('Failed to analyze consolidation');
+  return response.json();
+}

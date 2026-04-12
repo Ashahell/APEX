@@ -16,6 +16,7 @@ import {
   updateMemoryTTLConfig,
   getConsolidationCandidates,
   approveConsolidation,
+  analyzeConsolidation,
   BoundedMemoryStats,
   BoundedMemoryEntry,
 } from '../../lib/api';
@@ -646,9 +647,39 @@ export function BoundedMemory() {
       {activeTab === 'consolidation' && (
         <div className="space-y-4">
           <div className="p-4 bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
-            <h3 className="text-sm font-medium text-[var(--color-text)] mb-3">
-              Memory Consolidation
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-sm font-medium text-[var(--color-text)]">
+                Memory Consolidation
+              </h3>
+              <button
+                onClick={async () => {
+                  setIsLoadingConsolidation(true);
+                  try {
+                    const result = await analyzeConsolidation('memory', 5);
+                    setConsolidationCandidates(result.suggestions.map((s: any) => ({
+                      entries: s.entry_ids,
+                      suggested_summary: s.suggested_content || s.reasoning,
+                      char_savings: s.chars_saved || 0,
+                      confidence: 0.9,
+                    })));
+                    addToast({
+                      type: 'success',
+                      message: `Found ${result.suggestions.length} consolidation suggestions`,
+                    });
+                  } catch (err) {
+                    addToast({
+                      type: 'error',
+                      message: `Analysis failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+                    });
+                  } finally {
+                    setIsLoadingConsolidation(false);
+                  }
+                }}
+                className="px-3 py-1 bg-[var(--color-primary)] text-white rounded text-sm flex items-center gap-1"
+              >
+                <span>AI Analyze</span>
+              </button>
+            </div>
             {isLoadingConsolidation ? (
               <div className="flex items-center justify-center py-8">
                 <div className="animate-spin w-6 h-6 border-2 border-[var(--color-primary)] border-t-transparent rounded-full" />
