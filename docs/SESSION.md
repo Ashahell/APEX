@@ -436,3 +436,56 @@ Implemented clean, minimal baseline for SSE streaming to avoid trait-object boxi
 | MCP Consolidation | ✅ Complete |
 | Streaming Tests | ✅ Complete |
 | CI Node 24 Update | ✅ Complete |
+
+---
+
+## v1.7.x Performance Optimization Session (2026-04-12)
+
+### Memory Indexing Optimizations
+- **Files**: `core/memory/src/background_indexer.rs`
+- **Changes**:
+  - Added `max_concurrent_embeddings` config (default: 4) for parallel processing
+  - Added `cache_recent_files` config (default: true) for caching
+  - Added `recent_cache` HashMap to BackgroundIndexer for fast lookup
+
+### Connection Pooling Optimizations
+- **Files**: `core/memory/src/db.rs`
+- **Changes**:
+  - Added `DatabaseConfig` with `max_connections` (10) and `min_connections` (2)
+  - Increased default max_connections from 5 to 10
+  - Added min_connections to prevent connection starvation
+  - Added `with_config()` constructor
+
+### UI Enhancements
+- **Files**: `ui/src/components/streaming/StreamingDashboard.tsx`
+- **Changes**:
+  - Added HandsDashboard with metrics visualization
+  - Added Sparkline SVG for event frequency
+  - Added computed metrics (total events, time since last, status)
+  - Added correlation_id to streaming events
+  - Updated HandsPayload type
+
+### Memory Consolidation AI
+- **Files**: `core/router/src/api/bounded_memory.rs`, `ui/src/lib/api.ts`, `ui/src/components/memory/BoundedMemory.tsx`
+- **Changes**:
+  - Added `/api/v1/memory/bounded/consolidate` endpoint
+  - LLM-powered analysis for merge/remove/update suggestions
+  - Rule-based fallback (Jaccard similarity)
+  - AI Analyze button in UI
+
+### Animation Polish
+- **Files**: `ui/src/hooks/useMotion.ts`, `ui/src/index.css`
+- **Changes**:
+  - Added useMotion hook with reduced-motion support
+  - Added CSS keyframes (fadeIn, scaleIn, slideIn, modalIn, panelIn)
+  - Applied to StoryList, StoryEditor, KanbanBoard
+
+### Session Summary
+| Phase | Status |
+|-------|--------|
+| Animation Polish | ✅ Complete |
+| Event Correlation IDs | ✅ Complete |
+| Consolidation AI | ✅ Complete |
+| Hands Visualization | ✅ Complete |
+| Memory Indexing | ✅ Complete |
+| Connection Pooling | ✅ Complete |

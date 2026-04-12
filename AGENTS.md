@@ -22,7 +22,7 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.6.0 (Sapphire Features)
+- **Version**: v1.7.1 (Optimization Release)
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---

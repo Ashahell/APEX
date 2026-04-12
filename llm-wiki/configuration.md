@@ -36,8 +36,8 @@ APEX uses a unified configuration system via `AppConfig::global()` with environm
 |----------|---------|-------------|
 | APEX_DATABASE_URL | sqlite:apex.db | Database connection |
 | DATABASE_URL | sqlite:apex.db | Fallback DB URL |
-| APEX_DB_MAX_CONNECTIONS | 10 | Max pool connections |
-| APEX_DB_MIN_CONNECTIONS | 1 | Min pool connections |
+| APEX_DB_MAX_CONNECTIONS | 10 | Max pool connections (increased from 5) |
+| APEX_DB_MIN_CONNECTIONS | 2 | Min pool connections (increased from 1) |
 
 ### Execution
 | Variable | Default | Description |
@@ -59,6 +59,10 @@ APEX uses a unified configuration system via `AppConfig::global()` with environm
 | APEX_MEMORY_EMBEDDING_URL | http://localhost:8081 | Embedding server |
 | APEX_MEMORY_RRF_K | 60 | RRF constant |
 | APEX_MEMORY_MAX_RESULTS | 8 | Max search results |
+| APEX_INDEXER_BATCH_SIZE | 16 | Indexing batch size |
+| APEX_INDEXER_EMBED_RATE_MS | 50 | Embedding rate limit (ms) |
+| APEX_INDEXER_MAX_CONCURRENT | 4 | Max concurrent embeddings |
+| APEX_INDEXER_CACHE_ENABLED | true | Enable recent file caching |
 
 ### Skill Pool
 | Variable | Default | Description |
