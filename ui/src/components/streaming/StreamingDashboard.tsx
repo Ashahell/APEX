@@ -45,6 +45,9 @@ export interface HandsPayload {
   thought?: string;
   action?: string;
   target?: string;
+  status?: 'thinking' | 'acting' | 'waiting' | 'done';
+  latency_ms?: number;
+  step?: number;
 }
 
 export interface McpEventPayload {
@@ -265,6 +268,162 @@ const HandsPanel: React.FC<HandsPanelProps> = ({ taskId }) => {
             );
           })
         )}
+      </div>
+    </div>
+  );
+// ============================================================================
+// Hands Dashboard Component (Enhanced with metrics)
+// ============================================================================
+
+interface HandsDashboardProps {
+  taskId: string;
+}
+
+// Simple SVG sparkline for event frequency
+const Sparkline: React.FC<{ data: number[]; width?: number; height?: number }> = ({ data, width = 80, height = 24 }) => {
+  if (data.length === 0) return null;
+  
+  const max = Math.max(...data, 1);
+  const points = data.map((v, i) => {
+    const x = (i / (data.length - 1 || 1)) * width;
+    const y = height - (v / max) * height;
+    return `${x},${y}`;
+  }).join(' ');
+
+  return (
+    <svg width={width} height={height} className="inline-block">
+      <polyline
+        points={points}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="text-cyan-400"
+      />
+    </svg>
+  );
+};
+
+const HandsDashboard: React.FC<HandsDashboardProps> = ({ taskId }) => {
+  const endpoint = `/stream/hands/${taskId}`;
+  const { events, connected, error } = useStreaming(endpoint);
+  
+  const handsEvents = events.filter((e) => e.type === 'hands');
+
+  // Compute metrics from events
+  const totalEvents = handsEvents.length;
+  const lastEvent = handsEvents[handsEvents.length - 1];
+  const latestTimestamp = lastEvent?.timestamp || 0;
+  const now = Date.now();
+  const timeSinceLast = latestTimestamp > 0 ? now - latestTimestamp : null;
+  
+  // Event frequency bucket (events per 5 seconds)
+  const eventFrequency = React.useMemo(() => {
+    if (handsEvents.length < 2) return [];
+    const buckets: number[] = [];
+    let currentBucket: number[] = [];
+    const bucketMs = 5000;
+    
+    for (const event of handsEvents) {
+      const eventTime = event.timestamp;
+      if (currentBucket.length === 0 || eventTime - currentBucket[0] < bucketMs) {
+        currentBucket.push(eventTime);
+      } else {
+        buckets.push(currentBucket.length);
+        currentBucket = [eventTime];
+      }
+    }
+    if (currentBucket.length > 0) buckets.push(currentBucket.length);
+    return buckets.slice(-16); // Last 16 buckets
+  }, [handsEvents]);
+
+  // Status indicator
+  const status = React.useMemo(() => {
+    if (!connected) return 'disconnected';
+    if (error) return 'error';
+    if (handsEvents.length === 0) return 'idle';
+    const lastPayload = lastEvent?.payload as HandsPayload;
+    return lastPayload?.status || (lastPayload?.thought ? 'thinking' : lastPayload?.action ? 'acting' : 'active');
+  }, [connected, error, handsEvents.length, lastEvent]);
+
+  const statusColors: Record<string, string> = {
+    idle: 'bg-gray-500',
+    thinking: 'bg-cyan-500 animate-pulse',
+    acting: 'bg-yellow-500 animate-pulse',
+    active: 'bg-green-500',
+    error: 'bg-red-500',
+    disconnected: 'bg-gray-600',
+  };
+
+  const statusLabels: Record<string, string> = {
+    idle: 'Idle',
+    thinking: 'Thinking',
+    acting: 'Acting',
+    active: 'Active',
+    error: 'Error',
+    disconnected: 'Disconnected',
+  };
+
+  return (
+    <div className="p-4 bg-gray-800 rounded-lg">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Hands Agent Dashboard</h3>
+        <div className="flex items-center gap-2">
+          <Sparkline data={eventFrequency} />
+          <span className={`w-2 h-2 rounded-full ${statusColors[status]}`} />
+          <span className="text-xs text-gray-400">{statusLabels[status]}</span>
+        </div>
+      </div>
+
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="p-2 bg-gray-700 rounded text-center">
+          <div className="text-xl font-mono text-cyan-400">{totalEvents}</div>
+          <div className="text-xs text-gray-400">Events</div>
+        </div>
+        <div className="p-2 bg-gray-700 rounded text-center">
+          <div className="text-xl font-mono text-yellow-400">
+            {timeSinceLast !== null ? Math.max(0, Math.floor(timeSinceLast / 1000)) : '--'}
+          </div>
+          <div className="text-xs text-gray-400">Last (s)</div>
+        </div>
+        <div className="p-2 bg-gray-700 rounded text-center">
+          <div className="text-xl font-mono text-green-400">
+            {connected ? '✓' : '✗'}
+          </div>
+          <div className="text-xs text-gray-400">Status</div>
+        </div>
+      </div>
+
+      {/* Event Log */}
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {handsEvents.slice(-10).map((event, idx) => {
+          const payload = event.payload as HandsPayload;
+          return (
+            <div key={idx} className="p-2 bg-gray-700 rounded text-sm flex items-start gap-2">
+              <span className="text-xs text-gray-500 mt-1">
+                {new Date(event.timestamp).toLocaleTimeString()}
+              </span>
+              <div className="flex-1 min-w-0">
+                {payload.thought && (
+                  <p className="text-cyan-400 truncate">{payload.thought}</p>
+                )}
+                {payload.action && (
+                  <p className="text-yellow-400 truncate">
+                    → {payload.action}
+                    {payload.target && ` → ${payload.target}`}
+                  </p>
+                )}
+              </div>
+              {payload.latency_ms && (
+                <span className="text-xs text-gray-500 whitespace-nowrap">
+                  {payload.latency_ms}ms
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -549,7 +708,7 @@ export const StreamingDashboard: React.FC<StreamingDashboardProps> = ({ taskId: 
       {/* Content */}
       <div className="flex-1 p-4 overflow-auto">
         {activeTab === 'stats' && <StatsPanel endpoint="/stream/stats" />}
-        {activeTab === 'hands' && <HandsPanel taskId={selectedTaskId} />}
+        {activeTab === 'hands' && <HandsDashboard taskId={selectedTaskId} />}
         {activeTab === 'mcp' && <McpPanel taskId={selectedTaskId} />}
         {activeTab === 'task' && <TaskPanel taskId={selectedTaskId} />}
       </div>
