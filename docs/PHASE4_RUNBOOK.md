@@ -1,211 +1,42 @@
-# Phase 4 Runbook: MCP, Tool Ecosystem, and Governance Parity
+Phase 4 Runbook: Backups, DR, Runbooks
+====================================
 
-## Overview
-- Phase 4 closes MCP tooling, marketplace, and governance gaps; provides stable governance cadence.
-- This runbook provides operational steps for incident response, debugging, and escalation.
+Overview
+- This runbook documents Phase 4: backups, disaster recovery (DR), and runbooks for APEX production.
+- Objective is to ensure data protection, recoverability, and operational playbooks for incident response.
 
-## Phase 4 Features
+Scope
+- Production data: PostgreSQL DB (apex) and memory store if applicable
+- Configuration and secrets: deployment configs and TLS certs (with sensitive values redacted)
+- Runbooks: backup, restore, DR tests, incident response, and handover artifacts
 
-| Feature | Description |
-|---------|-------------|
-| MCP Tool Discovery | `/api/v1/mcp/tools/discover` returns all tools with metadata |
-| Server Health Monitoring | `/api/v1/mcp/servers/health` returns health scores |
-| Tool Health Tracking | `/api/v1/mcp/tools/:tool_key/health` returns per-tool health |
-| Marketplace Scaffolding | `/api/v1/mcp/marketplace` returns 5 sample tools |
-| Governance Cadence | Documented policy change process, constitution workflow |
+Prerequisites
+- Access to docker and docker-compose, access to secrets store, and a writable backups directory
+- Docker secrets configured (db_password)
+- Correct network access to backups location (local/remote)
 
----
+Backups
+- Schedule: daily incremental; weekly full backups
+- Retention: 6 weeks
+- Backup artifacts: backups/ directory, with subfolders per date
+- Procedures:
+  - Run ./scripts/backup_all.sh <target-backup-dir>
+  - Verify backups exist: ls -l <backup-dir>
+  - Log backups in a central index (backups/backup_index.md)
 
-## Incident Response Procedures
+Disaster Recovery (DR)
+- DR test plan: quarterly DR test in a staging environment
+- Steps:
+  - Bring up prod stack in staging using prod TLS/keys as applicable
+  - Execute backup restore sequence on a test DB and memory
+  - Validate data integrity (row counts, checksums)
+  - Validate failover/rollback paths
+  - Capture runbook execution results and update DR_runbook logs
 
-### 1. MCP Server Disconnect
+Runbooks
+- Phase 4 DR Runbooks are stored in docs/PHASE4_DR_TEST_PLAN.md and PHASE4_RUNBOOK.md
+- Incident response: runbooks for containment, eradication, recovery, and lessons learned
 
-**Symptoms:**
-- Server status shows "disconnected" or "error"
-- Tools from server unavailable
-- Health score drops to 0.0
-
-**Immediate Steps:**
-```bash
-# Check server health
-curl -s http://localhost:3000/api/v1/mcp/servers/health | jq .
-
-# Check specific server
-curl -s http://localhost:3000/api/v1/mcp/servers/<server-id> | jq .
-
-# Attempt reconnection
-curl -X POST http://localhost:3000/api/v1/mcp/servers/<server-id>/connect
-```
-
-**Debug Commands:**
-```bash
-# Check server logs
-# Review: core/router/src/mcp/server_manager.rs
-
-# Check tool availability
-curl -s http://localhost:3000/api/v1/mcp/tools/discover | jq '.tools | length'
-```
-
-**Common Causes:**
-- Server process crashed
-- Network connectivity issues
-- Configuration error
-
-**Rollback:** Restart server, verify configuration.
-
----
-
-### 2. Tool Execution Failure
-
-**Symptoms:**
-- Tool returns error response
-- Health status shows "unhealthy"
-- Error count increasing
-
-**Immediate Steps:**
-```bash
-# Check tool health
-curl -s http://localhost:3000/api/v1/mcp/tools/<tool-key>/health | jq .
-
-# Check all tools
-curl -s http://localhost:3000/api/v1/mcp/tools/discover | jq '.tools[] | {name, health}'
-```
-
-**Debug Commands:**
-```bash
-# Check tool execution logs
-# Review: core/router/src/mcp/client.rs
-
-# Test tool directly
-curl -X POST http://localhost:3000/api/v1/mcp/servers/<server-id>/tools/<tool-name> \
-  -H "Content-Type: application/json" \
-  -d '{"arguments": {...}}'
-```
-
-**Common Causes:**
-- Tool input validation failure
-- Server-side error
-- Timeout
-
-**Rollback:** Disable tool, investigate root cause.
-
----
-
-### 3. Marketplace Issues
-
-**Symptoms:**
-- Marketplace returns empty list
-- Tool installation fails
-- Rating/install count incorrect
-
-**Immediate Steps:**
-```bash
-# Check marketplace
-curl -s http://localhost:3000/api/v1/mcp/marketplace | jq '. | length'
-
-# Check registry
-curl -s http://localhost:3000/api/v1/mcp/registries | jq .
-```
-
-**Debug Commands:**
-```bash
-# Check registry tools
-curl -s http://localhost:3000/api/v1/mcp/registries/<rid>/tools | jq .
-
-# Discover tools
-curl -X POST http://localhost:3000/api/v1/mcp/registries/<rid>/tools/discover
-```
-
-**Common Causes:**
-- Registry schema not initialized
-- No tools registered
-- Database error
-
-**Rollback:** Re-initialize registry, re-register tools.
-
----
-
-## Debug Commands Quick Reference
-
-| Command | Purpose |
-|---------|---------|
-| `curl -s http://localhost:3000/api/v1/mcp/servers/health` | Server health overview |
-| `curl -s http://localhost:3000/api/v1/mcp/tools/discover` | Tool discovery |
-| `curl -s http://localhost:3000/api/v1/mcp/marketplace` | Marketplace listing |
-| `curl -s http://localhost:3000/api/v1/mcp/tools/:key/health` | Tool health |
-| `curl -s http://localhost:3000/api/v1/governance/immutable` | Audit trail |
-
----
-
-## Test Commands
-
-```bash
-# Run all tests
-cd core && cargo test
-
-# Run MCP-specific tests
-cd core && cargo test mcp
-```
-
----
-
-## Escalation Paths
-
-| Issue | First Contact | Escalation |
-|-------|--------------|------------|
-| MCP server issues | @backend-team | @infra-team |
-| Tool failures | @backend-team | @engineering-ops |
-| Governance issues | @user | @governance-board |
-| Marketplace issues | @frontend-team | @backend-team |
-
----
-
-## Rollback Procedure
-
-If Phase 4 changes cause critical issues:
-
-1. **Disable MCP features:**
-   ```bash
-   # Stop MCP server connections
-   # Remove marketplace tools
-   ```
-
-2. **Restart services:**
-   ```bash
-   cargo run --release --bin apex-router
-   ```
-
-3. **Verify recovery:**
-   ```bash
-   curl -s http://localhost:3000/api/v1/mcp/servers/health
-   curl -s http://localhost:3000/api/v1/mcp/tools/discover
-   ```
-
----
-
-## Verification Checklist
-
-After any incident, verify:
-
-- [ ] MCP servers health endpoint returns data
-- [ ] Tool discovery returns tools
-- [ ] Marketplace returns sample tools
-- [ ] Governance docs accessible
-- [ ] All tests pass
-
----
-
-## Contacts
-
-- On-call: @engineering-ops
-- Backend MCP: @backend-team
-- UI Marketplace: @frontend-team
-- Governance: @user
-
----
-
-## Last Updated
-
-- Phase 4: MCP, Tool Ecosystem, and Governance Parity
-- Version: 1.0
-- Date: 2026-03-31
+Validation & Sign-off
+- Runbooks reviewed and signed off by Security and Ops
+- DR test results recorded and archived with parity artifacts

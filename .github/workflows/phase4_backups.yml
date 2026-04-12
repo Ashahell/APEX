@@ -1,0 +1,26 @@
+name: Phase 4 Backups & DR
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  phase4-backups:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker
+        uses: docker/setup-docker-action@v4
+      - name: Install Docker Compose
+        run: |
+          sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-linux-x86_64" -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          docker-compose version
+      - name: Phase 4 dry-run backup
+        run: |
+          bash scripts/phase4_dryrun_setup.sh
+      - name: Upload Phase 4 artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase4-artifacts
+          path: backups-phase4

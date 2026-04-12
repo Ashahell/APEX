@@ -216,6 +216,9 @@ cd ui && npm run build
 
 [x] Phase 2 gating implemented; Phase 3 deployment hardened; Phase 4 DR; Phase 5 Governance; Phase 6 Release packaging
 ### Next 🚧
+- Phase 4 Backups, DR, and Runbooks: plan, implement, and test DR readiness; complete runbooks and handover artifacts.
+- Phase 5 Governance & Crosswalks: finalize cadence and crosswalks; publish docs.
+- Phase 6 Release Packaging & Parity Evidence: finalize v2.0.0 release notes and parity artifacts.
 - Validate Phase 2 gating in CI with real PRs and dry-runs
 - Harden Phase 3 production deployment and run smoke tests
 - Exercise Phase 4 DR runbooks and backups
