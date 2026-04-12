@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiFetch, apiPost, apiPut } from '../../lib/api';
+import { usePrefersReducedMotion } from '../../hooks/useMotion';
 
 interface Task {
   task_id: string;
@@ -45,6 +46,7 @@ export function KanbanBoard() {
   const [newTaskModal, setNewTaskModal] = useState(false);
   const [newTask, setNewTask] = useState({ content: '', project: '', priority: 'medium', category: '' });
   const [runningTask, setRunningTask] = useState<string | null>(null);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const fetchTasks = useCallback(async () => {
     try {
@@ -215,9 +217,9 @@ export function KanbanBoard() {
                   </div>
                 </div>
                 <div className="flex-1 border-x border-b rounded-b-xl bg-[var(--color-panel)] overflow-y-auto p-2 space-y-2">
-                  {columnTasks.map(task => (
+                  {columnTasks.map((task, index) => (
                 <div 
-                  className="bg-[var(--color-background)] rounded-xl border p-3 shadow-sm cursor-pointer hover:shadow-md transition-all hover:border-[#4248f1]/30"
+                  className={`bg-[var(--color-background)] rounded-xl border p-3 shadow-sm cursor-pointer hover:shadow-md transition-all hover:border-[#4248f1]/30 ${prefersReducedMotion ? '' : `hover:scale-[1.01] animate-fade-in ${index === 0 ? '' : index === 1 ? 'animation-delay-75' : ''}`}`}
                   onClick={() => setSelectedTask(task)}
                 >
                       <div className="flex items-start justify-between mb-2">

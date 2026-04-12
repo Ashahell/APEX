@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { usePrefersReducedMotion } from '../../hooks/useMotion';
 
 interface StoryCharacter {
   name: string;
@@ -27,6 +28,7 @@ export function StoryEditor({ onCreate, onCancel }: StoryEditorProps) {
     { name: '', description: '' }
   ]);
   const [initialPrompt, setInitialPrompt] = useState('');
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   const handleAddCharacter = () => {
     setCharacters([...characters, { name: '', description: '' }]);
@@ -54,9 +56,9 @@ export function StoryEditor({ onCreate, onCancel }: StoryEditorProps) {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
+    <div className={`max-w-2xl mx-auto p-6 space-y-6 ${prefersReducedMotion ? '' : 'animate-scale-in'}`}>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className={`flex items-center justify-between ${prefersReducedMotion ? '' : 'animate-fade-in'}`}>
         <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
           Create New Story
         </h2>
@@ -90,11 +92,11 @@ export function StoryEditor({ onCreate, onCancel }: StoryEditorProps) {
           Setting / Genre
         </label>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {SETTINGS.map(s => (
+          {SETTINGS.map((s, index) => (
             <button
               key={s.id}
               onClick={() => setSetting(s.id)}
-              className={`p-3 rounded-lg border text-left transition-all ${
+              className={`p-3 rounded-lg border text-left ${prefersReducedMotion ? '' : `transition-all duration-200 hover:scale-[1.02] ${index === 0 ? 'animate-fade-in' : index === 1 ? 'animation-delay-75' : index === 2 ? 'animation-delay-150' : index === 3 ? 'animation-delay-225' : index === 4 ? 'animation-delay-300' : 'animation-delay-375'}`} ${
                 setting === s.id
                   ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30'
                   : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
@@ -180,16 +182,16 @@ export function StoryEditor({ onCreate, onCancel }: StoryEditorProps) {
       </div>
 
       {/* Actions */}
-      <div className="flex justify-end gap-3 pt-4 border-t">
+      <div className={`flex justify-end gap-3 pt-4 border-t ${prefersReducedMotion ? '' : 'animate-fade-in-slow'}`}>
         <button
           onClick={onCancel}
-          className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg"
+          className={`px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg ${prefersReducedMotion ? '' : 'transition-colors duration-150'}`}
         >
           Cancel
         </button>
         <button
           onClick={handleSubmit}
-          className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700"
+          className={`px-6 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 ${prefersReducedMotion ? '' : 'transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]'}`}
         >
           Start Adventure
         </button>

@@ -50,6 +50,7 @@ pub struct SseEnvelope<T> {
     pub event_type: StreamEventType,
     pub timestamp: u64,
     pub trace_id: Option<String>,
+    pub correlation_id: Option<String>, // NEW: for event correlation across services
     pub payload: T,
 }
 
@@ -62,12 +63,18 @@ impl<T> SseEnvelope<T> {
                 .map(|d| d.as_millis() as u64)
                 .unwrap_or(0),
             trace_id: None,
+            correlation_id: None,
             payload,
         }
     }
 
     pub fn with_trace(mut self, trace_id: String) -> Self {
         self.trace_id = Some(trace_id);
+        self
+    }
+
+    pub fn with_correlation(mut self, correlation_id: String) -> Self {
+        self.correlation_id = Some(correlation_id);
         self
     }
 }

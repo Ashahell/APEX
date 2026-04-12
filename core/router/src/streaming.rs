@@ -233,22 +233,27 @@ macro_rules! streaming_endpoint {
             metrics.on_connect();
 
             let connection_id = uuid::Uuid::new_v4().to_string();
+            let correlation_id = uuid::Uuid::new_v4().to_string(); // NEW: correlation ID for event tracing
+            
             tracing::info!(
                 connection_id = %connection_id,
+                correlation_id = %correlation_id,
                 endpoint = %path,
                 task_id = %task_id,
                 "Stream connected"
             );
 
-            // Create connected event
+            // Create connected event with correlation_id
+            let connected_data = format!("connected:{}:{}:{}", task_id, connection_id, correlation_id);
             let e = Event::default()
                 .event($event_type)
-                .data(format!("connected:{}:{}", task_id, connection_id));
+                .data(connected_data);
             let vec_events: Vec<SSEItem> = vec![Ok(e)];
             let s = stream::iter(vec_events);
 
             tracing::debug!(
                 connection_id = %connection_id,
+                correlation_id = %correlation_id,
                 endpoint = %path,
                 task_id = %task_id,
                 "Stream event sent"
@@ -274,7 +279,10 @@ pub fn create_heartbeat_event() -> SSEItem {
         active_connections: stats.active_connections,
     };
 
-    let envelope = SseEnvelope::new(StreamEventType::Heartbeat, payload);
+    // Generate correlation_id for heartbeat events
+    let correlation_id = uuid::Uuid::new_v4().to_string();
+    let envelope = SseEnvelope::new(StreamEventType::Heartbeat, payload)
+        .with_correlation(correlation_id);
     let json = serde_json::to_string(&envelope).unwrap_or_default();
 
     Ok(Event::default().event("heartbeat").data(json))

@@ -26,6 +26,7 @@ export interface SseEnvelope<T> {
   type: StreamEventType;
   timestamp: number;
   trace_id?: string;
+  correlation_id?: string; // NEW: for event correlation
   payload: T;
 }
 
@@ -250,6 +251,9 @@ const HandsPanel: React.FC<HandsPanelProps> = ({ taskId }) => {
             const payload = event.payload as HandsPayload;
             return (
               <div key={idx} className="p-2 bg-gray-700 rounded text-sm">
+                {event.correlation_id && (
+                  <p className="text-xs text-orange-400 mb-1">ID: {event.correlation_id}</p>
+                )}
                 {payload.thought && <p className="text-cyan-400">{payload.thought}</p>}
                 {payload.action && (
                   <p className="text-yellow-400">
@@ -316,10 +320,13 @@ const McpPanel: React.FC<McpPanelProps> = ({ taskId }) => {
         {mcpEvents.length === 0 ? (
           <p className="text-gray-400 text-sm">Waiting for MCP events...</p>
         ) : (
-          mcpEvents.map((event, idx) => {
+          mcpEvents          .map((event, idx) => {
             const payload = event.payload as McpEventPayload;
             return (
               <div key={idx} className="p-2 bg-gray-700 rounded text-sm">
+                {event.correlation_id && (
+                  <p className="text-xs text-orange-400 mb-1">ID: {event.correlation_id}</p>
+                )}
                 <span className="text-purple-400 uppercase text-xs">{payload.type}</span>
                 {payload.tool && <p className="text-white">Tool: {payload.tool}</p>}
                 {payload.result && (
@@ -393,6 +400,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ taskId }) => {
               const hb = payload as HeartbeatPayload;
               return (
                 <div key={idx} className="p-2 bg-gray-700 rounded text-sm">
+                  {event.correlation_id && (
+                    <p className="text-xs text-orange-400 mb-1">ID: {event.correlation_id}</p>
+                  )}
                   <span className="text-blue-400">Heartbeat</span>
                   <p className="text-gray-400 text-xs">
                     Server: {new Date(hb.server_time).toISOString()} | Active: {hb.active_connections}
@@ -403,6 +413,9 @@ const TaskPanel: React.FC<TaskPanelProps> = ({ taskId }) => {
             const tp = payload as TaskPayload;
             return (
               <div key={idx} className="p-2 bg-gray-700 rounded text-sm">
+                {event.correlation_id && (
+                  <p className="text-xs text-orange-400 mb-1">ID: {event.correlation_id}</p>
+                )}
                 <span
                   className={`uppercase text-xs ${
                     tp.status === 'completed'

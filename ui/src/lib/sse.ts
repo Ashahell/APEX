@@ -69,6 +69,7 @@ export interface SseExecutionEvent {
   action?: string;
   message?: string;
   tools_used?: string[];
+  correlation_id?: string; // NEW: for event correlation
   consequences?: {
     files_read: string[];
     files_written: string[];
@@ -81,6 +82,7 @@ export interface SseExecutionEvent {
 export interface SseMetaEvent {
   type: 'connected' | 'heartbeat' | 'error';
   message?: string;
+  correlation_id?: string; // NEW: for event correlation
 }
 
 export type SseEvent = SseExecutionEvent | SseMetaEvent;

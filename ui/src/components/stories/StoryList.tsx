@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { usePrefersReducedMotion } from '../../hooks/useMotion';
 
 interface Story {
   id: string;
@@ -28,6 +29,7 @@ const SETTING_ICONS: Record<string, string> = {
 export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
   const [stories, setStories] = useState<Story[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const prefersReducedMotion = usePrefersReducedMotion();
 
   useEffect(() => {
     loadStories();
@@ -77,8 +79,8 @@ export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+      {/* Header - fade in */}
+      <div className={`flex items-center justify-between ${prefersReducedMotion ? '' : 'animate-fade-in'}`}>
         <div>
           <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             📖 Your Stories
@@ -89,7 +91,7 @@ export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
         </div>
         <button
           onClick={onCreateNew}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2"
+          className={`px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 flex items-center gap-2 ${prefersReducedMotion ? '' : 'transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]'}`}
         >
           <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
@@ -117,11 +119,11 @@ export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stories.map((story) => (
+          {stories.map((story, index) => (
             <button
               key={story.id}
               onClick={() => onSelectStory?.(story.id)}
-              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-md transition-all"
+              className={`p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-left hover:border-indigo-500 dark:hover:border-indigo-500 hover:shadow-md ${prefersReducedMotion ? '' : `transition-all duration-200 hover:scale-[1.02] animate-fade-in ${index === 0 ? '' : index === 1 ? 'animation-delay-75' : index === 2 ? 'animation-delay-150' : index === 3 ? 'animation-delay-225' : index === 4 ? 'animation-delay-300' : 'animation-delay-375'}`}`}
             >
               <div className="flex items-start justify-between mb-2">
                 <div className="text-2xl">
@@ -146,7 +148,7 @@ export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
       )}
 
       {/* Quick Actions */}
-      <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+      <div className={`border-t border-gray-200 dark:border-gray-700 pt-6 ${prefersReducedMotion ? '' : 'animate-fade-in-slow'}`}>
         <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
           Quick Start Templates
         </h3>
@@ -158,11 +160,11 @@ export function StoryList({ onSelectStory, onCreateNew }: StoryListProps) {
             { id: 'mystery', icon: '🔍', label: 'Mystery' },
             { id: 'western', icon: '🤠', label: 'Western' },
             { id: 'modern', icon: '🌆', label: 'Modern' },
-          ].map((template) => (
+          ].map((template, index) => (
             <button
               key={template.id}
               onClick={() => onCreateNew?.()}
-              className="px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm flex items-center gap-1.5"
+              className={`px-3 py-1.5 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-lg text-sm flex items-center gap-1.5 ${prefersReducedMotion ? '' : `transition-all duration-150 hover:scale-[1.05] ${index === 0 ? 'animation-delay-75' : ''}`}`}
             >
               <span>{template.icon}</span>
               <span>{template.label}</span>
