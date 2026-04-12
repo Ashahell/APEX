@@ -41,6 +41,9 @@ const TotpSetup = lazy(() => import('./components/auth/TotpSetup').then(m => ({ 
 const ClientAuthManager = lazy(() => import('./components/auth/ClientAuthManager').then(m => ({ default: m.ClientAuthManager })));
 const ThemeEditor = lazy(() => import('./components/settings/ThemeEditor').then(m => ({ default: m.ThemeEditor })));
 const StreamingDashboard = lazy(() => import('./components/streaming/StreamingDashboard').then(m => ({ default: m.StreamingDashboard })));
+const StoryList = lazy(() => import('./components/stories/StoryList').then(m => ({ default: m.StoryList })));
+const StoryPlayer = lazy(() => import('./components/stories/StoryPlayer').then(m => ({ default: m.StoryPlayer })));
+const StoryEditor = lazy(() => import('./components/stories/StoryEditor').then(m => ({ default: m.StoryEditor })));
 
 const TAB_ORDER: AppTab[] = [
   'chat', 'dashboard', 'board', 'workflows', 'settings', 'theme',
@@ -51,12 +54,14 @@ const TAB_ORDER: AppTab[] = [
   'totp', 'clients',
   'adapters', 'webhooks', 'social',
   'soul', 'autonomy', 'governance',
-  'streaming'
+  'streaming', 'stories'
 ];
 
 function AppContent() {
   const [activeTab, setActiveTab] = useState<AppTab>('chat');
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [storyView, setStoryView] = useState<'list' | 'play' | 'create'>('list');
+  const [selectedStoryId, setSelectedStoryId] = useState<string | null>(null);
   const { themeId, toggleTheme } = useTheme();
   
   // Use individual selectors to prevent unnecessary re-renders
@@ -153,6 +158,50 @@ function AppContent() {
       case 'autonomy': return <Suspense fallback={fallback}><AutonomyControls /></Suspense>;
       case 'governance': return <Suspense fallback={fallback}><GovernanceControls /></Suspense>;
       case 'streaming': return <Suspense fallback={fallback}><StreamingDashboard /></Suspense>;
+      case 'stories': return (
+        <Suspense fallback={fallback}>
+          {storyView === 'list' && (
+            <StoryList 
+              onSelectStory={(id) => { setSelectedStoryId(id); setStoryView('play'); }} 
+              onCreateNew={() => setStoryView('create')} 
+            />
+          )}
+          {storyView === 'play' && selectedStoryId && (
+            <StoryPlayer 
+              storyId={selectedStoryId} 
+              onBack={() => setStoryView('list')} 
+            />
+          )}
+          {storyView === 'create' && (
+            <StoryEditor 
+              onCancel={() => setStoryView('list')}
+              onCreate={(story) => {
+                // Create story via API then switch to play view
+                fetch('/api/v1/stories', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'X-APEX-Signature': 'dev-signature',
+                    'X-APEX-Timestamp': Math.floor(Date.now() / 1000).toString(),
+                  },
+                  body: JSON.stringify({
+                    title: story.title,
+                    setting: story.setting,
+                    characters: story.characters,
+                  }),
+                }).then(res => res.json()).then(data => {
+                  setSelectedStoryId(data.id);
+                  setStoryView('play');
+                }).catch(() => {
+                  // Fallback: use demo ID
+                  setSelectedStoryId('demo');
+                  setStoryView('play');
+                });
+              }}
+            />
+          )}
+        </Suspense>
+      );
       default:
         return <div className="p-6">Select an option from the sidebar</div>;
     }
