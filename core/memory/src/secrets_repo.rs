@@ -347,6 +347,13 @@ pub fn get_predefined_secret_ids() -> Vec<&'static str> {
         "twilio_sid",
         "twilio_token",
         "stripe_key",
+        // NEW: H3 Expanded targets (50+)
+        "heroku_api_key",
+        "digitalocean_token",
+        "vercel_token",
+        "netlify_token",
+        "cloudflare_token",
+        "datadog_api_key",
     ]
 }
 

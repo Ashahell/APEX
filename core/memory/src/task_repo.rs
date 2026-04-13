@@ -87,8 +87,23 @@ impl<'a> TaskRepository<'a> {
     pub async fn update_status(&self, id: &str, status: TaskStatus) -> Result<(), sqlx::Error> {
         let now = Utc::now();
 
-        sqlx::query("UPDATE tasks SET status = ?, updated_at = ? WHERE id = ?")
+        sqlx::query("UPDATE tasks SET status = ?, updated_at = ?, last_activity_at = ? WHERE id = ?")
             .bind(status.as_str())
+            .bind(now)
+            .bind(now)
+            .bind(id)
+            .execute(self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    // M2: Update last activity timestamp for inactivity tracking
+    pub async fn update_activity(&self, id: &str) -> Result<(), sqlx::Error> {
+        let now = Utc::now();
+
+        sqlx::query("UPDATE tasks SET last_activity_at = ?, updated_at = ? WHERE id = ?")
+            .bind(now)
             .bind(now)
             .bind(id)
             .execute(self.pool)
@@ -386,6 +401,18 @@ impl<'a> TaskRepository<'a> {
             .execute(self.pool)
             .await?;
         Ok(())
+    }
+
+    // M2: Find tasks that have been inactive for more than the specified minutes
+    pub async fn find_inactive_tasks(&self, inactive_minutes: i64) -> Result<Vec<Task>, sqlx::Error> {
+        let cutoff = Utc::now() - chrono::Duration::minutes(inactive_minutes);
+        
+        sqlx::query_as::<_, Task>(
+            "SELECT * FROM tasks WHERE status = 'running' AND last_activity_at < ? ORDER BY last_activity_at ASC"
+        )
+        .bind(cutoff)
+        .fetch_all(self.pool)
+        .await
     }
 
     pub fn begin(&self) -> impl sqlx::Executor<'a, Database = sqlx::Sqlite> + '_ {

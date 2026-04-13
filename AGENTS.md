@@ -22,7 +22,7 @@ APEX is **more secure than both** by design:
 
 - **Architecture**: 6-layer system (L1-L6) with Rust core, TypeScript gateway/skills, Python execution, React UI
 - **Status**: Pre-Alpha (Experimental) ⚠️
-- **Version**: v1.7.1 (Optimization Release)
+- **Version**: v1.8.0 (Parent Improvements Release)
 - **Repository Structure**: See design doc `docs/APEX-Design.md`
 
 ---
@@ -30,7 +30,7 @@ APEX is **more secure than both** by design:
 ## ⚠️ Pre-Alpha Warnings
 
 - **Security-first but unaudited** — Security implementation complete (Phases 0-13), but not formally penetration tested
-- **Limited testing** — 461 tests, many features are proof-of-concept
+- **Limited testing** — 336+ Rust tests, many features are proof-of-concept
 - **API instability** — Breaking changes expected
 - **No production support** — Use at your own risk
 - **Firecracker/VM isolation** — Requires kernel/rootfs configuration
@@ -104,6 +104,16 @@ APEX is **more secure than both** by design:
 - **Hermes Tests** ✅ Complete - Added 30 new tests for Hermes features (bounded_memory, session_search, skill_manager)
 - **TinySSE Streaming** ✅ Complete - Clean baseline with iterator-based SSE streams for Hands, MCP, and Task endpoints
 - **CI Node 24 Update** ✅ Complete - Updated TypeScript and UI workflows to use Node 24
+
+### v1.8.0 Parent Improvements Release
+- **H2: Subagent Progress Reporting** ✅ - Added Progress event to streaming, emit_progress() in deep_task_worker
+- **M1: Response Caching** ✅ - Cache wired to skills API endpoints (list, get, register, update, delete)
+- **H3: Expanded Secrets** ✅ - Added 6 new targets (heroku, digitalocean, vercel, netlify, cloudflare, datadog) - now 53 total
+- **M2: Inactivity-Based Timeout** ✅ - Added last_activity_at field, update_activity(), find_inactive_tasks() for smart timeouts
+- **M3: Skills System Alignment** ✅ - Added search() method to SkillLoader for skill discovery
+- **H4: Security Hardening** ✅ - Added security-audit.yml workflow (trivy CVE scanning, dependency audit, secrets scan)
+- **L2: Nix Flake Support** ✅ - Added flake.nix for NixOS deployment
+- **UI Fixes** ✅ - Fixed StreamingDashboard.tsx syntax, added correlation_id to useStreaming
 
 ### v1.7.0 Streaming MVP
 - **TinySSE Baseline** ✅ Complete - Implemented using `futures_util::stream::iter()` for deterministic in-memory streams

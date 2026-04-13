@@ -7,7 +7,7 @@ use tokio::sync::broadcast;
 
 use crate::agent_loop::{AgentConfig, AgentLoop};
 use crate::circuit_breaker::CircuitBreakerRegistry;
-use crate::execution_stream::ExecutionStreamManager;
+use crate::execution_stream::{ExecutionEvent, ExecutionStreamManager};
 use crate::message_bus::{DeepTaskMessage, MessageBus};
 use crate::skill_manager::SkillManager;
 use crate::unified_config::skill_constants::*;
@@ -46,6 +46,30 @@ impl DeepTaskWorker {
             narrative_memory,
             skill_manager,
         }
+    }
+
+    // NEW: H2 - Emit progress event for subagent progress reporting
+    async fn emit_progress(
+        stream: &crate::execution_stream::ExecutionStream,
+        step: u32,
+        max_steps: u32,
+        stage: &str,
+        message: &str,
+        tools_used: &[String],
+    ) {
+        let percent = if max_steps > 0 {
+            ((step as f64 / max_steps as f64) * 100.0) as u8
+        } else {
+            0
+        };
+        stream.try_emit_progress(
+            step,
+            max_steps,
+            percent,
+            stage.to_string(),
+            message.to_string(),
+            tools_used.iter().map(|s| s.clone()).collect(),
+        );
     }
 
     pub async fn run(self) {
@@ -390,6 +414,17 @@ impl DeepTaskWorker {
         // Debug: also log what AppConfig::global() returns
         let global_config = crate::unified_config::AppConfig::global();
         tracing::info!(global_use_llm = global_config.agent.use_llm, global_llama_url = %global_config.agent.llama_url, "Global config");
+
+        // NEW: H2 - Emit initial progress event before starting agent
+        stream
+            .try_emit_progress(
+                0,
+                message.max_steps,
+                0,
+                "initializing".to_string(),
+                format!("Task {} starting with {} max steps", task_id, message.max_steps),
+                vec![],
+            );
 
         let mut agent_builder = AgentLoop::new(config).with_execution_stream(stream);
 

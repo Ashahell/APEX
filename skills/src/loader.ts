@@ -167,4 +167,45 @@ export class SkillLoader {
     
     return results;
   }
+
+  // M3: Search skills by name pattern, tier, or version
+  search(query: string, options?: { tier?: string; minVersion?: string }): Skill[] {
+    let results = Array.from(this.skills.values());
+    
+    // Filter by name pattern (case-insensitive)
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      results = results.filter(skill => 
+        skill.name.toLowerCase().includes(lowerQuery)
+      );
+    }
+    
+    // Filter by tier
+    if (options?.tier) {
+      results = results.filter(skill => skill.tier === options.tier);
+    }
+    
+    // Filter by minimum version
+    if (options?.minVersion) {
+      results = results.filter(skill => 
+        this.compareVersions(skill.version, options.minVersion!) >= 0
+      );
+    }
+    
+    return results;
+  }
+
+  // Helper to compare versions (semver-like)
+  private compareVersions(a: string, b: string): number {
+    const partsA = a.split('.').map(Number);
+    const partsB = b.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(partsA.length, partsB.length); i++) {
+      const partA = partsA[i] || 0;
+      const partB = partsB[i] || 0;
+      if (partA > partB) return 1;
+      if (partA < partB) return -1;
+    }
+    return 0;
+  }
 }

@@ -24,6 +24,7 @@ export interface SseEnvelope<T> {
   type: StreamEventType;
   timestamp: number;
   trace_id?: string;
+  correlation_id?: string;
   payload: T;
 }
 

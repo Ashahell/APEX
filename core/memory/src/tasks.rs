@@ -184,6 +184,7 @@ pub struct Task {
     pub completed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    pub last_activity_at: Option<DateTime<Utc>>, // M2: Activity tracking for inactivity timeout
     pub project: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
@@ -220,6 +221,7 @@ pub struct UpdateTask {
     pub actual_cost_cents: Option<i64>,
     pub started_at: Option<DateTime<Utc>>,
     pub completed_at: Option<DateTime<Utc>>,
+    pub last_activity_at: Option<DateTime<Utc>>, // M2: Activity tracking
     pub project: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,

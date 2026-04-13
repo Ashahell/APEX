@@ -40,6 +40,15 @@ pub enum ExecutionEvent {
         steps: u32,
         tools_used: Vec<String>,
     },
+    // NEW: H2 - Progress reporting (from Parent Improvements Plan)
+    Progress {
+        step: u32,
+        max_steps: u32,
+        percent: u8,
+        stage: String,
+        message: String,
+        tools_used: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -169,6 +178,27 @@ impl ExecutionStream {
         .await;
     }
 
+    // NEW: H2 - Emit progress event for subagent progress reporting
+    pub async fn emit_progress(
+        &self,
+        step: u32,
+        max_steps: u32,
+        percent: u8,
+        stage: String,
+        message: String,
+        tools_used: Vec<String>,
+    ) {
+        self.emit(ExecutionEvent::Progress {
+            step,
+            max_steps,
+            percent,
+            stage,
+            message,
+            tools_used,
+        })
+        .await;
+    }
+
     pub fn try_emit(&self, event: ExecutionEvent) {
         let _ = self.sender.send(event);
     }
@@ -217,6 +247,26 @@ impl ExecutionStream {
         self.try_emit(ExecutionEvent::Complete {
             output,
             steps,
+            tools_used,
+        });
+    }
+
+    // NEW: H2 - Synchronous progress emit
+    pub fn try_emit_progress(
+        &self,
+        step: u32,
+        max_steps: u32,
+        percent: u8,
+        stage: String,
+        message: String,
+        tools_used: Vec<String>,
+    ) {
+        self.try_emit(ExecutionEvent::Progress {
+            step,
+            max_steps,
+            percent,
+            stage,
+            message,
             tools_used,
         });
     }

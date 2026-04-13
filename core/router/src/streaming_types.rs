@@ -21,6 +21,8 @@ pub enum StreamEventType {
     SessionEnd,
     Checkpoint,
     UserIntervention,
+    // NEW: Progress reporting (H2 from parent plan)
+    Progress,
 }
 
 impl StreamEventType {
@@ -39,6 +41,8 @@ impl StreamEventType {
             StreamEventType::SessionEnd => "session_end",
             StreamEventType::Checkpoint => "checkpoint",
             StreamEventType::UserIntervention => "user_intervention",
+            // NEW: Progress reporting (H2 from parent plan)
+            StreamEventType::Progress => "progress",
         }
     }
 }
@@ -94,6 +98,18 @@ pub struct HeartbeatPayload {
     pub active_connections: u64,
 }
 
+// NEW: H2 - Progress reporting payload (Parent Improvements Plan)
+#[derive(Debug, Serialize)]
+pub struct ProgressPayload {
+    pub task_id: String,
+    pub step: u32,
+    pub max_steps: u32,
+    pub percent: u8,             // 0-100 progress percentage
+    pub stage: String,           // "initializing", "thinking", "executing", "writing", "completed"
+    pub message: String,         // Human-readable progress message
+    pub tools_used: Vec<String>, // Tools called so far
+}
+
 /// Thread-safe streaming metrics — atomic counters for observability.
 #[derive(Debug, Default)]
 pub struct StreamingMetrics {
@@ -111,6 +127,8 @@ pub struct StreamingMetrics {
     pub events_session_end: AtomicU64,
     pub events_checkpoint: AtomicU64,
     pub events_user_intervention: AtomicU64,
+    // NEW: H2 - Progress reporting
+    pub events_progress: AtomicU64,
     // Error counters
     pub errors_auth: AtomicU64,
     pub errors_replay: AtomicU64,
@@ -159,6 +177,10 @@ impl StreamingMetrics {
             ExecutionEvent::Complete { .. } => {
                 let _ = self.events_complete.fetch_add(1, Ordering::Relaxed);
             }
+            // NEW: H2 - Progress event counter
+            ExecutionEvent::Progress { .. } => {
+                let _ = self.events_progress.fetch_add(1, Ordering::Relaxed);
+            }
         }
     }
 
@@ -206,6 +228,10 @@ impl StreamingMetrics {
                     .events_user_intervention
                     .fetch_add(1, Ordering::Relaxed);
             }
+            // NEW: H2 - Progress reporting
+            StreamEventType::Progress => {
+                let _ = self.events_progress.fetch_add(1, Ordering::Relaxed);
+            }
             // Legacy events handled by ExecutionEvent::on_event
             _ => {}
         }
@@ -237,6 +263,8 @@ pub struct EventCounts {
     pub session_end: u64,
     pub checkpoint: u64,
     pub user_intervention: u64,
+    // NEW: H2 - Progress reporting
+    pub progress: u64,
     pub total: u64,
 }
 
@@ -314,6 +342,7 @@ impl From<&StreamingMetrics> for StreamingStats {
                 session_end,
                 checkpoint,
                 user_intervention,
+                progress: m.events_progress.load(Ordering::Relaxed),
                 total: total_events,
             },
             errors: ErrorCounts {

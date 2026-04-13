@@ -43,6 +43,13 @@ pub fn router() -> Router<AppState> {
 }
 
 async fn list_skills(State(state): State<AppState>) -> Result<Json<Vec<SkillResponse>>, String> {
+    // M1: Try cache first
+    let cache_key = "skills:list";
+    if let Some(cached) = state.cache.get::<Vec<SkillResponse>>(cache_key).await {
+        tracing::debug!("Cache hit for skills:list");
+        return Ok(Json(cached));
+    }
+
     let registry = SkillRegistry::new(&state.pool);
 
     match registry.find_all().await {
@@ -58,6 +65,10 @@ async fn list_skills(State(state): State<AppState>) -> Result<Json<Vec<SkillResp
                     last_health_check: s.last_health_check,
                 })
                 .collect();
+            
+            // M1: Cache the result for 60 seconds
+            state.cache.set(cache_key, &responses, Some(60)).await;
+            
             Ok(Json(responses))
         }
         Err(e) => Err(format!("Failed to list skills: {}", e)),
@@ -68,19 +79,33 @@ async fn get_skill(
     State(state): State<AppState>,
     Path(name): Path<String>,
 ) -> Result<Json<SkillResponse>, String> {
+    // M1: Try cache first
+    let cache_key = format!("skill:{}", name);
+    if let Some(cached) = state.cache.get::<SkillResponse>(&cache_key).await {
+        tracing::debug!("Cache hit for skill:{}", name);
+        return Ok(Json(cached));
+    }
+
     let registry = SkillRegistry::new(&state.pool);
 
     match registry.find_by_name(&name).await {
-        Ok(Some(skill)) => Ok(Json(SkillResponse {
-            name: skill.name,
-            version: skill.version,
-            tier: skill.tier,
-            enabled: skill.enabled,
-            health_status: skill.health_status,
-            last_health_check: skill.last_health_check,
-        })),
+        Ok(Some(skill)) => {
+            let response = SkillResponse {
+                name: skill.name,
+                version: skill.version,
+                tier: skill.tier,
+                enabled: skill.enabled,
+                health_status: skill.health_status,
+                last_health_check: skill.last_health_check,
+            };
+            
+            // M1: Cache individual skill for 60 seconds
+            state.cache.set(&cache_key, &response, Some(60)).await;
+            
+            Ok(Json(response))
+        }
         Ok(None) => Err(format!("Skill not found: {}", name)),
-        Err(e) => Err(format!("Failed to get skill: {}", e)),
+Err(e) => Err(format!("Failed to get skill: {}", e)),
     }
 }
 
@@ -92,14 +117,20 @@ async fn register_skill(
     let entry = SkillRegistryEntry::new(payload.name.clone(), payload.version, payload.tier);
 
     match registry.upsert(&entry).await {
-        Ok(_) => Ok(Json(SkillResponse {
-            name: entry.name,
-            version: entry.version,
-            tier: entry.tier,
-            enabled: entry.enabled,
-            health_status: entry.health_status,
-            last_health_check: entry.last_health_check,
-        })),
+        Ok(_) => {
+            // M1: Invalidate skills list cache
+            state.cache.invalidate("skills:list").await;
+            state.cache.invalidate(&format!("skill:{}", entry.name)).await;
+            
+            Ok(Json(SkillResponse {
+                name: entry.name,
+                version: entry.version,
+                tier: entry.tier,
+                enabled: entry.enabled,
+                health_status: entry.health_status,
+                last_health_check: entry.last_health_check,
+            }))
+        }
         Err(e) => Err(format!("Failed to register skill: {}", e)),
     }
 }
@@ -112,18 +143,24 @@ async fn update_skill_health(
     let registry = SkillRegistry::new(&state.pool);
 
     match registry.update_health(&name, &payload.health_status).await {
-        Ok(_) => match registry.find_by_name(&name).await {
-            Ok(Some(skill)) => Ok(Json(SkillResponse {
-                name: skill.name,
-                version: skill.version,
-                tier: skill.tier,
-                enabled: skill.enabled,
-                health_status: skill.health_status,
-                last_health_check: skill.last_health_check,
-            })),
-            Ok(None) => Err(format!("Skill not found: {}", name)),
-            Err(e) => Err(format!("Failed to get skill: {}", e)),
-        },
+        Ok(_) => {
+            // M1: Invalidate cache for this skill
+            state.cache.invalidate("skills:list").await;
+            state.cache.invalidate(&format!("skill:{}", name)).await;
+            
+            match registry.find_by_name(&name).await {
+                Ok(Some(skill)) => Ok(Json(SkillResponse {
+                    name: skill.name,
+                    version: skill.version,
+                    tier: skill.tier,
+                    enabled: skill.enabled,
+                    health_status: skill.health_status,
+                    last_health_check: skill.last_health_check,
+                })),
+                Ok(None) => Err(format!("Skill not found: {}", name)),
+                Err(e) => Err(format!("Failed to get skill: {}", e)),
+            }
+        }
         Err(e) => Err(format!("Failed to update health: {}", e)),
     }
 }
@@ -135,7 +172,12 @@ async fn delete_skill(
     let registry = SkillRegistry::new(&state.pool);
 
     match registry.delete(&name).await {
-        Ok(_) => Ok(Json(serde_json::json!({"deleted": true, "name": name}))),
+        Ok(_) => {
+            // M1: Invalidate cache for this skill
+            state.cache.invalidate("skills:list").await;
+            state.cache.invalidate(&format!("skill:{}", name)).await;
+            Ok(Json(serde_json::json!({"deleted": true, "name": name})))
+        }
         Err(e) => Err(format!("Failed to delete skill: {}", e)),
     }
 }

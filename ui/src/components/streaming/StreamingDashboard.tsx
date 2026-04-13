@@ -208,7 +208,8 @@ interface HandsPanelProps {
   taskId: string;
 }
 
-const HandsPanel: React.FC<HandsPanelProps> = ({ taskId }) => {
+// Legacy - kept for potential future use
+export const HandsPanel: React.FC<HandsPanelProps> = ({ taskId }) => {
   const endpoint = `/stream/hands/${taskId}`;
   const { events, connected, error } = useStreaming(endpoint);
 
@@ -268,11 +269,13 @@ const HandsPanel: React.FC<HandsPanelProps> = ({ taskId }) => {
             );
           })
         )}
-      </div>
+</div>
     </div>
   );
-// ============================================================================
-// Hands Dashboard Component (Enhanced with metrics)
+};
+
+ // ============================================================================
+ // Hands Dashboard Component (Enhanced with metrics)
 // ============================================================================
 
 interface HandsDashboardProps {
