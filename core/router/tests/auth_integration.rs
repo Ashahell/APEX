@@ -198,6 +198,22 @@ async fn create_test_state() -> AppState {
         monitoring_state: apex_router::api::MonitoringState::default(),
         // v1.9.0: Vigilant Mode
         vigilant_state: apex_router::api::VigilantState::default(),
+        // v1.10.0: Automated Runbook Execution
+        runbook_manager: std::sync::Arc::new(tokio::sync::RwLock::new(
+            apex_router::runbook::RunbookManager::new(),
+        )),
+        // v1.10.0: Health Check Dashboard
+        health_state: std::sync::Arc::new(apex_router::health::HealthState::new()),
+        // v1.10.0: Task Retry Policies
+        retry_state: std::sync::Arc::new(apex_router::api::retry_api::RetryState::new()),
+        // v1.10.0: Alert Correlation
+        correlation_state: std::sync::Arc::new(apex_router::api::correlation_api::CorrelationState::new()),
+        // v1.10.0: Webhook Event Filtering
+        webhook_filter_state: std::sync::Arc::new(apex_router::api::webhook_filter_api::WebhookFilterState::new()),
+        // v1.10.0: Scheduled Task Templates
+        scheduled_template_state: std::sync::Arc::new(apex_router::api::scheduled_template_api::ScheduledTemplateState::new()),
+        // v1.10.0: Skill Chaining
+        skill_chain_state: std::sync::Arc::new(apex_router::api::skill_chain_api::SkillChainState::new()),
     }
 }
 

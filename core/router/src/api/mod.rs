@@ -23,6 +23,12 @@ pub mod notifications;
 pub mod pdf; // NEW
 pub mod persona_api; // NEW - Persona Assembly (Feature 2)
 pub mod privacy_api; // NEW - Privacy Toggle (Feature 6)
+pub mod runbook_api; // v1.10.0: Automated Runbook Execution
+pub mod retry_api; // v1.10.0: Task Retry Policies
+pub mod correlation_api; // v1.10.0: Alert Correlation
+pub mod webhook_filter_api; // v1.10.0: Webhook Event Filtering
+pub mod scheduled_template_api; // v1.10.0: Scheduled Task Templates
+pub mod skill_chain_api; // v1.10.0: Skill Chaining
 pub mod secrets; // NEW - Phase 7 Secrets Expansion
 pub mod security;
 pub mod session_search_api; // NEW - Hermes-style session search
@@ -323,6 +329,20 @@ pub struct AppState {
     pub monitoring_state: MonitoringState,
     // v1.9.0: Vigilant Mode - Alert Monitoring (Hermes-inspired)
     pub vigilant_state: VigilantState,
+    // v1.10.0: Automated Runbook Execution
+    pub runbook_manager: std::sync::Arc<tokio::sync::RwLock<crate::runbook::RunbookManager>>,
+    // v1.10.0: Health Check Dashboard
+    pub health_state: std::sync::Arc<crate::health::HealthState>,
+    // v1.10.0: Task Retry Policies
+    pub retry_state: std::sync::Arc<crate::api::retry_api::RetryState>,
+    // v1.10.0: Alert Correlation
+    pub correlation_state: std::sync::Arc<crate::api::correlation_api::CorrelationState>,
+    // v1.10.0: Webhook Event Filtering
+    pub webhook_filter_state: std::sync::Arc<crate::api::webhook_filter_api::WebhookFilterState>,
+    // v1.10.0: Scheduled Task Templates
+    pub scheduled_template_state: std::sync::Arc<crate::api::scheduled_template_api::ScheduledTemplateState>,
+    // v1.10.0: Skill Chaining
+    pub skill_chain_state: std::sync::Arc<crate::api::skill_chain_api::SkillChainState>,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -657,6 +677,20 @@ pub fn create_router(state: AppState) -> Router {
         .merge(crate::api::vigilant_api::create_vigilant_router())
         // v1.9.0: Pattern suggestions (needs AppState for DB access)
         .merge(crate::api::vigilant_api::create_pattern_suggestions_router())
+        // v1.10.0: Automated Runbook Execution
+        .merge(crate::api::runbook_api::create_runbook_router())
+        // v1.10.0: Health Check Dashboard
+        .merge(crate::health::api::create_health_router())
+        // v1.10.0: Task Retry Policies
+        .merge(crate::api::retry_api::create_retry_router())
+        // v1.10.0: Alert Correlation
+        .merge(crate::api::correlation_api::create_correlation_router())
+        // v1.10.0: Webhook Event Filtering
+        .merge(crate::api::webhook_filter_api::create_webhook_filter_router())
+        // v1.10.0: Scheduled Task Templates
+        .merge(crate::api::scheduled_template_api::create_scheduled_template_router())
+        // v1.10.0: Skill Chaining
+        .merge(crate::api::skill_chain_api::create_skill_chain_router())
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))

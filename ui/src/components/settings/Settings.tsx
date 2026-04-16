@@ -19,7 +19,14 @@ import { ContinuitySettings } from './ContinuitySettings';
 import { PersonaList } from './PersonaList';
 import { MonitoringDashboard } from './MonitoringDashboard';
 import { VigilantDashboard } from './VigilantDashboard';
+import { RunbookEditor } from './RunbookEditor';
+import { HealthDashboard } from './HealthDashboard';
 import { EmailConfigSettings } from './EmailConfigSettings';
+import { RetryPolicies } from './RetryPolicies';
+import { AlertCorrelations } from './AlertCorrelations';
+import { WebhookEventFilters } from './WebhookEventFilters';
+import { ScheduledTaskTemplates } from './ScheduledTaskTemplates';
+import { SkillChains } from './SkillChains';
 
 interface VmStats {
   enabled: boolean;
@@ -34,7 +41,7 @@ interface TotpStatus {
   configured: boolean;
 }
 
-type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a' | 'privacy' | 'continuity' | 'stories' | 'personas' | 'monitor' | 'vigilant' | 'email';
+type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a' | 'privacy' | 'continuity' | 'stories' | 'personas' | 'monitor' | 'vigilant' | 'runbooks' | 'health' | 'retry' | 'correlation' | 'email' | 'webhooks' | 'scheduled' | 'chains';
 type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory' | 'profile';
 type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel' | 'slackblocks';
 
@@ -135,7 +142,14 @@ export function Settings() {
     { id: 'a2a', label: 'A2A' },
     { id: 'monitor', label: '📊 Monitor' },
     { id: 'vigilant', label: '🚨 Vigilant' },
+    { id: 'runbooks', label: '📋 Runbooks' },
+    { id: 'health', label: '💚 Health' },
+    { id: 'retry', label: '🔁 Retry' },
+    { id: 'correlation', label: '🔗 Correlation' },
     { id: 'email', label: '📧 Email' },
+    { id: 'webhooks', label: '🔀 Webhooks' },
+    { id: 'scheduled', label: '⏰ Scheduled' },
+    { id: 'chains', label: '🔗 Chains' },
     { id: 'privacy', label: '🔒 Privacy' },
     { id: 'continuity', label: '⏰ Continuity' },
     { id: 'stories', label: '📖 Stories' },
@@ -1182,9 +1196,44 @@ export function Settings() {
           <VigilantDashboard />
         )}
 
+        {/* Runbooks Tab - Automated Remediation Workflows */}
+        {activeTab === 'runbooks' && (
+          <RunbookEditor />
+        )}
+
+        {/* Health Tab - System Health Dashboard */}
+        {activeTab === 'health' && (
+          <HealthDashboard />
+        )}
+
+        {/* Retry Tab - Task Retry Policies */}
+        {activeTab === 'retry' && (
+          <RetryPolicies />
+        )}
+
+        {/* Correlation Tab - Alert Correlation */}
+        {activeTab === 'correlation' && (
+          <AlertCorrelations />
+        )}
+
         {/* Email Tab - SMTP Configuration */}
         {activeTab === 'email' && (
           <EmailConfigSettings />
+        )}
+
+        {/* Webhooks Tab - Webhook Event Filters */}
+        {activeTab === 'webhooks' && (
+          <WebhookEventFilters />
+        )}
+
+        {/* Scheduled Tab - Scheduled Task Templates */}
+        {activeTab === 'scheduled' && (
+          <ScheduledTaskTemplates />
+        )}
+
+        {/* Chains Tab - Skill Chaining */}
+        {activeTab === 'chains' && (
+          <SkillChains />
         )}
       </div>
     </div>

@@ -55,6 +55,13 @@ pub mod telemetry_middleware; // Phase 2: Telemetry middleware
 pub mod tool_sandbox; // Feature 1: Tool Sandbox
 pub mod tool_validator; // Feature 1: Tool Maker Validation
 pub mod totp;
+pub mod runbook; // v1.10.0: Automated Runbook Execution
+pub mod health; // v1.10.0: Health Check Dashboard
+pub mod retry; // v1.10.0: Task Retry Policies
+pub mod correlation; // v1.10.0: Alert Correlation
+pub mod webhook_filter; // v1.10.0: Webhook Event Filtering
+pub mod scheduled_template; // v1.10.0: Scheduled Task Templates
+pub mod skill_chain; // v1.10.0: Skill Chaining
 pub mod monitoring; // Background Process Monitoring (Hermes-inspired)
 pub mod vigilant; // Vigilant Mode - Alert Monitoring (Hermes-inspired)
 pub mod unified_config;
