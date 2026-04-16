@@ -17,6 +17,7 @@ pub mod llms;
 pub mod mcp;
 pub mod memory;
 pub mod memory_ttl_api; // NEW - Phase 5 Memory TTL and Consolidation
+pub mod monitoring_api; // v1.9.0: Background Process Monitoring (Hermes-inspired)
 pub mod moltbook;
 pub mod notifications;
 pub mod pdf; // NEW
@@ -39,6 +40,7 @@ pub mod tasks;
 pub mod tool_validation; // NEW - Tool Maker Validation (Feature 1)
 pub mod totp;
 pub mod user_profile_api; // NEW - Hermes-style user profile
+pub mod vigilant_api; // v1.9.0: Vigilant Mode - Alert Monitoring (Hermes-inspired)
 pub mod webhooks;
 pub mod workflows; // NEW - Context Scope (Feature 3)
 
@@ -317,6 +319,10 @@ pub struct AppState {
     pub replay_protection: std::sync::Arc<dyn crate::security::replay_protection::ReplayProtection>,
     // Patch 16: Streaming analytics
     pub streaming_metrics: std::sync::Arc<crate::streaming::StreamingMetrics>,
+    // v1.9.0: Background Process Monitoring (Hermes-inspired)
+    pub monitoring_state: MonitoringState,
+    // v1.9.0: Vigilant Mode - Alert Monitoring (Hermes-inspired)
+    pub vigilant_state: VigilantState,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -641,6 +647,16 @@ pub fn create_router(state: AppState) -> Router {
         .merge(context_scope_api::create_context_scope_router()) // NEW - Context Scope (Feature 3)
         .merge(crate::streaming::create_streaming_router(state.clone())) // NEW - Patch 11: SSE streaming for Hands and MCP
         .merge(crate::streaming_sign::create_stream_sign_router()) // NEW - Signed URL for streaming
+        // v1.9.0: Background Process Monitoring (Hermes-inspired)
+        .merge(crate::api::monitoring_api::create_monitoring_router(crate::api::MonitoringState {
+            watcher_registry: state.monitoring_state.watcher_registry.clone(),
+            hook_emitter: state.monitoring_state.hook_emitter.clone(),
+            notifier: state.monitoring_state.notifier.clone(),
+        }))
+        // v1.9.0: Vigilant Mode - Alert Monitoring (Hermes-inspired)
+        .merge(crate::api::vigilant_api::create_vigilant_router())
+        // v1.9.0: Pattern suggestions (needs AppState for DB access)
+        .merge(crate::api::vigilant_api::create_pattern_suggestions_router())
         .route("/", axum::routing::get(root))
         .route("/health", axum::routing::get(health))
         .route("/api/v1/deep", post(execute_deep_task))
@@ -700,4 +716,44 @@ async fn execute_deep_task(
         status: "running".to_string(),
         message: "Deep task queued for execution".to_string(),
     }))
+}
+
+// v1.9.0: Monitoring and Vigilant state types for AppState
+
+/// State for Background Process Monitoring
+#[derive(Debug, Clone)]
+pub struct MonitoringState {
+    pub watcher_registry: crate::monitoring::SharedWatcherRegistry,
+    pub hook_emitter: crate::monitoring::SharedHookEmitter,
+    pub notifier: crate::monitoring::SharedNotificationDispatcher,
+}
+
+impl Default for MonitoringState {
+    fn default() -> Self {
+        Self {
+            watcher_registry: crate::monitoring::SharedWatcherRegistry::new(),
+            hook_emitter: crate::monitoring::SharedHookEmitter::new(),
+            notifier: crate::monitoring::SharedNotificationDispatcher::new(),
+        }
+    }
+}
+
+/// State for Vigilant Mode
+#[derive(Debug, Clone)]
+pub struct VigilantState {
+    pub rule_engine: crate::vigilant::SharedAlertRuleEngine,
+    pub threshold_monitor: crate::vigilant::SharedThresholdMonitor,
+    pub dispatcher: crate::vigilant::SharedAlertDispatcher,
+}
+
+impl Default for VigilantState {
+    fn default() -> Self {
+        Self {
+            rule_engine: crate::vigilant::SharedAlertRuleEngine::new(),
+            threshold_monitor: crate::vigilant::SharedThresholdMonitor::new(
+                crate::vigilant::ThresholdConfig::default(),
+            ),
+            dispatcher: crate::vigilant::SharedAlertDispatcher::new(),
+        }
+    }
 }

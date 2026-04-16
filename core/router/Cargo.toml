@@ -49,6 +49,7 @@ nats = { version = "0.25", optional = true }
 deadpool-redis = { version = "0.14", optional = true }
 notify = "6"
 tempfile = "3"
+flume = "0.11"
 
 [[bin]]
 name = "apex-router-bin"

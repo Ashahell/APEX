@@ -194,6 +194,10 @@ async fn create_test_state() -> AppState {
         ),
         // Patch 16: Streaming Analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
+        // v1.9.0: Background Process Monitoring
+        monitoring_state: apex_router::api::MonitoringState::default(),
+        // v1.9.0: Vigilant Mode
+        vigilant_state: apex_router::api::VigilantState::default(),
     }
 }
 

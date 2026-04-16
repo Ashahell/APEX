@@ -243,6 +243,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             respect_code_blocks: true,
         },
         embedding_dim: config.memory.embedding_dim,
+        max_concurrent_embeddings: 4,
+        cache_recent_files: true,
     };
     let background_indexer = std::sync::Arc::new(BackgroundIndexer::new(
         embedder.clone(),
@@ -373,6 +375,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
         // Patch 16: Streaming analytics
         streaming_metrics: std::sync::Arc::new(apex_router::streaming::StreamingMetrics::default()),
+        // v1.9.0: Background Process Monitoring (Hermes-inspired)
+        monitoring_state: apex_router::api::MonitoringState::default(),
+        // v1.9.0: Vigilant Mode - Alert Monitoring (Hermes-inspired)
+        vigilant_state: apex_router::api::VigilantState::default(),
     };
 
     let state_arc = std::sync::Arc::new(state);

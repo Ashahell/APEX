@@ -1,5 +1,13 @@
 # Log
 
+## [2026-04-16] update | v1.9.0 LLM Wiki updates
+## [2026-04-16] create | entities/vigilant-mode.md - Alert monitoring system
+## [2026-04-16] create | entities/alert-analytics.md - Historical analytics
+## [2026-04-16] create | entities/death-spiral-detection.md - Pattern detection
+## [2026-04-16] create | concepts/escalation-patterns.md - Escalation strategies
+## [2026-04-16] create | summaries/v1.9.0-release-notes.md - Release notes
+## [2026-04-16] update | index.md - Added v1.9.0 features
+
 ## [2026-04-13] create | v1.8.0 wiki structure with new features
 ## [2026-04-13] ingest | PARENT_IMPROVEMENTS_PLAN.md implemented
 ## [2026-04-13] ingest | AGENTS.md v1.8.0 release notes

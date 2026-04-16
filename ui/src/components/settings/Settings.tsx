@@ -17,6 +17,9 @@ import { UserProfileSettings } from './UserProfileSettings';
 import { PrivacySettings } from './PrivacySettings';
 import { ContinuitySettings } from './ContinuitySettings';
 import { PersonaList } from './PersonaList';
+import { MonitoringDashboard } from './MonitoringDashboard';
+import { VigilantDashboard } from './VigilantDashboard';
+import { EmailConfigSettings } from './EmailConfigSettings';
 
 interface VmStats {
   enabled: boolean;
@@ -31,7 +34,7 @@ interface TotpStatus {
   configured: boolean;
 }
 
-type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a' | 'privacy' | 'continuity' | 'stories' | 'personas';
+type SettingsTab = 'agent' | 'external' | 'mcp' | 'skills' | 'security' | 'vm' | 'runtime' | 'config' | 'preferences' | 'about' | 'notifications' | 'developer' | 'backup' | 'speech' | 'a2a' | 'privacy' | 'continuity' | 'stories' | 'personas' | 'monitor' | 'vigilant' | 'email';
 type AgentSubTab = 'chat' | 'embed' | 'util' | 'browser' | 'memory' | 'profile';
 type ExternalSubTab = 'apikeys' | 'litellm' | 'secrets' | 'auth' | 'externalapi' | 'updatechecker' | 'tunnel' | 'slackblocks';
 
@@ -130,6 +133,9 @@ export function Settings() {
     { id: 'backup', label: 'Backup' },
     { id: 'speech', label: 'Speech' },
     { id: 'a2a', label: 'A2A' },
+    { id: 'monitor', label: '📊 Monitor' },
+    { id: 'vigilant', label: '🚨 Vigilant' },
+    { id: 'email', label: '📧 Email' },
     { id: 'privacy', label: '🔒 Privacy' },
     { id: 'continuity', label: '⏰ Continuity' },
     { id: 'stories', label: '📖 Stories' },
@@ -1164,6 +1170,21 @@ export function Settings() {
             </div>
             <PersonaList onEdit={(persona) => console.log('Edit persona:', persona)} />
           </div>
+        )}
+
+        {/* Monitor Tab - Background Process Monitoring */}
+        {activeTab === 'monitor' && (
+          <MonitoringDashboard />
+        )}
+
+        {/* Vigilant Tab - Alert Rules & Threshold Monitoring */}
+        {activeTab === 'vigilant' && (
+          <VigilantDashboard />
+        )}
+
+        {/* Email Tab - SMTP Configuration */}
+        {activeTab === 'email' && (
+          <EmailConfigSettings />
         )}
       </div>
     </div>

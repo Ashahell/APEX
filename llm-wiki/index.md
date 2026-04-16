@@ -1,13 +1,13 @@
 # Index - APEX LLM Wiki
 
-> **Last Updated:** 2026-04-13
+> **Last Updated:** 2026-04-16
 
 ---
 
 ## Entities (Core Concepts)
 
 ### Architecture (L1-L6)
-- [architecture-overview.md](summaries/architecture-overview.md) - System architecture (L1-L6)
+- [architecture-overview.md](entities/architecture-overview.md) - System architecture (L1-L6)
 - [task-router.md](entities/task-router.md) - L2 Rust task router with classification
 - [memory-service.md](entities/memory-service.md) - L3 SQLite-based memory
 - [execution-engine.md](entities/execution-engine.md) - L5 Python/Docker execution
@@ -16,6 +16,12 @@
 - [permission-tiers.md](entities/permission-tiers.md) - T0-T3 permission tier system
 - [hmac-auth.md](entities/hmac-auth.md) - HMAC request authentication
 - [secrets-management.md](entities/secrets-management.md) - 53 secrets targets
+
+### Alerting & Monitoring
+- [vigilant-mode.md](entities/vigilant-mode.md) - v1.9.0: Alert monitoring with escalation
+- [alert-analytics.md](entities/alert-analytics.md) - v1.9.0: Historical analytics with charts
+- [death-spiral-detection.md](entities/death-spiral-detection.md) - v1.9.0: Pattern-based anomaly detection
+- [monitoring-dashboard.md](entities/monitoring-dashboard.md) - v1.9.0: Hermes-inspired background monitoring
 
 ### Skills & Tools
 - [skills-framework.md](entities/skills-framework.md) - TypeScript skill system (34 built-in)
@@ -45,11 +51,13 @@
 - [error-handling.md](concepts/error-handling.md) - Error handling patterns
 - [caching-strategy.md](concepts/caching-strategy.md) - Response caching
 - [activity-tracking.md](concepts/activity-tracking.md) - Inactivity timeout implementation
+- [escalation-patterns.md](concepts/escalation-patterns.md) - v1.9.0: Alert escalation strategies
 
 ---
 
 ## Summaries (Source Syntheses)
 
+- [v1.9.0-release-notes.md](summaries/v1.9.0-release-notes.md) - **v1.9.0: Alert Escalation & Analytics**
 - [v1.8.0-release-notes.md](summaries/v1.8.0-release-notes.md) - Parent Improvements Release
 - [parent-improvements.md](summaries/parent-improvements.md) - Implementation summary
 
@@ -62,25 +70,27 @@
 
 ---
 
-## v1.8.0 New Features (2026-04-13)
+## v1.9.0 New Features (2026-04-16)
 
 | Feature | File | Status |
 |---------|------|--------|
-| H2: Progress Reporting | progress-reporting.md | ✅ |
-| M1: Response Caching | response-cache.md | ✅ |
-| H3: Expanded Secrets | secrets-management.md | ✅ (53 targets) |
-| M2: Inactivity Tracking | inactivity-tracking.md | ✅ |
-| M3: Skills Search | skill-loader.md | ✅ |
-| H4: Security Audit | security-audit.yml | ✅ (CI) |
-| L2: Nix Flake | flake.nix | ✅ |
-| UI: TS Fix | StreamingDashboard.tsx | ✅ |
+| Alert Escalation | vigilant-mode.md | ✅ |
+| Historical Analytics | alert-analytics.md | ✅ |
+| Death Spiral Integration | death-spiral-detection.md | ✅ |
+| Pattern Auto-Rules | vigilant-mode.md | ✅ |
+| Escalation API | vigilant-mode.md | ✅ |
+| Analytics Charts UI | alert-analytics.md | ✅ |
+| Pattern Suggestions UI | vigilant-mode.md | ✅ |
+| Session Search Fix | task-repository.md | ✅ |
+
+**Test Suite:** 434 tests passing (63 memory + 365 router + 6 security)
 
 ---
 
 ## Sources (Original Documentation)
 
 ### Primary
-- [raw/AGENTS.md](../AGENTS.md) - Main development guide (v1.8.0)
+- [raw/AGENTS.md](../AGENTS.md) - Main development guide (v1.9.0)
 - [raw/PARENT_IMPROVEMENTS_PLAN.md](../docs/PARENT_IMPROVEMENTS_PLAN.md) - Implementation plan
 - [raw/APEX-Design.md](../docs/APEX-Design.md) - System design
 
@@ -95,18 +105,18 @@
 
 ## Quick Links
 
-- **Tests**: 336+ Rust, 53 Python, 16 TypeScript, 20 UI
-- **Build**: `cargo build && pnpm build`
+- **Tests**: 434 total (63 memory + 365 router + 6 security)
+- **Build**: `cargo build --release && cd ui && npm run build`
 - **Run**: `./apex.bat start`
 
 ---
 
-**To query the wiki:**
+## To query the wiki:
 1. Read this index.md
 2. Navigate to relevant entity/concept
 3. Synthesize answer with citations
 
-**To add new content:**
+## To add new content:
 1. Save source to `raw/`
 2. Write summary to appropriate directory
 3. Update this index.md

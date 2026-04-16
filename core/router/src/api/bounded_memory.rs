@@ -890,7 +890,7 @@ Return a JSON array of suggestions, maximum {} items."#,
 }
 
 /// Parse JSON suggestions from LLM response
-fn parse_llm_suggestions(response: &str, entries: &[crate::memory_stores::MemoryEntry]) -> Vec<ConsolidationSuggestion> {
+fn parse_llm_suggestions(response: &str, _entries: &[crate::memory_stores::MemoryEntry]) -> Vec<ConsolidationSuggestion> {
     // Try to extract JSON from response
     let json_start = response.find('[').or_else(|| response.find('{'));
     let json_end = response.rfind(']').or_else(|| response.rfind('}'));

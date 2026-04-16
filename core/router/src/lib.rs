@@ -55,6 +55,8 @@ pub mod telemetry_middleware; // Phase 2: Telemetry middleware
 pub mod tool_sandbox; // Feature 1: Tool Sandbox
 pub mod tool_validator; // Feature 1: Tool Maker Validation
 pub mod totp;
+pub mod monitoring; // Background Process Monitoring (Hermes-inspired)
+pub mod vigilant; // Vigilant Mode - Alert Monitoring (Hermes-inspired)
 pub mod unified_config;
 pub mod user_profile;
 pub mod vm_pool;

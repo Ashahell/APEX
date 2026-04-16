@@ -705,6 +705,24 @@ impl Database {
         sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('error_cascade', 'error_cascade', 'Error Cascade Detected', 'Multiple sequential errors - task likely failing repeatedly', 'critical', 'Cancel task, review error logs, check credentials/permissions')"#)
             .execute(&self.pool).await.ok();
 
+        // Migration: Add last_activity_at column for inactivity tracking
+        sqlx::query("ALTER TABLE tasks ADD COLUMN last_activity_at TEXT")
+            .execute(&self.pool)
+            .await
+            .map_err(|e| {
+                if e.to_string().contains("duplicate column") {
+                    return sqlx::Error::RowNotFound;
+                }
+                sqlx::Error::Configuration(Box::new(e))
+            })
+            .ok();
+        
+        // Create index for last_activity_at queries
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_last_activity ON tasks(last_activity_at)")
+            .execute(&self.pool)
+            .await
+            .ok();
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }
