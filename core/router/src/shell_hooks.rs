@@ -55,7 +55,7 @@ impl ShellHooks {
     }
 }
 
-async fn run_hook_script(script: &str, context: serde_json::Value) -> Result<String, String> {
+async fn run_hook_script(script: &str, _context: serde_json::Value) -> Result<String, String> {
     let output = Command::new("sh")
         .arg("-c")
         .arg(script)
