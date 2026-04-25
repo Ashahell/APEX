@@ -38,10 +38,11 @@
 - Summary field in session search API
 - "Summarized" badge in SessionSearch UI
 
-### 2.3 Temporal Decay Improvements
+### 2.3 Temporal Decay Improvements ✅ Complete
 - MMR (Maximal Marginal Relevance) for deduplication
-- Configurable decay curve (linear/exponential)
-- Quality score combining relevance + recency
+- Configurable decay curve (APEX_MEMORY_HALF_LIFE_DAYS)
+- Quality score combining relevance + recency + frequency boost
+- Configurable mmr_lambda via APEX_MEMORY_MMR_LAMBDA
 
 ## Phase 3: LLM Provider Abstraction
 

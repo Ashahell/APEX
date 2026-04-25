@@ -252,22 +252,23 @@ async fn search_memory(
     // Compute vector similarity ranks
     let mut vec_scores: Vec<(String, f64, Vec<f32>)> = Vec::new();
     let mut bm25_scores: Vec<(String, usize)> = Vec::new();
-    let mut chunk_data: std::collections::HashMap<String, (String, String, String)> = std::collections::HashMap::new();
+    let mut chunk_data: std::collections::HashMap<String, (String, String, String, f64, i64)> = std::collections::HashMap::new();
     
     let query_lower = query.q.to_lowercase();
+    let half_life_days = state.config.memory.half_life_days;
     
     for row in rows {
         let (chunk_id, file_path, content, memory_type, embedding_json, access_age_days, access_count) = row;
         
         // Store chunk data
-        chunk_data.insert(chunk_id.clone(), (file_path.clone(), content.clone(), memory_type.clone()));
+        chunk_data.insert(chunk_id.clone(), (file_path.clone(), content.clone(), memory_type.clone(), access_age_days, access_count));
         
         // Vector similarity
         if let Some(emb_json) = embedding_json {
             if let Ok(embedding) = serde_json::from_str::<Vec<f32>>(&emb_json) {
                 let sim = cosine_similarity_f32(&query_embedding, &embedding);
-                // Apply temporal decay (half-life: 30 days)
-                let decay = (access_age_days / 30.0).max(0.0);
+                // Apply temporal decay (configurable half-life)
+                let decay = (access_age_days / half_life_days).max(0.0);
                 let temporal_score = sim * 2.0_f64.powf(-decay);
                 // Apply frequency boost
                 let freq_boost = frequency_boost(access_count as u64);
@@ -296,20 +297,26 @@ async fn search_memory(
     let fused = reciprocal_rank_fusion(&vec_ranks, &bm25_ranks, rrf_k);
     
     // Build final results with MMR for diversity
-    let lambda = 0.7;
+    let lambda = state.config.memory.mmr_lambda;
+    let half_life_days = state.config.memory.half_life_days;
     let _mmr_selected = mmr_select(&vec_scores, &query_embedding, limit, lambda);
     
     let search_results: Vec<MemorySearchResult> = fused.iter()
         .take(limit)
         .map(|(chunk_id, score)| {
-            let (file_path, content, memory_type) = chunk_data.get(chunk_id)
+            let (file_path, content, memory_type, access_age_days, access_count) = chunk_data.get(chunk_id)
                 .cloned()
-                .unwrap_or_else(|| (chunk_id.clone(), String::new(), "unknown".to_string()));
+                .unwrap_or_else(|| (chunk_id.clone(), String::new(), "unknown".to_string(), 0.0, 0));
+            
+            // Apply temporal decay
+            let decay = (access_age_days / half_life_days).max(0.0);
+            let temporal_score = score * 2.0_f64.powf(-decay) * (1.0 + (access_count as f64).ln().max(1.0));
+            
             MemorySearchResult {
                 chunk_id: chunk_id.clone(),
                 file_path,
                 content: content.chars().take(500).collect(),
-                score: *score,
+                score: temporal_score,
                 memory_type,
             }
         })
