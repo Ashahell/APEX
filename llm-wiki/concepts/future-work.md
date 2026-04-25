@@ -26,11 +26,12 @@
 **Goal:** Improve memory integrity and search quality  
 **Risk:** Medium | **Effort:** ~3-4 weeks
 
-### 2.1 Memory Integrity Verification
-- Hash store table with chunk/vector hashes
+### 2.1 Memory Integrity Verification ✅ Complete
+- Hash store table with chunk/vector hashes (migration 027)
 - Integrity check on startup (SHA-256 sidecar)
 - Repair option for flagged chunks
-- API: `GET /api/v1/memory/integrity`
+- API: `GET /api/v1/memory/integrity` (+ 5 more endpoints)
+- 11 tests: 5 unit + 6 integration
 
 ### 2.2 Enhanced Session Search
 - Auto-summary on session end (>50 messages)

@@ -102,6 +102,7 @@ APEX is **more secure than both** by design:
 - **Security Tests** ✅ Complete - Added 57 security tests (input validation, audit chain, permission tiers)
 - **SystemComponent Trait** ✅ Complete - Unified lifecycle management for all components
 - **Hermes Tests** ✅ Complete - Added 30 new tests for Hermes features (bounded_memory, session_search, skill_manager)
+- **Memory Integrity (Phase 2.1)** ✅ Complete - SHA-256 hash sidecar for vector index integrity checking and repair
 
 ### v0.3.1 OpenClaw Integration
 - **Death Spiral Detection** - ✅ Complete (FileCreationBurst, ToolCallLoop, NoSideEffects patterns)
