@@ -98,6 +98,7 @@ async fn create_task(
                     permission_tier: tier_str.clone(),
                     use_tir: payload.use_tir.unwrap_or(false),
                     enable_subagents: payload.enable_subagents.unwrap_or(true),
+                    model: None,
                 });
 
             state.metrics.record_task(&tier_str, "running").await;

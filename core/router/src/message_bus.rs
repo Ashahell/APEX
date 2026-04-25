@@ -36,6 +36,7 @@ pub struct DeepTaskMessage {
     pub permission_tier: String,
     pub use_tir: bool,
     pub enable_subagents: bool,
+    pub model: Option<String>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -221,6 +222,7 @@ mod tests {
             permission_tier: "T2".to_string(),
             use_tir: false,
             enable_subagents: true,
+            model: None,
         });
         
         let received = receiver.recv().await.unwrap();

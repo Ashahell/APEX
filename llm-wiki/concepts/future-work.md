@@ -60,11 +60,10 @@
 - Direct LLM execution when priority: "fast"
 - Set via API: `priority: "fast"` or keyboard shortcut hint (Ctrl+Shift+F)
 
-### 3.3 Multi-Model Routing
-- Task priority: Low, Normal, High, Fast
-- Smaller model for Fast Mode
-- Skip skill worker for immediate execution
-- Keyboard shortcut: Ctrl+Shift+F
+### 3.3 Multi-Model Routing ✅ Complete
+- Per-task model selection via `model` field
+- DeepTaskMessage now carries model preference
+- API: POST /api/v1/deep with `model: "qwen3-4b"`
 
 ### 3.3 Multi-Model Routing
 - Per-task model assignment (primary, auxiliary)

@@ -38,6 +38,9 @@ impl T3ConfirmationWorker {
                                 skill_name: skill_name.clone(),
                                 input: serde_json::Value::Null,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         } else {
                             message_bus.publish_deep_task(DeepTaskMessage {
@@ -47,6 +50,9 @@ impl T3ConfirmationWorker {
                                 budget_usd: 1.0,
                                 time_limit_secs: None,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         }
                     } else if message.confirmed {
@@ -56,6 +62,9 @@ impl T3ConfirmationWorker {
                                 skill_name: skill_name.clone(),
                                 input: serde_json::Value::Null,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         } else {
                             message_bus.publish_deep_task(DeepTaskMessage {
@@ -65,6 +74,9 @@ impl T3ConfirmationWorker {
                                 budget_usd: 1.0,
                                 time_limit_secs: None,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         }
                     }
@@ -125,6 +137,9 @@ impl T3ConfirmationWorker {
                                 skill_name: skill_name.clone(),
                                 input: serde_json::Value::Null,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         } else {
                             message_bus.publish_deep_task(DeepTaskMessage {
@@ -134,6 +149,9 @@ impl T3ConfirmationWorker {
                                 budget_usd: 1.0,
                                 time_limit_secs: None,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         }
                     } else if message.confirmed {
@@ -143,6 +161,9 @@ impl T3ConfirmationWorker {
                                 skill_name: skill_name.clone(),
                                 input: serde_json::Value::Null,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         } else {
                             message_bus.publish_deep_task(DeepTaskMessage {
@@ -152,6 +173,9 @@ impl T3ConfirmationWorker {
                                 budget_usd: 1.0,
                                 time_limit_secs: None,
                                 permission_tier: message.tier.clone(),
+                                use_tir: false,
+                                enable_subagents: true,
+                                model: None,
                             });
                         }
                     }
