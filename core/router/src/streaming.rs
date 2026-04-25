@@ -61,11 +61,22 @@ pub struct StreamAuthQuery {
 #[derive(Debug, thiserror::Error)]
 pub enum StreamingError {
     #[error("Streaming is disabled")] StreamingDisabled,
+    #[error("Stream not found: {0}")] StreamNotFound(String),
+    #[error("Authentication required")] AuthRequired,
+    #[error("Replay detected: {0}")] ReplayDetected(String),
+    #[error("Internal error: {0}")] Internal(String),
 }
 
 impl axum::response::IntoResponse for StreamingError {
     fn into_response(self) -> axum::response::Response {
         (axum::http::StatusCode::FORBIDDEN, self.to_string()).into_response()
+    }
+}
+
+impl StreamingError {
+    pub fn to_sse_event(&self) -> axum::response::sse::Event {
+        axum::response::sse::Event::default()
+            .data(self.to_string())
     }
 }
 

@@ -326,7 +326,7 @@ mod tests {
 
     #[test]
     fn test_assemble_prompt() {
-        let persona = Persona::new("Test".to_string());
+        let mut persona = Persona::new("Test".to_string());
         persona.prompt_pieces.push(PromptPiece::new(
             PromptPieceType::Location,
             "You are in New York.".to_string(),
