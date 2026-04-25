@@ -22,7 +22,8 @@ impl TtlCleanup {
             let deleted = match config.entity_type.as_str() {
                 "tasks" => self.delete_old_tasks(config.retention_days).await?,
                 "messages" => self.delete_old_messages(config.retention_days).await?,
-                "audit_log" => self.delete_old_audit_logs(config.retention_days).await?,
+                // FIXED: Archive instead of delete to preserve hash chain
+                "audit_log" => self.archive_old_audit_logs(config.retention_days).await?,
                 "vector_store" => self.delete_old_vector_store(config.retention_days).await?,
                 _ => 0,
             };
@@ -73,16 +74,56 @@ impl TtlCleanup {
         Ok(result.rows_affected() as i64)
     }
 
-    async fn delete_old_audit_logs(&self, days: i32) -> Result<i64, String> {
-        let result = sqlx::query(
-            "DELETE FROM audit_log WHERE timestamp < datetime('now', ?)"
-        )
-        .bind(format!("-{} days", days))
+    async fn archive_old_audit_logs(&self, days: i32) -> Result<i64, String> {
+        // Get entries to archive (batch of 1000)
+        let entries: Vec<(i64, String, String, String, String, String, String, Option<String>)> = 
+            sqlx::query_as(
+                "SELECT id, prev_hash, hash, timestamp, action, entity_type, entity_id, details 
+                 FROM audit_log WHERE timestamp < datetime('now', ?) LIMIT 1000"
+            )
+            .bind(format!("-{} days", days))
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to fetch audit logs to archive: {}", e))?;
+
+        if entries.is_empty() {
+            return Ok(0);
+        }
+
+        // Archive each entry
+        for entry in &entries {
+            sqlx::query(
+                "INSERT INTO audit_archive (id, prev_hash, hash, timestamp, action, entity_type, entity_id, details, archived_at)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))"
+            )
+            .bind(entry.0)
+            .bind(&entry.1)
+            .bind(&entry.2)
+            .bind(&entry.3)
+            .bind(&entry.4)
+            .bind(&entry.5)
+            .bind(&entry.6)
+            .bind(&entry.7)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| format!("Failed to archive audit log: {}", e))?;
+        }
+
+        // Delete archived entries from audit_log
+        let ids: Vec<i64> = entries.iter().map(|e| e.0).collect();
+        let placeholders: String = ids.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        
+        sqlx::query(&format!(
+            "DELETE FROM audit_log WHERE id IN ({})",
+            placeholders
+        ))
         .execute(&self.pool)
         .await
-        .map_err(|e| format!("Failed to delete old audit logs: {}", e))?;
+        .map_err(|e| format!("Failed to delete archived audit logs: {}", e))?;
 
-        Ok(result.rows_affected() as i64)
+        tracing::info!("Archived {} audit log entries", entries.len());
+        
+        Ok(entries.len() as i64)
     }
 
     async fn delete_old_vector_store(&self, days: i32) -> Result<i64, String> {

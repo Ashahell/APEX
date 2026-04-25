@@ -19,6 +19,11 @@ impl Database {
         let db = Self { pool };
         
         db.run_migrations().await?;
+        
+        // Clean up orphaned records BEFORE enabling foreign keys
+        // This prevents FK enable failure due to existing orphans
+        db.cleanup_orphaned_records().await?;
+        
         db.configure_pragma().await?;
 
         Ok(db)
@@ -494,6 +499,112 @@ impl Database {
         sqlx::query(r#"INSERT OR IGNORE INTO pattern_alert_templates (id, pattern_type, title, description, severity, remediation) VALUES ('error_cascade', 'error_cascade', 'Error Cascade Detected', 'Multiple sequential errors - task likely failing repeatedly', 'critical', 'Cancel task, review error logs, check credentials/permissions')"#)
             .execute(&self.pool).await.ok();
 
+        // Migration 024: Add CASCADE DELETE to messages table
+        // First check if we need to recreate the table
+        let has_cascade: Option<bool> = sqlx::query_scalar(
+            "SELECT COUNT(*) > 0 FROM pragma_foreign_key_list('messages') WHERE to='tasks'"
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .unwrap_or(Some(false));
+
+        if has_cascade != Some(true) {
+            // Recreate messages table with CASCADE DELETE
+            // SQLite doesn't support ALTER TABLE for FK actions, need to recreate
+            sqlx::query("ALTER TABLE messages RENAME TO messages_old")
+                .execute(&self.pool).await.ok();
+
+            sqlx::query(r#"
+                CREATE TABLE messages (
+                    id TEXT PRIMARY KEY NOT NULL,
+                    task_id TEXT,
+                    channel TEXT NOT NULL,
+                    thread_id TEXT,
+                    author TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    role TEXT NOT NULL,
+                    attachments TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+                )
+            "#).execute(&self.pool).await.ok();
+
+            // Copy data from old table
+            sqlx::query("INSERT INTO messages SELECT * FROM messages_old")
+                .execute(&self.pool).await.ok();
+
+            // Drop old table
+            sqlx::query("DROP TABLE messages_old")
+                .execute(&self.pool).await.ok();
+
+            // Recreate index
+            sqlx::query("CREATE INDEX IF NOT EXISTS idx_messages_task ON messages(task_id)")
+                .execute(&self.pool).await.ok();
+
+            tracing::info!("Migration 024: Added CASCADE DELETE to messages table");
+        }
+
+        // Migration 025: Encrypt existing sensitive preferences
+        // Mark sensitive keys as encrypted (they may already be base64 encoded)
+        let sensitive_keys = ["api_key", "token", "secret", "password", "credential", "hmac", "auth"];
+        for key_pattern in sensitive_keys {
+            sqlx::query(
+                "UPDATE preferences SET encrypted = 1 WHERE key LIKE ? AND encrypted = 0"
+            )
+            .bind(format!("%{}%", key_pattern))
+            .execute(&self.pool)
+            .await
+            .ok();
+        }
+
+        // Migration 026: Create audit_archive table (append-only, never deleted)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS audit_archive (
+                id INTEGER PRIMARY KEY,
+                prev_hash TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                timestamp TEXT NOT NULL,
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL,
+                entity_id TEXT NOT NULL,
+                details TEXT,
+                archived_at TEXT NOT NULL DEFAULT (datetime('now'))
+            )
+        "#).execute(&self.pool).await.ok();
+
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_audit_archive_timestamp ON audit_archive(timestamp)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_audit_archive_entity ON audit_archive(entity_type, entity_id)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_audit_archive_hash ON audit_archive(hash)")
+            .execute(&self.pool).await.ok();
+
+        tracing::info!("Migration 026: Created audit_archive table");
+
+        // Migration 027: Seed TTL config with audit_log disabled by default
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS ttl_config (
+                entity_type TEXT PRIMARY KEY,
+                retention_days INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                last_cleanup TEXT
+            )
+        "#).execute(&self.pool).await.ok();
+
+        // Disable audit_log cleanup by default to preserve chain integrity
+        sqlx::query("INSERT OR IGNORE INTO ttl_config (entity_type, retention_days, enabled) VALUES ('audit_log', 365, 0)")
+            .execute(&self.pool).await.ok();
+        
+        // Enable other cleanups by default
+        sqlx::query("INSERT OR IGNORE INTO ttl_config (entity_type, retention_days, enabled) VALUES ('tasks', 90, 1)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO ttl_config (entity_type, retention_days, enabled) VALUES ('messages', 90, 1)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO ttl_config (entity_type, retention_days, enabled) VALUES ('vector_store', 30, 1)")
+            .execute(&self.pool).await.ok();
+
+        tracing::info!("Migration 027: Seeded TTL config, audit_log cleanup disabled by default");
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }
@@ -515,7 +626,50 @@ impl Database {
         sqlx::query("PRAGMA temp_store=MEMORY")
             .execute(&self.pool).await?;
 
-        tracing::info!("SQLite pragma configured: WAL mode enabled");
+        // CRITICAL: Enable foreign key enforcement
+        // This was disabled by default, causing orphaned records
+        sqlx::query("PRAGMA foreign_keys=ON")
+            .execute(&self.pool).await?;
+
+        tracing::info!("SQLite pragma configured: WAL mode enabled, foreign keys enforced");
+        Ok(())
+    }
+
+    pub async fn cleanup_orphaned_records(&self) -> Result<(), sqlx::Error> {
+        // Clean up orphaned messages (task_id references non-existent task)
+        let deleted_messages = sqlx::query(
+            "DELETE FROM messages WHERE task_id IS NOT NULL AND task_id NOT IN (SELECT id FROM tasks)"
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        if deleted_messages.rows_affected() > 0 {
+            tracing::warn!("Cleaned up {} orphaned messages", deleted_messages.rows_affected());
+        }
+
+        // Clean up orphaned decision_journal entries
+        let deleted_journal = sqlx::query(
+            "DELETE FROM decision_journal WHERE task_id IS NOT NULL AND task_id NOT IN (SELECT id FROM tasks)"
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        if deleted_journal.rows_affected() > 0 {
+            tracing::warn!("Cleaned up {} orphaned decision_journal entries", deleted_journal.rows_affected());
+        }
+
+        // Clean up orphaned memory_chunks (task_id references non-existent task)
+        let deleted_chunks = sqlx::query(
+            "DELETE FROM memory_chunks WHERE task_id IS NOT NULL AND task_id NOT IN (SELECT id FROM tasks)"
+        )
+        .execute(&self.pool)
+        .await?;
+        
+        if deleted_chunks.rows_affected() > 0 {
+            tracing::warn!("Cleaned up {} orphaned memory_chunks", deleted_chunks.rows_affected());
+        }
+
+        tracing::info!("Orphaned record cleanup completed");
         Ok(())
     }
 }

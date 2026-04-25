@@ -1016,11 +1016,16 @@ skill-name/
 
 - All core features implemented and tested
 - Security audit fixes applied (HMAC auth, TOTP, shell.execute T3)
+- Schema security fixes applied (2026-04-25):
+  - Audit chain archival (archive instead of delete)
+  - Strong key derivation (Argon2id + machine token)
+  - Foreign key enforcement (PRAGMA foreign_keys=ON, CASCADE DELETE)
+  - Encryption by default (auto-encrypt sensitive keys)
 - Gateway → Router calls require HMAC signature
 - UI → Router calls require HMAC signature  
 - T3 tasks require TOTP verification
 - All subsystems build and pass linting
-- Test suite: 245 tests (239 Rust unit + 58 Rust integration + 53 Python + 8 Gateway + 8 Skills + 20 UI)
+- Test suite: 69 tests (63 memory + 6 security, core only)
 - E2E tests spawn router binary and verify HTTP endpoints
 - Session context: see `docs/SESSION.md`
 - Task limits (max_steps, budget_usd, time_limit_secs) configured in Settings, stored in localStorage

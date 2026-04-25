@@ -11,6 +11,7 @@ use rand::Rng;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use thiserror::Error;
+use tracing;
 
 /// Errors for secret storage
 #[derive(Error, Debug)]
@@ -65,40 +66,97 @@ impl SecretStore {
         Ok(store)
     }
 
-    /// Derive a key from machine-specific values
+    /// Derive a key from machine-specific values using Argon2id
     fn derive_machine_key() -> [u8; 32] {
-        use std::collections::hash_map::DefaultHasher;
-        use std::hash::{Hash, Hasher};
-
-        // Gather machine-specific data
-        let mut hasher = DefaultHasher::new();
-
-        // hostname
-        if let Ok(hostname) = std::env::var("COMPUTERNAME") {
-            hostname.hash(&mut hasher);
-        } else if let Ok(hostname) = std::env::var("HOSTNAME") {
-            hostname.hash(&mut hasher);
-        }
-
-        // username
-        if let Ok(username) = std::env::var("USERNAME") {
-            username.hash(&mut hasher);
-        }
-
-        // Platform
-        std::env::consts::OS.hash(&mut hasher);
-        std::env::consts::ARCH.hash(&mut hasher);
-
-        let hash = hasher.finish();
-
-        // Expand to 32 bytes
+        use argon2::{password_hash::SaltString, Argon2, PasswordHasher};
+        
+        // Get machine unique ID (includes random token for entropy)
+        let machine_id = Self::get_machine_unique_id();
+        
+        // Generate random salt
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        
+        // Derive key using Argon2id
+        let argon2 = Argon2::default();
+        let hash = argon2
+            .hash_password(machine_id.as_bytes(), &salt)
+            .expect("Argon2 hash failed");
+        
+        // Extract first 32 bytes
         let mut key = [0u8; 32];
-        key[..8].copy_from_slice(&hash.to_le_bytes());
-        key[8..16].copy_from_slice(&hash.to_be_bytes());
-        key[16..24].copy_from_slice(&hash.to_le_bytes());
-        key[24..32].copy_from_slice(&hash.to_be_bytes());
-
+        let hash_bytes = hash.hash.unwrap();
+        key.copy_from_slice(&hash_bytes.as_bytes()[..32]);
+        
         key
+    }
+
+    /// Get machine unique ID - combines hostname, username, platform, and a persistent random token
+    fn get_machine_unique_id() -> String {
+        let mut components = Vec::new();
+        
+        // Hostname
+        if let Ok(h) = std::env::var("COMPUTERNAME").or_else(|_| std::env::var("HOSTNAME")) {
+            components.push(h);
+        }
+        
+        // Username
+        if let Ok(u) = std::env::var("USERNAME").or_else(|_| std::env::var("USER")) {
+            components.push(u);
+        }
+        
+        // Platform details
+        components.push(std::env::consts::OS.to_string());
+        components.push(std::env::consts::ARCH.to_string());
+        
+        // CRITICAL: Add random token - this is the entropy that makes the key non-reversible
+        let token = Self::get_or_create_machine_token();
+        components.push(token);
+        
+        components.join("|")
+    }
+
+    /// Get or create persistent random machine token
+    fn get_or_create_machine_token() -> String {
+        let token_path = dirs::data_local_dir()
+            .unwrap_or_else(|| PathBuf::from("."))
+            .join("apex")
+            .join(".machine_token");
+        
+        if let Ok(token) = std::fs::read_to_string(&token_path) {
+            if !token.is_empty() {
+                return token;
+            }
+        }
+        
+        // Generate new token (64 characters of random data)
+        let token: String = (0..64)
+            .map(|_| {
+                let idx = rand::random::<usize>() % 62;
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                    .chars()
+                    .nth(idx)
+                    .unwrap()
+            })
+            .collect();
+        
+        // Ensure directory exists
+        if let Some(parent) = token_path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        
+        // Write with restrictive permissions
+        let _ = std::fs::write(&token_path, &token);
+        
+        // Set file permissions to read-only (owner only)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&token_path, std::fs::Permissions::from_mode(0o600));
+        }
+        
+        tracing::info!("Generated new machine token at {:?}", token_path);
+        
+        token
     }
 
     /// Get the store file path
@@ -221,7 +279,6 @@ impl SecretStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use tempfile::TempDir;
 
     fn temp_store() -> (SecretStore, TempDir) {

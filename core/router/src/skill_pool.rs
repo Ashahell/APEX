@@ -338,7 +338,7 @@ impl SystemComponent for SkillPool {
         
         // Drop the sender to signal workers to stop
         // This will cause the receiver to return None
-        std::mem::drop(&self.free_tx);
+        drop(self.free_tx.clone());
         
         self.state.store(ComponentState::Stopped as u8, Ordering::SeqCst);
         info!("SkillPool stopped");

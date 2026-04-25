@@ -1,6 +1,6 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
-use sqlx::{Row, SqlitePool};
+use sqlx::SqlitePool;
 
 /// Dashboard layout configuration
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

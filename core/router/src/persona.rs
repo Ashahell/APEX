@@ -147,7 +147,7 @@ impl Persona {
 
     /// Assemble the full system prompt from pieces
     pub fn assemble_prompt(&self) -> String {
-        let mut parts: Vec<String> = self
+        let parts: Vec<String> = self
             .prompt_pieces
             .iter()
             .filter(|p| p.enabled)
@@ -314,19 +314,19 @@ mod tests {
 
     #[test]
     fn test_persona_validate_empty_name() {
-        let mut persona = Persona::new("".to_string());
+        let persona = Persona::new("".to_string());
         assert!(persona.validate().is_err());
     }
 
     #[test]
     fn test_persona_validate_name_too_long() {
-        let mut persona = Persona::new("a".repeat(MAX_NAME_LENGTH + 1));
+        let persona = Persona::new("a".repeat(MAX_NAME_LENGTH + 1));
         assert!(persona.validate().is_err());
     }
 
     #[test]
     fn test_assemble_prompt() {
-        let mut persona = Persona::new("Test".to_string());
+        let persona = Persona::new("Test".to_string());
         persona.prompt_pieces.push(PromptPiece::new(
             PromptPieceType::Location,
             "You are in New York.".to_string(),

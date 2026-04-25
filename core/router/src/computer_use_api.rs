@@ -141,7 +141,7 @@ async fn execute(Json(payload): Json<ExecuteRequest>) -> Json<ExecuteResponse> {
     let status = match &res {
         Ok(r) => {
             // Store a minimal record
-        let mut store = STORE.get_or_init(|| Mutex::new(HashMap::new()));
+            let store = STORE.get_or_init(|| Mutex::new(HashMap::new()));
             let entry = ComputerUseTask {
                 id: task_id.clone(),
                 task: payload.task.clone(),
@@ -157,7 +157,7 @@ async fn execute(Json(payload): Json<ExecuteRequest>) -> Json<ExecuteResponse> {
         }
         Err(_e) => {
             // store as failed
-            let mut store = STORE.get_or_init(|| Mutex::new(HashMap::new()));
+        let store = STORE.get_or_init(|| Mutex::new(HashMap::new()));
             let entry = ComputerUseTask {
                 id: task_id.clone(),
                 task: payload.task.clone(),

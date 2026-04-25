@@ -17,7 +17,7 @@ struct SimpleSseStream {
 impl Stream for SimpleSseStream {
     type Item = SSEItem;
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let this = unsafe { &mut *(&self as *const _ as *mut Self) };
+        let this = self.get_mut();
         if this.items.is_empty() {
             return Poll::Ready(None);
         }
@@ -35,7 +35,7 @@ impl Unpin for TinySseStream {}
 impl Stream for TinySseStream {
     type Item = SSEItem;
     fn poll_next(self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let me = unsafe { &mut *(&self as *const _ as *mut Self) };
+        let me = self.get_mut();
         if me.items.is_empty() {
             return Poll::Ready(None);
         }
@@ -45,16 +45,16 @@ impl Stream for TinySseStream {
 use serde::Deserialize;
 use tokio::sync::mpsc;
 use tokio_stream::wrappers::ReceiverStream;
+use futures_util::StreamExt;
 
 // Public surface: types relocated to streaming_types.rs
 pub use crate::streaming_types::{StreamingMetrics, StreamingStats, EventCounts, ErrorCounts};
 
 use crate::api::AppState;
 use crate::execution_stream::ExecutionEvent;
-use std::pin::Pin;
 
 #[derive(Debug, Deserialize)]
-struct StreamAuthQuery {
+pub struct StreamAuthQuery {
     // Placeholder for future auth surface
 }
 
@@ -127,7 +127,8 @@ fn feed_events_via_channel(task_id: String) -> DynEventStream {
         let _ = tx.send(e2).await;
         let _ = tx.send(e3).await;
     });
-    Box::new(ReceiverStream::new(rx))
+    let stream = ReceiverStream::new(rx).map(Ok::<_, axum::Error>);
+    Box::new(stream)
 }
 
 pub async fn stream_mcp(

@@ -62,7 +62,13 @@ async fn set_setting(
     Path(key): Path<String>,
     Json(req): Json<SetSettingRequest>,
 ) -> Result<Json<SettingResponse>, String> {
-    let encrypt = req.encrypt.unwrap_or(false);
+    // Auto-encrypt sensitive keys by default (api_key, token, secret, password, etc.)
+    let sensitive_patterns = ["api_key", "token", "secret", "password", "credential", "hmac", "auth"];
+    let key_lower = key.to_lowercase();
+    let is_sensitive = sensitive_patterns.iter().any(|p| key_lower.contains(p));
+    
+    // Use provided value, or default to encrypt for sensitive keys
+    let encrypt = req.encrypt.unwrap_or(is_sensitive);
     
     state.preferences_repo
         .set(&key, &req.value, encrypt)
