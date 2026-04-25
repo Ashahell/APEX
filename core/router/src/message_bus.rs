@@ -8,6 +8,7 @@ pub struct MessageBus {
     deep_task_sender: broadcast::Sender<DeepTaskMessage>,
     confirmation_sender: broadcast::Sender<ConfirmationMessage>,
     mcp_sender: broadcast::Sender<McpMessage>,
+    steer_sender: broadcast::Sender<SteerMessage>,
 }
 
 #[derive(Clone, Debug)]
@@ -47,6 +48,12 @@ pub struct ConfirmationMessage {
     pub skill_name: Option<String>,
     pub confirmed: bool,
     pub permission_tier: String,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SteerMessage {
+    pub task_id: String,
+    pub direction: String,
 }
 
 /// MCP event message for real-time updates
@@ -110,12 +117,14 @@ impl MessageBus {
         let (deep_task_sender, _) = broadcast::channel(capacity);
         let (confirmation_sender, _) = broadcast::channel(capacity);
         let (mcp_sender, _) = broadcast::channel(capacity);
+        let (steer_sender, _) = broadcast::channel(capacity);
         Self {
             sender,
             skill_sender,
             deep_task_sender,
             confirmation_sender,
             mcp_sender,
+            steer_sender,
         }
     }
 
@@ -157,6 +166,14 @@ impl MessageBus {
 
     pub fn subscribe_mcp(&self) -> broadcast::Receiver<McpMessage> {
         self.mcp_sender.subscribe()
+    }
+    
+    pub fn publish_steer(&self, message: SteerMessage) {
+        let _ = self.steer_sender.send(message);
+    }
+    
+    pub fn subscribe_steer(&self) -> broadcast::Receiver<SteerMessage> {
+        self.steer_sender.subscribe()
     }
 }
 

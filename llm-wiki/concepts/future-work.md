@@ -75,10 +75,10 @@
 **Goal:** Enable advanced agent capabilities  
 **Risk:** High | **Effort:** ~6-8 weeks
 
-### 4.1 Mid-Run Agent Nudges (/steer)
-- Inject guidance without breaking cache
-- `POST /api/v1/tasks/:id/steer`
-- Show steer history in ProcessGroup
+### 4.1 Mid-Run Agent Nudges (/steer) ✅ Complete
+- `POST /api/v1/tasks/:id/steer` endpoint
+- SteerMessage in message_bus
+- Use: `curl -X POST .../tasks/{id}/steer -d '{"direction": "focus on X"}'`
 
 ### 4.2 Subagent Pool Execution
 - Decompose task via LLM

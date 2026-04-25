@@ -3,6 +3,7 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
+use serde::Deserialize;
 use ulid::Ulid;
 
 use crate::apex_security::capability::{CapabilityToken, PermissionTier};
@@ -21,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/tasks/:id", get(get_task).put(update_task))
         .route("/api/v1/tasks/:id/cancel", post(cancel_task))
         .route("/api/v1/tasks/:id/confirm", post(confirm_task))
+        .route("/api/v1/tasks/:id/steer", post(steer_task))
 }
 
 async fn create_task(
@@ -297,7 +299,40 @@ async fn get_filter_options(State(state): State<AppState>) -> Json<serde_json::V
     Json(serde_json::json!({
         "projects": projects,
         "categories": categories,
-        "priorities": ["low", "medium", "high", "urgent"],
+        "priorities": ["low", "medium", "high", "urgent", "fast"],
         "statuses": ["pending", "running", "completed", "failed", "cancelled"],
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SteerRequest {
+    pub direction: String,
+}
+
+async fn steer_task(
+    State(state): State<AppState>,
+    axum::extract::Path(task_id): axum::extract::Path<String>,
+    Json(payload): Json<SteerRequest>,
+) -> Result<Json<serde_json::Value>, String> {
+    let repo = TaskRepository::new(&state.pool);
+    
+    let task = repo.find_by_id(&task_id)
+        .await
+        .map_err(|_| "Task not found")?;
+    
+    if task.status != "running" {
+        return Err("Task not running".to_string());
+    }
+    
+    tracing::info!(task_id = %task_id, direction = %payload.direction, "Steering task");
+    
+    state.message_bus.publish_steer(crate::message_bus::SteerMessage {
+        task_id: task_id.clone(),
+        direction: payload.direction,
+    });
+    
+    Ok(Json(serde_json::json!({
+        "success": true,
+        "task_id": task_id,
+    })))
 }
