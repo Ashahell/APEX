@@ -1,0 +1,49 @@
+{
+  "communities": {
+    "0": [
+      "streaming_tinysse_tests_hands_tinysse_three_events",
+      "streaming_tinysse_tests_mcp_tinysse_three_events",
+      "streaming_tinysse_tests_rs",
+      "streaming_tinysse_tests_task_tinysse_three_events",
+      "streaming_tinysse_tests_tinyssetest_new"
+    ],
+    "1": [
+      "streaming_tinysse_tests_tinyssetest",
+      "streaming_tinysse_tests_tinyssetest_poll"
+    ]
+  },
+  "cohesion": {
+    "0": 0.6,
+    "1": 1.0
+  },
+  "gods": [
+    {
+      "id": "streaming_tinysse_tests_tinyssetest",
+      "label": "TinySseTest",
+      "degree": 3
+    },
+    {
+      "id": "streaming_tinysse_tests_hands_tinysse_three_events",
+      "label": "hands_tinysse_three_events()",
+      "degree": 2
+    },
+    {
+      "id": "streaming_tinysse_tests_mcp_tinysse_three_events",
+      "label": "mcp_tinysse_three_events()",
+      "degree": 2
+    },
+    {
+      "id": "streaming_tinysse_tests_task_tinysse_three_events",
+      "label": "task_tinysse_three_events()",
+      "degree": 2
+    }
+  ],
+  "surprises": [],
+  "questions": [
+    {
+      "type": "bridge_node",
+      "question": "Why does `TinySseTest` connect `Community 1` to `Community 0`?",
+      "why": "High betweenness centrality (0.350) - this node is a cross-community bridge."
+    }
+  ]
+}
