@@ -1003,3 +1003,217 @@ POST /api/v1/governance/oracle
   "enable": true
 }
 ```
+
+---
+
+## Hermes Features (v1.5.0)
+
+### Bounded Memory
+
+```
+GET /api/v1/memory/bounded/stats
+```
+
+Get bounded memory statistics (agent/user character counts).
+
+**Response:**
+```json
+{
+  "agent": {"used": 2200, "limit": 2200, "entries": 15},
+  "user": {"used": 1375, "limit": 1375, "entries": 8}
+}
+```
+
+```
+GET /api/v1/memory/bounded/snapshot
+```
+
+Get frozen snapshot for system prompt (past tense, consolidated).
+
+```
+GET /api/v1/memory/bounded/memory
+POST /api/v1/memory/bounded/memory
+PUT /api/v1/memory/bounded/memory/:old_text
+DELETE /api/v1/memory/bounded/memory
+```
+
+Agent memory entries (MEMORY.md).
+
+```
+GET /api/v1/memory/bounded/user
+POST /api/v1/memory/bounded/user
+PUT /api/v1/memory/bounded/user/:old_text
+DELETE /api/v1/memory/bounded/user
+```
+
+User profile entries (USER.md).
+
+### Auto-Created Skills
+
+```
+GET /api/v1/skills/auto-created
+POST /api/v1/skills/auto-created
+GET /api/v1/skills/auto-created/:name
+PUT /api/v1/skills/auto-created/:name
+DELETE /api/v1/skills/auto-created/:name
+GET /api/v1/skills/auto-created/search?q=query
+GET /api/v1/skills/suggestions/:task_id
+DELETE /api/v1/skills/suggestions/:task_id
+```
+
+Hermes-style agent-managed skills.
+
+### Session Search
+
+```
+GET /api/v1/search/sessions?q=query&limit=10&include_context=true
+GET /api/v1/search/sessions/stats
+POST /api/v1/search/reindex
+```
+
+FTS5-based session search with BM25 ranking.
+
+### User Profile
+
+```
+GET /api/v1/user/profile
+PUT /api/v1/user/profile
+GET /api/v1/user/profile/system-prompt
+```
+
+Communication style, verbosity, response format preferences.
+
+### Skills Hub
+
+```
+GET /api/v1/hub/status
+GET /api/v1/hub/skills
+GET /api/v1/hub/skills/:id
+```
+
+Marketplace skills with trust levels.
+
+---
+
+## v1.6.0 Sapphire Features
+
+### Story Engine
+
+```
+GET /stories
+POST /stories
+GET /stories/:id
+DELETE /stories/:id
+POST /stories/:id/choice
+POST /stories/:id/advance
+GET /stories/:id/inventory
+POST /stories/:id/inventory
+```
+
+Interactive fiction with choices and dice rolls.
+
+### Persona Assembly
+
+```
+GET /personas
+POST /personas
+GET /personas/:id
+PUT /personas/:id
+DELETE /personas/:id
+POST /personas/:id/activate
+```
+
+Configurable agent persona with voice/model configs.
+
+### Continuity Scheduler
+
+```
+GET /api/v1/continuity/tasks
+POST /api/v1/continuity/tasks
+GET /api/v1/continuity/tasks/:id
+PUT /api/v1/continuity/tasks/:id
+DELETE /api/v1/continuity/tasks/:id
+```
+
+Cron-based recurring tasks.
+
+### Privacy Guard
+
+```
+GET /api/v1/privacy/config
+PUT /api/v1/privacy/config
+```
+
+Data retention and PII filtering.
+
+### Context Scope
+
+```
+GET /api/v1/context/scope
+PUT /api/v1/context/scope
+GET /api/v1/context/session/:session_id
+PUT /api/v1/context/session/:session_id
+```
+
+Session-level context isolation.
+
+---
+
+## v1.4.0 OpenClaw Features
+
+### Execution Patterns (Death Spiral Detection)
+
+```
+GET /api/v1/patterns
+GET /api/v1/patterns/task/:task_id
+GET /api/v1/patterns/type/:pattern_type
+GET /api/v1/patterns/severity/:severity
+GET /api/v1/patterns/stats
+DELETE /api/v1/patterns/task/:task_id
+GET /api/v1/patterns/templates
+```
+
+Anomaly detection for tool loops, file bursts.
+
+### Dynamic Tools
+
+```
+GET /api/v1/dynamic-tools
+POST /api/v1/dynamic-tools
+GET /api/v1/dynamic-tools/:name
+DELETE /api/v1/dynamic-tools/:name
+POST /api/v1/dynamic-tools/:name/execute
+```
+
+Runtime-generated Python tools.
+
+### Secrets Expansion
+
+```
+GET /api/v1/secrets
+GET /api/v1/secrets/:id
+PUT /api/v1/secrets/:id
+DELETE /api/v1/secrets/:id
+GET /api/v1/secrets/categories
+GET /api/v1/secrets/category/:category
+GET /api/v1/secrets/rotation/:secret_name
+GET /api/v1/secrets/rotation/recent
+GET /api/v1/secrets/access/:secret_ref_id
+GET /api/v1/secrets/access/recent
+GET /api/v1/secrets/predefined
+```
+
+64-target secret management.
+
+### Slack Block Kit
+
+```
+GET /api/v1/slack/templates
+POST /api/v1/slack/templates
+GET /api/v1/slack/templates/:id
+PUT /api/v1/slack/templates/:id
+DELETE /api/v1/slack/templates/:id
+POST /api/v1/slack/templates/:id/render
+```
+
+Rich Slack message templates.
