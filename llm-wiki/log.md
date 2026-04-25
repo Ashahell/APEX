@@ -62,3 +62,32 @@
 - Blocks: localhost, private IPs (10.x, 172.16-31.x, 192.168.x), cloud metadata (169.254.169.254)
 - DNS resolution to prevent CNAME redirection attacks
 - Added 12 SSRF protection tests (64 execution tests total passing)
+
+## [2026-04-25] feat | Phase 1 UX improvements (FUTURE_WORK.md)
+### Stop-Button Persistence
+- Migration 025: cancellation_requests table + tasks.cancellation_requested fields
+- request_cancellation(), check_cancellation(), clear_cancellation() in task_repo.rs
+- skill_worker + deep_task_worker check cancellation before each step
+- WebSocket sends task_cancelled on reconnect
+
+### Lexical Skill Matching Fallback
+- Migration 026: skill_triggers table with keyword→skill mapping
+- 60+ default triggers across 20 categories
+- calculate_lexical_score(): exact=200, name=150, desc=80, keyword=40
+- API: GET/POST/DELETE /api/v1/skills/triggers
+- 6 unit tests passing
+
+### Chat Compaction (Phase 1.9)
+- compaction.rs: 267 lines, 5 tests (should_compact, disabled, summary, tokens, preserves_recent)
+- API: POST/GET /api/v1/sessions/:id/compact
+- UI: "Compact" button in Chat header (disabled <20 messages)
+- Settings: threshold (10-90%) and preserve (2-50) in Developer tab
+- Toast feedback on success/failure
+- All tests passing, pushed to GitHub (commit 767ee46)
+
+## [2026-04-25] ingest | Updated llm-wiki with Phase 1 entries
+- [concepts/phase-1-ux-improvements.md] created
+- [concepts/chat-compaction.md] created
+- [concepts/session-control.md] created
+- [concepts/schema-fix-plan.md] updated
+- [index.md] updated with new concept pages

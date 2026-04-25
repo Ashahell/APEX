@@ -12,6 +12,10 @@
 - [architecture.md](concepts/architecture.md) - 6-layer system, security model
 - [skills.md](concepts/skills.md) - Skill registry, SKILL.md standard
 - [schema-audit.md](concepts/schema-audit.md) - Database schema audit (critical findings)
+- [phase-1-ux-improvements.md](concepts/phase-1-ux-improvements.md) - Stop-button persistence, lexical matching, chat compaction
+- [chat-compaction.md](concepts/chat-compaction.md) - Context window reduction via summarization
+- [session-control.md](concepts/session-control.md) - Yield, resume, compact for multi-turn sessions
+- [schema-fix-plan.md](concepts/schema-fix-plan.md) - Security fixes: audit chain, key derivation, FK enforcement
 
 ## Phases
 _Version phase documentation_
