@@ -21,7 +21,7 @@ export interface Message {
 
 export interface Task {
   id: string;
-  status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'running' | 'cancelling' | 'completed' | 'failed' | 'cancelled';
   tier: 'instant' | 'shallow' | 'deep';
   input: string;
   output?: string;

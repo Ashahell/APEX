@@ -199,6 +199,23 @@ class WebSocketClient {
         store.addNotification(notification);
         break;
       }
+      case 'task_cancelled': {
+        const taskId = data.task_id as string;
+        const reason = data.reason as string | undefined;
+        if (taskId) {
+          store.updateTask(taskId, {
+            status: 'cancelling',
+            error: reason || 'Cancellation requested',
+          });
+          // Transition to cancelled after short delay
+          setTimeout(() => {
+            store.updateTask(taskId, {
+              status: 'cancelled',
+            });
+          }, 1000);
+        }
+        break;
+      }
       case 'metrics': {
         store.setSessionCost((data.sessionCost as number) || 0);
         store.setTotalCost((data.totalCost as number) || 0);

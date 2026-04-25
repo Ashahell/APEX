@@ -544,7 +544,28 @@ impl Database {
             tracing::info!("Migration 024: Added CASCADE DELETE to messages table");
         }
 
-        // Migration 025: Encrypt existing sensitive preferences
+        // Migration 025: Cancellation tracking for persistent stop-button
+        sqlx::query("ALTER TABLE tasks ADD COLUMN cancellation_requested INTEGER NOT NULL DEFAULT 0")
+            .execute(&self.pool).await.ok();
+        sqlx::query("ALTER TABLE tasks ADD COLUMN cancellation_requested_at TEXT")
+            .execute(&self.pool).await.ok();
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS cancellation_requests (
+                id TEXT PRIMARY KEY NOT NULL,
+                task_id TEXT NOT NULL,
+                requested_at TEXT NOT NULL DEFAULT (datetime('now')),
+                source TEXT NOT NULL DEFAULT 'user',
+                fulfilled INTEGER NOT NULL DEFAULT 0,
+                fulfilled_at TEXT
+            )
+        "#).execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_cancel_task ON cancellation_requests(task_id)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_cancel_pending ON cancellation_requests(fulfilled, requested_at)")
+            .execute(&self.pool).await.ok();
+        tracing::info!("Migration 025: Added cancellation tracking");
+
+        // Migration 026: Encrypt existing sensitive preferences
         // Mark sensitive keys as encrypted (they may already be base64 encoded)
         let sensitive_keys = ["api_key", "token", "secret", "password", "credential", "hmac", "auth"];
         for key_pattern in sensitive_keys {

@@ -165,15 +165,24 @@ async fn cancel_task(
 ) -> Result<Json<TaskStatusResponse>, String> {
     let repo = TaskRepository::new(&state.pool);
 
-    match repo.update_status(&task_id, TaskStatus::Cancelled).await {
+    // Request persistent cancellation (survives reconnects)
+    match repo.request_cancellation(&task_id, "user").await {
         Ok(_) => {
+            // Also update status immediately if task is pending
+            let task = repo.find_by_id(&task_id).await.ok();
+            if let Some(t) = task {
+                if t.status == "pending" {
+                    let _ = repo.update_status(&task_id, TaskStatus::Cancelled).await;
+                }
+            }
+            
             state.metrics.record_task("unknown", "cancelled").await;
             Ok(Json(TaskStatusResponse {
                 task_id,
                 status: "cancelled".to_string(),
                 content: None,
                 output: None,
-                error: None,
+                error: Some("Cancellation requested".to_string()),
                 project: None,
                 priority: None,
                 category: None,

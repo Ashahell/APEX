@@ -43,6 +43,13 @@ export function TaskSidebar({ onTaskClick }: TaskSidebarProps) {
             <circle cx="12" cy="12" r="3" fill="#3b82f6" />
           </svg>
         );
+      case 'cancelling':
+        return (
+          <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none">
+            <circle cx="12" cy="12" r="10" stroke="#f97316" strokeWidth="2" strokeDasharray="4 2" />
+            <path d="M12 8v4M12 16h.01" stroke="#f97316" strokeWidth="2" strokeLinecap="round" />
+          </svg>
+        );
       case 'completed':
         return (
           <svg className="w-3 h-3" viewBox="0 0 24 24" fill="none">

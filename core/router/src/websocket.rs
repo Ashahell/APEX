@@ -74,10 +74,11 @@ pub async fn ws_handler(
     State(state): State<StdArc<AppState>>,
 ) -> impl IntoResponse {
     let ws_manager = state.ws_manager.clone();
-    ws.on_upgrade(move |socket| handle_socket(socket, ws_manager))
+    let pool = state.pool.clone();
+    ws.on_upgrade(move |socket| handle_socket(socket, ws_manager, pool))
 }
 
-async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
+async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager, pool: sqlx::Pool<sqlx::Sqlite>) {
     let (sender, mut receiver) = socket.split();
     let task_id = StdArc::new(RwLock::new(String::new()));
     let (tx, mut rx) = broadcast::channel::<String>(100);
@@ -92,6 +93,7 @@ async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
     let sender = StdArc::new(tokio::sync::Mutex::new(sender));
     let sender_for_tasks = sender.clone();
     let sender_for_notifs = sender.clone();
+    let sender_for_cancel_check = sender.clone();
 
     tokio::spawn(async move {
         while let Some(msg) = receiver.next().await {
@@ -104,6 +106,18 @@ async fn handle_socket(socket: WebSocket, ws_manager: WebSocketManager) {
                             drop(id_guard);
                             let tx_clone = tx_orig.clone();
                             ws_manager.add_client(id.to_string(), tx_clone).await;
+
+                            // Check for pending cancellation on reconnect (OpenClaw #70673)
+                            // Send cancellation event immediately if task was cancelled while disconnected
+                            let repo = apex_memory::task_repo::TaskRepository::new(&pool);
+                            if let Ok(true) = repo.check_cancellation(id).await {
+                                let cancel_msg = serde_json::json!({
+                                    "type": "task_cancelled",
+                                    "task_id": id,
+                                    "reason": "Cancellation requested while disconnected"
+                                }).to_string();
+                                let _ = sender_for_cancel_check.lock().await.send(Message::Text(cancel_msg)).await;
+                            }
                         }
                     }
                 }

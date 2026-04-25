@@ -187,6 +187,8 @@ pub struct Task {
     pub project: Option<String>,
     pub priority: Option<String>,
     pub category: Option<String>,
+    pub cancellation_requested: bool,
+    pub cancellation_requested_at: Option<DateTime<Utc>>,
 }
 
 impl Task {

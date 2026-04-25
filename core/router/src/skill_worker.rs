@@ -203,6 +203,20 @@ impl SkillWorker {
         }
 
         let repo = TaskRepository::new(pool);
+
+        // Check for cancellation request (persisted stop-button)
+        match repo.check_cancellation(&message.task_id).await {
+            Ok(true) => {
+                tracing::info!(task_id = %message.task_id, "Task cancellation requested, aborting execution");
+                let _ = repo.update_status(&message.task_id, TaskStatus::Cancelled).await;
+                let _ = repo.clear_cancellation(&message.task_id).await;
+                return;
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(task_id = %message.task_id, error = %e, "Failed to check cancellation status");
+            }
+        }
         
         // Track execution time for anomaly detection
         let execution_start = Instant::now();

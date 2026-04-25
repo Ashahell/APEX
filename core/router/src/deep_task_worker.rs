@@ -328,6 +328,20 @@ impl DeepTaskWorker {
     ) -> Result<String, String> {
         tracing::debug!(vm_id = %vm_id, "Executing deep task in VM");
 
+        // Check for cancellation request (persisted stop-button)
+        let repo = TaskRepository::new(&self.pool);
+        match repo.check_cancellation(&message.task_id).await {
+            Ok(true) => {
+                tracing::info!(task_id = %message.task_id, "Task cancellation requested before execution");
+                let _ = repo.clear_cancellation(&message.task_id).await;
+                return Err("Task cancelled before execution".to_string());
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(task_id = %message.task_id, error = %e, "Failed to check cancellation status");
+            }
+        }
+
         let stream = self.execution_streams.create_stream(&message.task_id);
         let task_id = message.task_id.clone();
         let task_id_for_spawn = task_id.clone();

@@ -34,8 +34,8 @@ impl<'a> TaskRepository<'a> {
         // Use INSERT RETURNING to get the created task in a single query
         sqlx::query_as::<_, Task>(
             r#"
-            INSERT INTO tasks (id, status, tier, input_content, channel, thread_id, author, skill_name, project, priority, category, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO tasks (id, status, tier, input_content, channel, thread_id, author, skill_name, project, priority, category, created_at, updated_at, cancellation_requested, cancellation_requested_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, NULL)
             RETURNING *
             "#,
         )
@@ -367,5 +367,237 @@ impl<'a> TaskRepository<'a> {
 
     pub fn begin(&self) -> impl sqlx::Executor<'a, Database = sqlx::Sqlite> + '_ {
         self.pool
+    }
+
+    pub async fn request_cancellation(&self, task_id: &str, source: &str) -> Result<(), sqlx::Error> {
+        let now = Utc::now();
+        let id = uuid::Uuid::new_v4().to_string();
+
+        // Insert cancellation request
+        sqlx::query(
+            r#"
+            INSERT INTO cancellation_requests (id, task_id, requested_at, source)
+            VALUES (?, ?, ?, ?)
+            "#
+        )
+        .bind(&id)
+        .bind(task_id)
+        .bind(now)
+        .bind(source)
+        .execute(self.pool)
+        .await?;
+
+        // Update task cancellation flag
+        sqlx::query(
+            r#"
+            UPDATE tasks 
+            SET cancellation_requested = 1, cancellation_requested_at = ?
+            WHERE id = ?
+            "#
+        )
+        .bind(now)
+        .bind(task_id)
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn check_cancellation(&self, task_id: &str) -> Result<bool, sqlx::Error> {
+        let row = sqlx::query(
+            "SELECT cancellation_requested FROM tasks WHERE id = ?"
+        )
+        .bind(task_id)
+        .fetch_optional(self.pool)
+        .await?;
+
+        Ok(row.map(|r| r.get::<i32, _>(0) == 1).unwrap_or(false))
+    }
+
+    pub async fn clear_cancellation(&self, task_id: &str) -> Result<(), sqlx::Error> {
+        let now = Utc::now();
+
+        // Mark cancellation request as fulfilled
+        sqlx::query(
+            "UPDATE cancellation_requests SET fulfilled = 1, fulfilled_at = ? WHERE task_id = ? AND fulfilled = 0"
+        )
+        .bind(now)
+        .bind(task_id)
+        .execute(self.pool)
+        .await?;
+
+        // Clear task cancellation flag
+        sqlx::query(
+            "UPDATE tasks SET cancellation_requested = 0 WHERE id = ?"
+        )
+        .bind(task_id)
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn get_pending_cancellations(&self) -> Result<Vec<String>, sqlx::Error> {
+        let rows = sqlx::query(
+            r#"
+            SELECT task_id FROM cancellation_requests 
+            WHERE fulfilled = 0 
+            AND requested_at > datetime('now', '-5 minutes')
+            "#
+        )
+        .fetch_all(self.pool)
+        .await?;
+
+        let task_ids: Vec<String> = rows.iter().filter_map(|r| r.try_get(0).ok()).collect();
+        Ok(task_ids)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::Database;
+    use crate::tasks::{CreateTask, TaskTier};
+    use std::path::PathBuf;
+
+    #[tokio::test]
+    async fn test_request_cancellation() {
+        let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+        db.run_migrations().await.unwrap();
+        let pool = db.pool().clone();
+        let repo = TaskRepository::new(&pool);
+        
+        // Create a task first
+        let task_id = "test-task-1";
+        repo.create(
+            task_id,
+            CreateTask {
+                input_content: "Test task".to_string(),
+                channel: Some("test".to_string()),
+                thread_id: None,
+                author: None,
+                skill_name: None,
+                project: None,
+                priority: None,
+                category: None,
+            },
+            TaskTier::Deep,
+        ).await.unwrap();
+
+        // Request cancellation
+        repo.request_cancellation(task_id, "user").await.unwrap();
+
+        // Check cancellation is set
+        let cancelled = repo.check_cancellation(task_id).await.unwrap();
+        assert!(cancelled, "Task should be marked for cancellation");
+    }
+
+    #[tokio::test]
+    async fn test_check_cancellation_no_request() {
+        let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+        db.run_migrations().await.unwrap();
+        let pool = db.pool().clone();
+        let repo = TaskRepository::new(&pool);
+        
+        // Create a task without cancellation
+        let task_id = "test-task-2";
+        repo.create(
+            task_id,
+            CreateTask {
+                input_content: "Test task".to_string(),
+                channel: Some("test".to_string()),
+                thread_id: None,
+                author: None,
+                skill_name: None,
+                project: None,
+                priority: None,
+                category: None,
+            },
+            TaskTier::Deep,
+        ).await.unwrap();
+
+        // Check cancellation - should be false
+        let cancelled = repo.check_cancellation(task_id).await.unwrap();
+        assert!(!cancelled, "Task should not be marked for cancellation");
+    }
+
+    #[tokio::test]
+    async fn test_clear_cancellation() {
+        let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+        db.run_migrations().await.unwrap();
+        let pool = db.pool().clone();
+        let repo = TaskRepository::new(&pool);
+        
+        // Create a task
+        let task_id = "test-task-3";
+        repo.create(
+            task_id,
+            CreateTask {
+                input_content: "Test task".to_string(),
+                channel: Some("test".to_string()),
+                thread_id: None,
+                author: None,
+                skill_name: None,
+                project: None,
+                priority: None,
+                category: None,
+            },
+            TaskTier::Deep,
+        ).await.unwrap();
+
+        // Request cancellation
+        repo.request_cancellation(task_id, "user").await.unwrap();
+        
+        // Verify cancellation is set
+        let cancelled = repo.check_cancellation(task_id).await.unwrap();
+        assert!(cancelled);
+
+        // Clear cancellation
+        repo.clear_cancellation(task_id).await.unwrap();
+
+        // Verify cancellation is cleared
+        let cancelled = repo.check_cancellation(task_id).await.unwrap();
+        assert!(!cancelled, "Cancellation should be cleared");
+    }
+
+    #[tokio::test]
+    async fn test_get_pending_cancellations() {
+        let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+        db.run_migrations().await.unwrap();
+        let pool = db.pool().clone();
+        let repo = TaskRepository::new(&pool);
+        
+        // Create tasks
+        let task_id_1 = "test-task-4";
+        let task_id_2 = "test-task-5";
+        let task_id_3 = "test-task-6";
+        
+        for task_id in [task_id_1, task_id_2, task_id_3] {
+            repo.create(
+                task_id,
+                CreateTask {
+                    input_content: "Test task".to_string(),
+                    channel: Some("test".to_string()),
+                    thread_id: None,
+                    author: None,
+                    skill_name: None,
+                    project: None,
+                    priority: None,
+                    category: None,
+                },
+                TaskTier::Deep,
+            ).await.unwrap();
+        }
+
+        // Request cancellation for two tasks
+        repo.request_cancellation(task_id_1, "user").await.unwrap();
+        repo.request_cancellation(task_id_2, "system").await.unwrap();
+
+        // Get pending cancellations
+        let pending = repo.get_pending_cancellations().await.unwrap();
+        assert_eq!(pending.len(), 2, "Should have 2 pending cancellations");
+        assert!(pending.contains(&task_id_1.to_string()));
+        assert!(pending.contains(&task_id_2.to_string()));
+        assert!(!pending.contains(&task_id_3.to_string()));
     }
 }
