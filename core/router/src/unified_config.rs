@@ -230,6 +230,7 @@ pub struct AppConfig {
     pub nats: NatsConfig,
     pub logging: LoggingConfig,
     pub skills: SkillsConfig,
+    pub shell_hooks: ShellHookConfig,
     pub skill_pool: SkillPoolConfigSection,
     pub tool_validation_level: Option<String>,  // Feature 1: Tool validation level
     pub soul: SoulConfig,
@@ -635,6 +636,27 @@ impl Default for SkillsConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ShellHookConfig {
+    pub pre_tool_call: Option<String>,
+    pub post_tool_call: Option<String>,
+    pub session_start: Option<String>,
+    pub session_end: Option<String>,
+    pub timeout_secs: u64,
+}
+
+impl Default for ShellHookConfig {
+    fn default() -> Self {
+        Self {
+            pre_tool_call: std::env::var("APEX_SHELL_PRE_TOOL").ok(),
+            post_tool_call: std::env::var("APEX_SHELL_POST_TOOL").ok(),
+            session_start: std::env::var("APEX_SHELL_SESSION_START").ok(),
+            session_end: std::env::var("APEX_SHELL_SESSION_END").ok(),
+            timeout_secs: 5,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SoulConfig {
     pub directory: Option<String>,
     pub backup_enabled: bool,
@@ -886,6 +908,7 @@ impl Default for AppConfig {
             nats: NatsConfig::default(),
             logging: LoggingConfig::default(),
             skills: SkillsConfig::default(),
+            shell_hooks: ShellHookConfig::default(),
             skill_pool: SkillPoolConfigSection::default(),
             tool_validation_level: Some(tool_validation_constants::DEFAULT_VALIDATION_LEVEL.to_string()),
             soul: SoulConfig::default(),

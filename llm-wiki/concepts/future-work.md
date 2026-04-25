@@ -91,10 +91,11 @@
 - `/api/v1/webhooks` CRUD endpoints
 - trigger_event() for task.completed/failed
 
-### 4.4 Shell Hooks
-- Lifecycle hooks: pre/post tool call, session start/end
-- Execute shell scripts with context JSON
-- Timeout after 5 seconds
+### 4.4 Shell Hooks ✅ Complete
+- ShellHookConfig with env vars (APEX_SHELL_*)
+- pre_tool_call, post_tool_call, session_start, session_end
+- 5 second timeout
+- ShellHooks module ready to use in skill_worker
 
 ## Priority Matrix
 

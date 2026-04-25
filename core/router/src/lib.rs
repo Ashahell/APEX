@@ -15,6 +15,7 @@ pub mod governance;
 pub mod heartbeat;
 pub mod hub_client;
 pub mod llama;
+pub mod shell_hooks;
 pub mod llm_transport;
 pub use llama::{LlamaClient, LlmTransport};
 pub mod memory_stores;
