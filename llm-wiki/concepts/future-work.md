@@ -80,11 +80,11 @@
 - SteerMessage in message_bus
 - Use: `curl -X POST .../tasks/{id}/steer -d '{"direction": "focus on X"}'`
 
-### 4.2 Subagent Pool Execution
-- Decompose task via LLM
-- Spawn parallel workers (max 4)
-- File coordination for shared state
-- Orchestrator role
+### 4.2 Subagent Pool Execution ✅ Complete
+- `/api/v1/subagent/decompose` endpoint
+- Parallel worker pool (max 4 workers)
+- SubTask status tracking
+- Orchestrator in deep_task_worker
 
 ### 4.3 Webhook Direct Delivery
 - Deliver without LLM involvement
