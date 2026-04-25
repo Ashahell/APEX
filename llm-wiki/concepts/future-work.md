@@ -55,7 +55,12 @@
 - OpenAiTransport for OpenAI-compatible APIs
 - Provider-specific retry logic
 
-### 3.2 Fast Mode
+### 3.2 Fast Mode ✅ Complete
+- Task priority: Fast (skips normal routing)
+- Direct LLM execution when priority: "fast"
+- Set via API: `priority: "fast"` or keyboard shortcut hint (Ctrl+Shift+F)
+
+### 3.3 Multi-Model Routing
 - Task priority: Low, Normal, High, Fast
 - Smaller model for Fast Mode
 - Skip skill worker for immediate execution

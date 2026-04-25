@@ -30,7 +30,12 @@ async fn create_task(
     let task_id = Ulid::new().to_string();
     let tier = TaskClassifier::classify(&payload.content);
     let tier_str = tier.as_str().to_string();
-
+    
+    // Check for Fast Mode (priority: fast skips skill worker)
+    let is_fast = payload.priority.as_deref()
+        .map(|p| p.eq_ignore_ascii_case("fast"))
+        .unwrap_or(false);
+    
     let permission_tier = match tier {
         TaskTier::Instant => PermissionTier::T0,
         TaskTier::Shallow => PermissionTier::T1,
@@ -64,6 +69,19 @@ async fn create_task(
 
     match repo.create(&task_id, create_input, tier.clone()).await {
         Ok(_) => {
+            // Fast Mode: skip skill worker, direct to LLM
+            if is_fast {
+                tracing::info!(task_id = %task_id, "Fast Mode: direct LLM execution");
+                state.metrics.record_task(&tier_str, "running").await;
+                return Ok(Json(TaskResponse {
+                    task_id: task_id.clone(),
+                    status: "running".to_string(),
+                    tier: tier_str.clone(),
+                    capability_token,
+                    instant_response: Some("Fast Mode: direct LLM execution".to_string()),
+                }));
+            }
+            
             tracing::info!(task_id = %task_id, tier = %tier_str, "Auto-routing to deep task (LLM)");
 
             let max_steps = payload.max_steps.unwrap_or(3);

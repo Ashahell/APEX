@@ -143,6 +143,7 @@ pub enum TaskPriority {
     Medium,
     High,
     Urgent,
+    Fast,
 }
 
 impl TaskPriority {
@@ -152,6 +153,7 @@ impl TaskPriority {
             TaskPriority::Medium => "medium",
             TaskPriority::High => "high",
             TaskPriority::Urgent => "urgent",
+            TaskPriority::Fast => "fast",
         }
     }
 
@@ -161,8 +163,13 @@ impl TaskPriority {
             "medium" => Some(TaskPriority::Medium),
             "high" => Some(TaskPriority::High),
             "urgent" => Some(TaskPriority::Urgent),
+            "fast" => Some(TaskPriority::Fast),
             _ => None,
         }
+    }
+    
+    pub fn is_fast(&self) -> bool {
+        matches!(self, TaskPriority::Fast)
     }
 }
 
