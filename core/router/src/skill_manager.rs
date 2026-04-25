@@ -29,7 +29,7 @@ pub struct SkillMetadata {
 }
 
 /// Request to create a new skill
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct SkillCreateRequest {
     /// Skill name (slug format: my-skill-name)
     pub name: String,
@@ -395,6 +395,61 @@ Task completed successfully.
             })
             .collect())
     }
+
+    /// Calculate lexical match score for a skill
+    /// Returns (score, match_type): 
+    /// - score >= 100: exact match
+    /// - score >= 50: partial match  
+    /// - score >= 10: keyword match
+    fn calculate_lexical_score(query: &str, skill: &SkillMetadata) -> (i32, String) {
+        let query_lower = query.to_lowercase();
+        let name_lower = skill.name.to_lowercase();
+        let desc_lower = skill.description.to_lowercase();
+
+        if name_lower == query_lower {
+            return (200, "exact_name".to_string());
+        }
+        if name_lower.contains(&query_lower) && query_lower.len() > 3 {
+            return (150, "name_contains".to_string());
+        }
+        if query_lower.contains(&name_lower) && name_lower.len() > 3 {
+            return (120, "query_contains_name".to_string());
+        }
+        if desc_lower.contains(&query_lower) && query_lower.len() > 3 {
+            return (80, "description_contains".to_string());
+        }
+
+        let mut keyword_score = 0;
+        for trigger in &skill.trigger_conditions {
+            let trigger_lower = trigger.to_lowercase();
+            if trigger_lower == query_lower {
+                keyword_score = 60;
+                break;
+            } else if trigger_lower.contains(&query_lower) || query_lower.contains(&trigger_lower) {
+                keyword_score = 40;
+            }
+        }
+
+        (keyword_score, "keyword".to_string())
+    }
+
+    /// Find skills using lexical matching with weighted scoring
+    /// Falls back to this when vector search is unavailable
+    pub fn find_by_lexical(&self, query: &str) -> Result<Vec<(SkillMetadata, i32, String)>, SkillError> {
+        let all_skills = self.list_skills()?;
+        
+        let mut results: Vec<(SkillMetadata, i32, String)> = all_skills
+            .into_iter()
+            .map(|skill| {
+                let (score, match_type) = Self::calculate_lexical_score(query, &skill);
+                (skill, score, match_type)
+            })
+            .filter(|(_, score, _)| *score > 0)
+            .collect();
+
+        results.sort_by(|a, b| b.1.cmp(&a.1));
+        Ok(results)
+    }
 }
 
 /// Skill manager errors
@@ -469,6 +524,7 @@ mod tests {
             category: Some("testing".to_string()),
             description: Some("A test skill".to_string()),
             source_task_id: Some("task123".to_string()),
+            ..Default::default()
         };
         
         let metadata = manager.create_skill(req).await.unwrap();
@@ -669,5 +725,108 @@ mod tests {
         // Content includes SKILL.md frontmatter
         assert!(content.contains("Line 1\nLine 2\nLine 3"));
         assert!(content.contains("content-test"));
+    }
+    
+    #[test]
+    fn test_calculate_lexical_score_exact_name() {
+        let skill = SkillMetadata {
+            name: "deploy-rust".to_string(),
+            description: "Deploy Rust applications".to_string(),
+            version: "1.0.0".to_string(),
+            category: "deployment".to_string(),
+            platforms: vec![],
+            created_at: 0,
+            trigger_conditions: vec!["deploy rust".to_string()],
+            auto_created: false,
+            source_task_id: None,
+        };
+        
+        let (score, match_type) = SkillManager::calculate_lexical_score("deploy-rust", &skill);
+        assert_eq!(score, 200);
+        assert_eq!(match_type, "exact_name");
+    }
+    
+    #[test]
+    fn test_calculate_lexical_score_name_contains() {
+        let skill = SkillMetadata {
+            name: "deploy-rust".to_string(),
+            description: "Deploy Rust applications".to_string(),
+            version: "1.0.0".to_string(),
+            category: "deployment".to_string(),
+            platforms: vec![],
+            created_at: 0,
+            trigger_conditions: vec![],
+            auto_created: false,
+            source_task_id: None,
+        };
+        
+        let (score, match_type) = SkillManager::calculate_lexical_score("deploy", &skill);
+        assert_eq!(score, 150);
+        assert_eq!(match_type, "name_contains");
+    }
+    
+    #[test]
+    fn test_calculate_lexical_score_keyword_match() {
+        let skill = SkillMetadata {
+            name: "code-generate".to_string(),
+            description: "Generate code using AI".to_string(),
+            version: "1.0.0".to_string(),
+            category: "development".to_string(),
+            platforms: vec![],
+            created_at: 0,
+            trigger_conditions: vec!["write code".to_string(), "generate code".to_string()],
+            auto_created: false,
+            source_task_id: None,
+        };
+        
+        let (score, match_type) = SkillManager::calculate_lexical_score("write code", &skill);
+        assert_eq!(score, 60);
+        assert_eq!(match_type, "keyword");
+    }
+    
+    #[test]
+    fn test_calculate_lexical_score_no_match() {
+        let skill = SkillMetadata {
+            name: "deploy-rust".to_string(),
+            description: "Deploy Rust applications".to_string(),
+            version: "1.0.0".to_string(),
+            category: "deployment".to_string(),
+            platforms: vec![],
+            created_at: 0,
+            trigger_conditions: vec![],
+            auto_created: false,
+            source_task_id: None,
+        };
+        
+        let (score, match_type) = SkillManager::calculate_lexical_score("python", &skill);
+        assert_eq!(score, 0);
+    }
+    
+    #[tokio::test]
+    async fn test_find_by_lexical() {
+        let (manager, _temp) = create_test_manager();
+        
+        // Create skill with name matching query
+        manager.create_skill(SkillCreateRequest {
+            name: "shell-execute".to_string(),
+            content: "Execute shell commands".to_string(),
+            category: Some("system".to_string()),
+            description: Some("Run terminal commands".to_string()),
+            source_task_id: None,
+        }).await.unwrap();
+        
+        manager.create_skill(SkillCreateRequest {
+            name: "code-generate".to_string(),
+            content: "Generate code".to_string(),
+            category: Some("development".to_string()),
+            description: Some("AI code generation".to_string()),
+            source_task_id: None,
+        }).await.unwrap();
+        
+        // Test lexical matching on name (exact match)
+        let results = manager.find_by_lexical("shell-execute").unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].0.name, "shell-execute");
+        assert!(results[0].1 >= 200); // exact name match
     }
 }

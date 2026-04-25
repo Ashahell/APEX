@@ -201,4 +201,73 @@ impl<'a> SkillRegistry<'a> {
 
         Ok(())
     }
+
+    pub async fn seed_default_triggers(&self) -> Result<(), sqlx::Error> {
+        let default_triggers = vec![
+            ("shell.execute", "run command", 3),
+            ("shell.execute", "execute shell", 3),
+            ("shell.execute", "run terminal", 3),
+            ("shell.execute", "bash", 2),
+            ("shell.execute", "terminal", 2),
+            ("code.generate", "write code", 3),
+            ("code.generate", "generate code", 3),
+            ("code.generate", "implement", 2),
+            ("code.generate", "create function", 2),
+            ("code.review", "review code", 3),
+            ("code.review", "code review", 3),
+            ("code.review", "check code", 2),
+            ("code.refactor", "refactor", 3),
+            ("code.refactor", "improve code", 2),
+            ("code.format", "format code", 3),
+            ("code.format", "prettier", 2),
+            ("code.format", "lint", 2),
+            ("code.document", "document code", 3),
+            ("code.document", "add docs", 2),
+            ("code.test", "write test", 3),
+            ("code.test", "create test", 3),
+            ("code.test", "unit test", 2),
+            ("file.search", "find file", 3),
+            ("file.search", "search files", 3),
+            ("file.search", "locate file", 2),
+            ("file.delete", "delete file", 3),
+            ("file.delete", "remove file", 2),
+            ("git.commit", "git commit", 3),
+            ("git.commit", "commit changes", 3),
+            ("git.branch", "git branch", 3),
+            ("git.branch", "create branch", 2),
+            ("git.force_push", "force push", 3),
+            ("git.force_push", "git push --force", 3),
+            ("docker.build", "build docker", 3),
+            ("docker.build", "docker image", 2),
+            ("docker.run", "run docker", 3),
+            ("docker.run", "docker run", 3),
+            ("db.migrate", "run migration", 3),
+            ("db.migrate", "database migration", 3),
+            ("db.schema", "database schema", 3),
+            ("db.schema", "design database", 2),
+            ("db.drop", "drop database", 3),
+            ("api.design", "design api", 3),
+            ("api.design", "create endpoint", 2),
+            ("api.test", "test api", 3),
+            ("api.test", "api testing", 2),
+            ("docs.read", "read docs", 3),
+            ("docs.read", "documentation", 2),
+            ("seo.optimize", "seo", 3),
+            ("seo.optimize", "search engine", 2),
+            ("deploy.kubectl", "kubectl", 3),
+            ("deploy.kubectl", "deploy kubernetes", 3),
+            ("aws.lambda", "lambda", 3),
+            ("aws.lambda", "aws serverless", 2),
+            ("ci.configure", "ci cd", 3),
+            ("ci.configure", "github actions", 2),
+            ("repo.search", "search repository", 3),
+            ("repo.search", "find code", 2),
+        ];
+
+        for (skill, keyword, weight) in default_triggers {
+            self.add_trigger(skill, keyword, weight).await.ok();
+        }
+
+        Ok(())
+    }
 }

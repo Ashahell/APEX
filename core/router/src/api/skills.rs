@@ -30,6 +30,10 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/skills/:name/health", put(update_skill_health))
         .route("/api/v1/skills/execute", post(execute_skill))
         .route("/api/v1/skills/:name/cache", post(invalidate_skill_cache))
+        .route("/api/v1/skills/triggers", get(list_triggers).post(add_trigger))
+        .route("/api/v1/skills/triggers/search", get(search_by_trigger))
+        .route("/api/v1/skills/triggers/:skill_name", get(get_triggers_for_skill).delete(delete_triggers_for_skill))
+        .route("/api/v1/skills/triggers/:skill_name/:keyword", delete(delete_trigger))
         .route("/api/v1/skills/cache", post(invalidate_all_cache))
 }
 
@@ -505,4 +509,142 @@ async fn list_mcp_tools_as_skills(
         .collect();
     
     Ok(Json(skills))
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct AddTriggerRequest {
+    pub skill_name: String,
+    pub keyword: String,
+    pub weight: Option<i32>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct TriggerResponse {
+    pub id: String,
+    pub skill_name: String,
+    pub keyword: String,
+    pub weight: i32,
+    pub created_at: String,
+}
+
+impl From<apex_memory::skill_registry::SkillTrigger> for TriggerResponse {
+    fn from(t: apex_memory::skill_registry::SkillTrigger) -> Self {
+        TriggerResponse {
+            id: t.id,
+            skill_name: t.skill_name,
+            keyword: t.keyword,
+            weight: t.weight,
+            created_at: t.created_at,
+        }
+    }
+}
+
+async fn list_triggers(State(state): State<AppState>) -> Result<Json<Vec<TriggerResponse>>, String> {
+    use apex_memory::skill_registry::SkillTrigger;
+    
+    let triggers = sqlx::query_as::<_, SkillTrigger>("SELECT * FROM skill_triggers ORDER BY weight DESC")
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let responses: Vec<TriggerResponse> = triggers
+        .into_iter()
+        .map(TriggerResponse::from)
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn add_trigger(
+    State(state): State<AppState>,
+    Json(payload): Json<AddTriggerRequest>,
+) -> Result<Json<TriggerResponse>, String> {
+    use apex_memory::skill_registry::SkillTrigger;
+    
+    let registry = SkillRegistry::new(&state.pool);
+    let weight = payload.weight.unwrap_or(1);
+
+    registry
+        .add_trigger(&payload.skill_name, &payload.keyword, weight)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let trigger = sqlx::query_as::<_, SkillTrigger>(
+        "SELECT * FROM skill_triggers WHERE skill_name = ? AND keyword = ?"
+    )
+    .bind(&payload.skill_name)
+    .bind(&payload.keyword)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| e.to_string())?
+    .ok_or("Failed to retrieve created trigger")?;
+
+    Ok(Json(TriggerResponse::from(trigger)))
+}
+
+async fn search_by_trigger(
+    State(state): State<AppState>,
+    axum::extract::Query(params): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Json<Vec<TriggerResponse>>, String> {
+    let query = params.get("q").cloned().unwrap_or_default();
+    if query.is_empty() {
+        return Ok(Json(vec![]));
+    }
+
+    let registry = SkillRegistry::new(&state.pool);
+    let triggers = registry
+        .find_triggers_by_keyword(&query)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let responses: Vec<TriggerResponse> = triggers
+        .into_iter()
+        .map(TriggerResponse::from)
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn get_triggers_for_skill(
+    State(state): State<AppState>,
+    Path(skill_name): Path<String>,
+) -> Result<Json<Vec<TriggerResponse>>, String> {
+    let registry = SkillRegistry::new(&state.pool);
+    let triggers = registry
+        .find_triggers_for_skill(&skill_name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let responses: Vec<TriggerResponse> = triggers
+        .into_iter()
+        .map(TriggerResponse::from)
+        .collect();
+
+    Ok(Json(responses))
+}
+
+async fn delete_triggers_for_skill(
+    State(state): State<AppState>,
+    Path(skill_name): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let registry = SkillRegistry::new(&state.pool);
+    registry
+        .delete_triggers_for_skill(&skill_name)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(Json(serde_json::json!({"success": true, "message": format!("Deleted all triggers for skill: {}", skill_name)})))
+}
+
+async fn delete_trigger(
+    State(state): State<AppState>,
+    Path((skill_name, keyword)): Path<(String, String)>,
+) -> Result<Json<serde_json::Value>, String> {
+    let registry = SkillRegistry::new(&state.pool);
+    registry
+        .delete_trigger(&skill_name, &keyword)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(Json(serde_json::json!({"success": true, "message": format!("Deleted trigger: {} for skill: {}", keyword, skill_name)})))
 }
