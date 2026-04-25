@@ -1,6 +1,7 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, SqlitePool};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
 pub struct SkillRegistryEntry {
@@ -12,6 +13,15 @@ pub struct SkillRegistryEntry {
     pub last_health_check: Option<String>,
     pub created_at: String,
     pub updated_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct SkillTrigger {
+    pub id: String,
+    pub skill_name: String,
+    pub keyword: String,
+    pub weight: i32,
+    pub created_at: String,
 }
 
 impl SkillRegistryEntry {
@@ -126,6 +136,66 @@ impl<'a> SkillRegistry<'a> {
     pub async fn delete(&self, name: &str) -> Result<(), sqlx::Error> {
         sqlx::query("DELETE FROM skill_registry WHERE name = ?")
             .bind(name)
+            .execute(self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn add_trigger(&self, skill_name: &str, keyword: &str, weight: i32) -> Result<(), sqlx::Error> {
+        let id = Uuid::new_v4().to_string();
+        let now = Utc::now().to_rfc3339();
+
+        sqlx::query(
+            r#"
+            INSERT INTO skill_triggers (id, skill_name, keyword, weight, created_at)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(skill_name, keyword) DO UPDATE SET weight = excluded.weight
+            "#,
+        )
+        .bind(&id)
+        .bind(skill_name)
+        .bind(keyword)
+        .bind(weight)
+        .bind(&now)
+        .execute(self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    pub async fn find_triggers_by_keyword(&self, query: &str) -> Result<Vec<SkillTrigger>, sqlx::Error> {
+        let pattern = format!("%{}%", query.to_lowercase());
+        sqlx::query_as::<_, SkillTrigger>(
+            "SELECT * FROM skill_triggers WHERE LOWER(keyword) LIKE ? ORDER BY weight DESC"
+        )
+        .bind(&pattern)
+        .fetch_all(self.pool)
+        .await
+    }
+
+    pub async fn find_triggers_for_skill(&self, skill_name: &str) -> Result<Vec<SkillTrigger>, sqlx::Error> {
+        sqlx::query_as::<_, SkillTrigger>(
+            "SELECT * FROM skill_triggers WHERE skill_name = ? ORDER BY weight DESC"
+        )
+        .bind(skill_name)
+        .fetch_all(self.pool)
+        .await
+    }
+
+    pub async fn delete_trigger(&self, skill_name: &str, keyword: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM skill_triggers WHERE skill_name = ? AND keyword = ?")
+            .bind(skill_name)
+            .bind(keyword)
+            .execute(self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn delete_triggers_for_skill(&self, skill_name: &str) -> Result<(), sqlx::Error> {
+        sqlx::query("DELETE FROM skill_triggers WHERE skill_name = ?")
+            .bind(skill_name)
             .execute(self.pool)
             .await?;
 

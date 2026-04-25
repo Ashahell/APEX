@@ -626,6 +626,24 @@ impl Database {
 
         tracing::info!("Migration 027: Seeded TTL config, audit_log cleanup disabled by default");
 
+        // Migration 028: Skill triggers for lexical matching fallback
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS skill_triggers (
+                id TEXT PRIMARY KEY NOT NULL,
+                skill_name TEXT NOT NULL,
+                keyword TEXT NOT NULL,
+                weight INTEGER NOT NULL DEFAULT 1,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(skill_name, keyword)
+            )
+        "#).execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_skill_triggers_keyword ON skill_triggers(keyword)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_skill_triggers_skill ON skill_triggers(skill_name)")
+            .execute(&self.pool).await.ok();
+
+        tracing::info!("Migration 028: Created skill_triggers table for lexical matching");
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }
