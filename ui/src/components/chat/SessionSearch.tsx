@@ -9,6 +9,7 @@ interface SearchResult {
   rank: number;
   context_before: string;
   context_after: string;
+  summary?: string;
 }
 
 interface SearchStats {
@@ -204,6 +205,15 @@ export function SessionSearch({ onSelectResult }: SessionSearchProps) {
                     </div>
                   )}
 
+                  {/* Summary badge */}
+                  {result.summary && (
+                    <div className="mt-2">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                        Summarized
+                      </span>
+                    </div>
+                  )}
+
                   {/* Task ID */}
                   <div className="text-xs text-muted-foreground mt-2">
                     Task: {result.task_id.slice(0, 8)}... • Relevance: {(result.rank * 100).toFixed(0)}%
@@ -321,8 +331,15 @@ export function SessionSearchBar() {
                     ),
                   }}
                 />
-                <div className="text-xs text-muted-foreground mt-1">
-                  {result.task_id.slice(0, 8)}...
+                <div className="flex items-center gap-2 mt-1">
+                  <div className="text-xs text-muted-foreground">
+                    {result.task_id.slice(0, 8)}...
+                  </div>
+                  {result.summary && (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+                      Summarized
+                    </span>
+                  )}
                 </div>
               </button>
             ))

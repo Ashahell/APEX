@@ -365,6 +365,47 @@ impl<'a> TaskRepository<'a> {
         Ok(())
     }
 
+    pub async fn summarize_if_needed(&self, task_id: &str) -> Result<Option<String>, sqlx::Error> {
+        let count: (i64,) = sqlx::query_as("SELECT COUNT(*) FROM messages WHERE task_id = ?")
+            .bind(task_id)
+            .fetch_one(self.pool)
+            .await?;
+
+        if count.0 <= 50 {
+            return Ok(None);
+        }
+
+        // Get all messages for summary
+        let rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT content FROM messages WHERE task_id = ? ORDER BY created_at"
+        )
+        .bind(task_id)
+        .fetch_all(self.pool)
+        .await?;
+
+        // Simple extractive summary: first 100 chars of first message + count
+        let summary = if let Some(first) = rows.first() {
+            let total = rows.len();
+            let preview = if first.0.len() > 100 {
+                format!("{}...", &first.0[..100])
+            } else {
+                first.0.clone()
+            };
+            format!("[{} messages] {}", total, preview)
+        } else {
+            return Ok(None);
+        };
+
+        // Update task with summary
+        sqlx::query("UPDATE tasks SET summary = ? WHERE id = ?")
+            .bind(&summary)
+            .bind(task_id)
+            .execute(self.pool)
+            .await?;
+
+        Ok(Some(summary))
+    }
+
     pub fn begin(&self) -> impl sqlx::Executor<'a, Database = sqlx::Sqlite> + '_ {
         self.pool
     }

@@ -677,6 +677,18 @@ impl Database {
         sqlx::query("INSERT OR IGNORE INTO integrity_meta (id) VALUES (1)")
             .execute(&self.pool).await.ok();
 
+        // Migration 031: Session Summary (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN IF NOT EXISTS summary TEXT")
+            .execute(&self.pool).await.ok();
+
+        tracing::info!("Migration 031: Added session summary field");
+
+        // Migration 032: Session Summary Index
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_tasks_summary ON tasks(summary)")
+            .execute(&self.pool).await.ok();
+        
+        tracing::info!("Migration 032: Created summary index");
+
         tracing::info!("Migrations completed successfully");
         Ok(())
     }

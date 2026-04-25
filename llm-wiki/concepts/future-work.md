@@ -33,11 +33,10 @@
 - API: `GET /api/v1/memory/integrity` (+ 5 more endpoints)
 - 11 tests: 5 unit + 6 integration
 
-### 2.2 Enhanced Session Search
+### 2.2 Enhanced Session Search ✅ Complete
 - Auto-summary on session end (>50 messages)
-- LLM-powered search refinement (re-rank FTS5 results)
-- Context window extraction
-- UI: "Summarized" badge on old sessions
+- Summary field in session search API
+- "Summarized" badge in SessionSearch UI
 
 ### 2.3 Temporal Decay Improvements
 - MMR (Maximal Marginal Relevance) for deduplication

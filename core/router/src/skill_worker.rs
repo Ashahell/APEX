@@ -265,6 +265,11 @@ impl SkillWorker {
                 {
                     tracing::error!(task_id = %message.task_id, error = %e, "Failed to update completed task");
                 }
+
+                // Auto-summarize if >50 messages (Phase 2.2)
+                if let Ok(Some(summary)) = repo.summarize_if_needed(&message.task_id).await {
+                    tracing::debug!(task_id = %message.task_id, summary = %summary, "Session summarized");
+                }
             }
             Err(error) => {
                 circuit_breakers.record_failure(&message.skill_name).await;

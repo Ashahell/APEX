@@ -21,6 +21,7 @@ pub struct SearchResult {
     pub rank: f64,
     pub context_before: String,
     pub context_after: String,
+    pub summary: Option<String>,
 }
 
 /// Search query parameters
@@ -116,6 +117,20 @@ impl SessionSearch {
             }
         }
     }
+
+    /// Fetch task data including summary
+    async fn fetch_task_data(&self, task_id: &str) -> Result<Option<TaskRow>, SessionSearchError> {
+        sqlx::query_as(
+            r#"
+            SELECT id as task_id, input_content as content, 0.0 as rank, summary
+            FROM tasks WHERE id = ?
+            "#
+        )
+        .bind(task_id)
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(|e| SessionSearchError::SearchError(e.to_string()))
+    }
     
     /// Search sessions using FTS5 or LIKE fallback
     pub async fn search(&self, query: &SearchQuery) -> Result<Vec<SearchResult>, SessionSearchError> {
@@ -150,8 +165,9 @@ impl SessionSearch {
         let rows: Vec<TaskRow> = sqlx::query_as(
             &format!(
                 r#"
-                SELECT task_id, content, bm25({}) as rank
-                FROM {}
+                SELECT t.id as task_id, t.input_content as content, bm25({}) as rank, t.summary
+                FROM {} f
+                JOIN tasks t ON t.id = f.task_id
                 WHERE {} MATCH ?
                 ORDER BY rank
                 LIMIT ? OFFSET ?
@@ -177,6 +193,7 @@ impl SessionSearch {
                 rank: row.rank,
                 context_before: String::new(),
                 context_after: String::new(),
+                summary: row.summary,
             }
         }).collect())
     }
@@ -185,7 +202,7 @@ impl SessionSearch {
     async fn search_like(&self, search_term: &str, limit: usize, offset: usize) -> Result<Vec<SearchResult>, SessionSearchError> {
         let rows: Vec<TaskRow> = sqlx::query_as(
             r#"
-            SELECT id as task_id, input_content as content, 0.0 as rank
+            SELECT id as task_id, input_content as content, 0.0 as rank, summary
             FROM tasks
             WHERE input_content LIKE ?
             ORDER BY created_at DESC
@@ -206,6 +223,7 @@ impl SessionSearch {
             rank: row.rank,
             context_before: String::new(),
             context_after: String::new(),
+            summary: row.summary,
         }).collect())
     }
     
@@ -232,6 +250,7 @@ struct TaskRow {
     task_id: String,
     content: Option<String>,
     rank: f64,
+    summary: Option<String>,
 }
 
 /// Session search errors
@@ -265,6 +284,12 @@ mod tests {
     async fn create_test_search() -> (SessionSearch, Database) {
         let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
         db.run_migrations().await.unwrap();
+        
+        // Add summary column for tests (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+            .execute(db.pool())
+            .await
+            .ok();
         
         let search = SessionSearch::new(db.pool().clone());
         (search, db)
@@ -480,6 +505,7 @@ mod tests {
             rank: 0.95,
             context_before: "Before text".to_string(),
             context_after: "After text".to_string(),
+            summary: None,
         };
         
         assert_eq!(result.task_id, "test123");
