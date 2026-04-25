@@ -11,10 +11,91 @@ import asyncio
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Optional
+import ipaddress
 import json
+from urllib.parse import urlparse
 
 import loguru
 import httpx
+
+
+BLOCKED_IP_RANGES = [
+    ipaddress.ip_network("10.0.0.0/8"),
+    ipaddress.ip_network("172.16.0.0/12"),
+    ipaddress.ip_network("192.168.0.0/16"),
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("0.0.0.0/8"),
+    ipaddress.ip_network("224.0.0.0/4"),
+    ipaddress.ip_network("240.0.0.0/4"),
+]
+
+
+def is_safe_url(url: str) -> tuple[bool, str]:
+    """Validate URL is safe from SSRF attacks.
+    
+    Returns (is_safe, reason).
+    """
+    if not url:
+        return False, "No URL provided"
+    
+    if not url.startswith(("http://", "https://")):
+        return False, "Invalid URL: must start with http:// or https://"
+    
+    try:
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        
+        if not hostname:
+            return False, "Invalid URL: no hostname"
+        
+        # Check for localhost variants
+        if hostname in ("localhost", "localhost.localdomain"):
+            return False, "Blocked: localhost access not allowed"
+        
+        # Resolve hostname to IP (handles CNAME redirection attacks)
+        try:
+            ip = ipaddress.ip_address(hostname)
+        except ValueError:
+            try:
+                import socket
+                # Use synchronous DNS resolution
+                addr_info = socket.getaddrinfo(hostname, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+                if not addr_info:
+                    return False, f"Could not resolve hostname: {hostname}"
+                # Get the IP address from the first result
+                ip = ipaddress.ip_address(addr_info[0][4][0])
+            except Exception as e:
+                return False, f"Could not resolve hostname {hostname}: {e}"
+        
+        # Block private IP ranges
+        if ip.is_private:
+            return False, f"Blocked: private IP range {ip}"
+        
+        if ip.is_loopback:
+            return False, f"Blocked: loopback address {ip}"
+        
+        if ip.is_link_local:
+            return False, f"Blocked: link-local address {ip}"
+        
+        # Block cloud metadata endpoints
+        if str(ip) == "169.254.169.254":
+            return False, "Blocked: cloud metadata endpoint"
+        
+        if str(ip) == "169.254.169.253":
+            return False, "Blocked: cloud metadata endpoint"
+        
+        if str(ip) == "169.254.169.251":
+            return False, "Blocked: cloud metadata endpoint"
+        
+        # Block unspecified/any address
+        if ip.is_unspecified:
+            return False, f"Blocked: unspecified address {ip}"
+        
+        return True, "OK"
+        
+    except Exception as e:
+        return False, f"URL validation error: {e}"
 
 
 class TaskStatus(str, Enum):
@@ -667,23 +748,17 @@ Provide only the code, no explanations. Include necessary imports."""
             )
 
     async def _tool_web_fetch(self, input_data: Any, context: AgentContext) -> ToolResult:
-        """Fetch content from a URL."""
+        """Fetch content from a URL with SSRF protection."""
         url = input_data.get("url", "")
 
-        if not url:
+        # SSRF protection check
+        is_safe, reason = is_safe_url(url)
+        if not is_safe:
+            loguru.logger.warning(f"SSRF blocked: {url} - {reason}")
             return ToolResult(
                 tool_name="web.fetch",
                 success=False,
-                error="No URL provided",
-                cost_cents=0,
-            )
-
-        # Validate URL
-        if not url.startswith(("http://", "https://")):
-            return ToolResult(
-                tool_name="web.fetch",
-                success=False,
-                error="Invalid URL: must start with http:// or https://",
+                error=f"URL blocked for security reasons: {reason}",
                 cost_cents=0,
             )
 
