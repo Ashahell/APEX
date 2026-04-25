@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { apiGet, apiPost, apiDelete, apiPut } from '../../lib/api';
 import { WorkflowVisualizer } from './WorkflowVisualizer';
+import { Loading, ErrorDisplay, EmptyState } from '../ui/LoadingState';
 
 interface Workflow {
   id: string;
@@ -258,15 +259,17 @@ export function Workflows() {
             </div>
 
             {loading ? (
-              <div className="text-center py-12 text-[var(--color-text-muted)]">Loading...</div>
+              <Loading text="Loading workflows..." />
             ) : workflows.length === 0 ? (
-              <div className="text-center text-[var(--color-text-muted)] py-12">
-                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mx-auto opacity-50">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-                </svg>
-                <p className="mt-4 mb-2">No workflows found</p>
-                <p className="text-sm">Create a workflow to get started</p>
-              </div>
+              <EmptyState
+                title="No workflows found"
+                description="Create a workflow to get started"
+                icon={
+                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                  </svg>
+                }
+              />
             ) : (
               <div className="space-y-3">
                 {workflows.map((workflow) => (

@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
+import { Spinner, Loading, ErrorDisplay } from '../ui/LoadingState';
 
 // Types matching the Rust backend
 interface SearchResult {
@@ -155,9 +156,7 @@ export function SessionSearch({ onSelectResult }: SessionSearchProps) {
 
       {/* Error */}
       {error && (
-        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 text-sm text-destructive">
-          {error}
-        </div>
+        <ErrorDisplay message={error} />
       )}
 
       {/* Results */}
@@ -227,10 +226,7 @@ export function SessionSearch({ onSelectResult }: SessionSearchProps) {
 
       {/* Loading state */}
       {loading && searched && (
-        <div className="text-center py-8">
-          <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
-          <div className="mt-2 text-sm text-muted-foreground">Searching...</div>
-        </div>
+        <Loading text="Searching..." />
       )}
     </div>
   );
