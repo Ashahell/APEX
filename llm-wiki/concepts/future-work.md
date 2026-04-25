@@ -86,10 +86,10 @@
 - SubTask status tracking
 - Orchestrator in deep_task_worker
 
-### 4.3 Webhook Direct Delivery
-- Deliver without LLM involvement
-- `POST /api/v1/webhooks/subscribe`
-- Event routing: task.completed → direct, task.failed → agent
+### 4.3 Webhook Direct Delivery ✅ Complete
+- Event-based webhook system
+- `/api/v1/webhooks` CRUD endpoints
+- trigger_event() for task.completed/failed
 
 ### 4.4 Shell Hooks
 - Lifecycle hooks: pre/post tool call, session start/end
