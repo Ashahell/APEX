@@ -9,6 +9,7 @@ use axum::extract::State;
 use ulid::Ulid;
 
 use apex_memory::hybrid_search::{rrf_score, reciprocal_rank_fusion, temporal_decay, frequency_boost, mmr_select};
+use apex_memory::memory_integrity::MemoryIntegrity;
 use apex_memory::multimodal_repo::{MultimodalRepository, MultimodalStats, MultimodalSearchResult};
 use super::{AppState, FileContent, FileItem, GetFileContentQuery, ListFilesQuery, MemoryStatsResponse, ReflectionItem};
 
@@ -44,6 +45,12 @@ pub fn router() -> Router<AppState> {
         .route("/api/v1/memory/multimodal/embeddings", get(list_multimodal_embeddings))
         .route("/api/v1/memory/multimodal/index", post(index_memory))
         .route("/api/v1/memory/multimodal/search", get(search_multimodal))
+        // Memory Integrity (Phase 2.1)
+        .route("/api/v1/memory/integrity", get(get_integrity_status))
+        .route("/api/v1/memory/integrity/verify", post(verify_integrity))
+        .route("/api/v1/memory/integrity/repair", post(repair_integrity))
+        .route("/api/v1/memory/integrity/sync", post(sync_hashes))
+        .route("/api/v1/memory/integrity/sync-status", get(get_sync_status))
 }
 
 async fn list_files(Query(query): Query<ListFilesQuery>) -> Result<Json<Vec<FileItem>>, String> {
@@ -635,4 +642,78 @@ async fn search_multimodal(
         .collect();
     
     Ok(Json(results))
+}
+
+// ============ Memory Integrity ============
+
+async fn get_integrity_status(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let integrity = MemoryIntegrity::new(state.pool.clone());
+    let meta = integrity.get_meta().await.map_err(|e| e.to_string())?;
+    let sync = integrity.get_sync_status().await.map_err(|e| e.to_string())?;
+
+    Ok(Json(serde_json::json!({
+        "meta": meta,
+        "sync": sync,
+    })))
+}
+
+async fn verify_integrity(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let integrity = MemoryIntegrity::new(state.pool.clone());
+    let report = integrity.verify_integrity().await.map_err(|e| e.to_string())?;
+
+    Ok(Json(serde_json::json!({
+        "status": report.status,
+        "total_chunks": report.total_chunks,
+        "valid_chunks": report.valid_chunks,
+        "corrupted_chunks": report.corrupted_chunks,
+        "corrupt_chunk_ids": report.corrupt_chunk_ids,
+        "last_check": report.last_check,
+        "duration_ms": report.duration_ms,
+    })))
+}
+
+async fn repair_integrity(
+    State(state): State<AppState>,
+    axum::extract::Json(payload): axum::extract::Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, String> {
+    let integrity = MemoryIntegrity::new(state.pool.clone());
+
+    let report = if let Some(chunk_ids) = payload.get("chunk_ids").and_then(|v| v.as_array()) {
+        let ids: Vec<String> = chunk_ids.iter().filter_map(|v| v.as_str().map(String::from)).collect();
+        integrity.repair_chunks(&ids).await.map_err(|e| e.to_string())?
+    } else {
+        integrity.repair_all_corrupted().await.map_err(|e| e.to_string())?
+    };
+
+    Ok(Json(serde_json::json!({
+        "total_repaired": report.total_repaired,
+        "failed": report.failed,
+        "repaired_chunk_ids": report.repaired_chunk_ids,
+        "failed_chunk_ids": report.failed_chunk_ids,
+    })))
+}
+
+async fn sync_hashes(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let integrity = MemoryIntegrity::new(state.pool.clone());
+    let count = integrity.compute_all_hashes().await.map_err(|e| e.to_string())?;
+
+    Ok(Json(serde_json::json!({
+        "computed": count,
+        "message": format!("Computed {} missing hashes", count),
+    })))
+}
+
+async fn get_sync_status(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, String> {
+    let integrity = MemoryIntegrity::new(state.pool.clone());
+    let sync = integrity.get_sync_status().await.map_err(|e| e.to_string())?;
+
+    Ok(Json(sync))
 }

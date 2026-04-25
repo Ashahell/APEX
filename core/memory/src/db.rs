@@ -642,7 +642,40 @@ impl Database {
         sqlx::query("CREATE INDEX IF NOT EXISTS idx_skill_triggers_skill ON skill_triggers(skill_name)")
             .execute(&self.pool).await.ok();
 
-        tracing::info!("Migration 028: Created skill_triggers table for lexical matching");
+        tracing::info!("Migration 028: Created hash_store for memory integrity verification");
+
+        // Migration 029: Memory Integrity Hash Store
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS hash_store (
+                chunk_id TEXT PRIMARY KEY NOT NULL,
+                content_hash TEXT NOT NULL,
+                word_count INTEGER NOT NULL,
+                chunk_index INTEGER NOT NULL,
+                created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                verified_at TEXT,
+                status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK(status IN ('pending', 'valid', 'corrupted', 'repaired'))
+            )
+        "#).execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_hash_store_status ON hash_store(status)")
+            .execute(&self.pool).await.ok();
+        sqlx::query("CREATE INDEX IF NOT EXISTS idx_hash_store_verified ON hash_store(verified_at)")
+            .execute(&self.pool).await.ok();
+
+        // Integrity metadata table (singleton row)
+        sqlx::query(r#"
+            CREATE TABLE IF NOT EXISTS integrity_meta (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_check TEXT,
+                total_chunks INTEGER DEFAULT 0,
+                valid_chunks INTEGER DEFAULT 0,
+                corrupted_chunks INTEGER DEFAULT 0,
+                repaired_chunks INTEGER DEFAULT 0,
+                status TEXT DEFAULT 'unknown' CHECK(status IN ('unknown', 'checking', 'valid', 'corrupted', 'empty', 'error'))
+            )
+        "#).execute(&self.pool).await.ok();
+        sqlx::query("INSERT OR IGNORE INTO integrity_meta (id) VALUES (1)")
+            .execute(&self.pool).await.ok();
 
         tracing::info!("Migrations completed successfully");
         Ok(())

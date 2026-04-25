@@ -11,6 +11,7 @@ pub mod db;
 pub mod decision_journal;
 pub mod embedder;
 pub mod hybrid_search;
+pub mod memory_integrity;
 pub mod msg_repo;
 pub mod narrative;
 pub mod preferences;
@@ -58,6 +59,9 @@ pub use task_repo::TaskRepository;
 pub use tasks::{CreateTask, Task, TaskPriority, TaskStatus, TaskTier};
 pub use channel_repo::{ChannelRepository, CreateChannel};
 pub use audit::{AuditEntry, CreateAuditEntry, AuditRepository};
+pub use memory_integrity::{
+    HashStoreEntry, IntegrityMeta, IntegrityReport, MemoryIntegrity, RepairReport,
+};
 pub use ttl_cleanup::{CleanupReport, TtlCleanup};
 pub use preferences::PreferencesRepository;
 pub use config_repo::{ConfigEntry, ConfigRepository, McpServer, McpTool};

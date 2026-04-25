@@ -1627,3 +1627,136 @@ async fn test_config_persistence_nonexistent() {
     // Should return default config
     assert!(result.agent.llms.len() >= 1);
 }
+
+#[tokio::test]
+async fn test_memory_integrity_status_endpoint() {
+    let _timer = TestTimer::new("test_memory_integrity_status_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/integrity")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_integrity_verify_endpoint() {
+    let _timer = TestTimer::new("test_memory_integrity_verify_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri("/api/v1/memory/integrity/verify")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_integrity_sync_endpoint() {
+    let _timer = TestTimer::new("test_memory_integrity_sync_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method(http::Method::POST)
+                .uri("/api/v1/memory/integrity/sync")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_integrity_sync_status_endpoint() {
+    let _timer = TestTimer::new("test_memory_integrity_sync_status_endpoint");
+    let state = create_test_state().await;
+    let app = create_router(state);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/memory/integrity/sync-status")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn test_memory_integrity_hash_computation() {
+    let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+    db.run_migrations().await.unwrap();
+
+    sqlx::query("INSERT INTO memory_chunks (id, file_path, chunk_index, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind("chunk-test-1")
+        .bind("/test/file.md")
+        .bind(0)
+        .bind("Test content for hashing")
+        .bind(4)
+        .bind("test")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let integrity = apex_memory::MemoryIntegrity::new(db.pool().clone());
+    let computed = integrity.compute_all_hashes().await.unwrap();
+
+    assert_eq!(computed, 1, "Should compute exactly 1 missing hash");
+
+    let count = integrity.hash_count().await.unwrap();
+    assert_eq!(count, 1, "Should have exactly 1 hash stored");
+
+    let computed2 = integrity.compute_all_hashes().await.unwrap();
+    assert_eq!(computed2, 0, "Second run should find no missing hashes");
+}
+
+#[tokio::test]
+async fn test_memory_integrity_verify_clean() {
+    let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
+    db.run_migrations().await.unwrap();
+
+    sqlx::query("INSERT INTO memory_chunks (id, file_path, chunk_index, content, word_count, memory_type) VALUES (?, ?, ?, ?, ?, ?)")
+        .bind("chunk-verify-1")
+        .bind("/test/file.md")
+        .bind(0)
+        .bind("Clean content")
+        .bind(2)
+        .bind("test")
+        .execute(db.pool())
+        .await
+        .unwrap();
+
+    let integrity = apex_memory::MemoryIntegrity::new(db.pool().clone());
+    integrity.compute_all_hashes().await.unwrap();
+
+    let report = integrity.verify_integrity().await.unwrap();
+
+    assert_eq!(report.total_chunks, 1);
+    assert_eq!(report.valid_chunks, 1);
+    assert_eq!(report.corrupted_chunks, 0);
+    assert!(report.corrupt_chunk_ids.is_empty());
+}

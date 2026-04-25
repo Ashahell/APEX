@@ -79,6 +79,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pool_for_workers = pool.clone();
     tracing::info!("Database initialized at {:?}", pool);
 
+    // Initialize memory integrity (sync hashes for new chunks, log status)
+    {
+        let integrity = apex_memory::MemoryIntegrity::new(pool.clone());
+        match integrity.compute_all_hashes().await {
+            Ok(computed) if computed > 0 => {
+                tracing::info!("Computed {} missing content hashes for memory integrity", computed);
+            }
+            Ok(_) => {
+                tracing::debug!("Memory integrity: all chunks hashed");
+            }
+            Err(e) => {
+                tracing::warn!("Memory integrity hash sync failed: {}", e);
+            }
+        }
+    }
+
     let message_bus = MessageBus::new(100);
     let circuit_breakers = CircuitBreakerRegistry::new();
     
