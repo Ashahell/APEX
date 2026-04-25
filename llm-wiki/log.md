@@ -91,3 +91,21 @@
 - [concepts/session-control.md] created
 - [concepts/schema-fix-plan.md] updated
 - [index.md] updated with new concept pages
+
+## [2026-04-25] ingest | Full wiki refresh — all recent changes
+### Pages Updated
+- [project-overview.md] refreshed — v1.6.0 summary, test suite, build commands
+- [concepts/architecture.md] refreshed — 6-layer diagram, API surface, unified config
+- [concepts/skills.md] refreshed — Hermes features, auto-created skills, Skills Hub
+
+### Pages Created
+- [concepts/security.md] — T0-T3 tiers, HMAC, TOTP, VM isolation, SSRF, schema fixes
+- [concepts/future-work.md] — 4-phase roadmap, Phase 1 complete, priorities
+- [concepts/streaming.md] — SSE, WebSocket, TinySSE protocols
+- [concepts/test-suite.md] — 461+ tests breakdown by suite
+- [concepts/ssrf-protection.md] — CVE-2026-4308 mitigation
+
+### Pages Updated
+- [concepts/schema-fix-plan.md] — Security fixes complete
+- [index.md] — All new pages indexed
+- [log.md] — This entry

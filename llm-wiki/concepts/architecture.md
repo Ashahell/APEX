@@ -14,6 +14,7 @@ APEX (Autonomous Platform for Execution & Communication) is a 6-layer single-use
 |--------|----------------|
 | **OpenClaw** | Messaging adapters (Slack, Discord, Telegram), open architecture, plugin ecosystem |
 | **AgentZero** | Dark navy/cyan aesthetic, agent loop logic, SKILL.md standard |
+| **Hermes** | Bounded memory, auto-created skills, session search, user profiling |
 | **Security-first** | Hardened beyond both — T0-T3 tiers, HMAC auth, TOTP, VM isolation |
 
 ## 6-Layer Architecture
@@ -22,92 +23,120 @@ APEX (Autonomous Platform for Execution & Communication) is a 6-layer single-use
 L6 ┌─────────────────────────────────────────────────────────────┐
    │  Web UI (React SPA)                                         │
    │  Real-time chat · Skill marketplace · File browser          │
-L5 └──────────────────────┬────────────────────────────────────┘
-                          │  WebSocket
-L4 ┌──────────────────────▼─────────────────────────────────────┐
+L5 └──────────────────────┬──────────────────────────────────────┘
+                          │  WebSocket / HTTP
+L4 ┌──────────────────────▼──────────────────────────────────────┐
    │  L1 · Messaging Gateway (TypeScript)                        │
    │  Slack · Discord · Telegram · WhatsApp · Email             │
-L3 └──────────────────────┬──────────────────────────────────────┘
-                          │  TaskRequest → NATS
-L2 ┌──────────────────────▼─────────────────────────────────────┐
+L3 └──────────────────────┬───────────────────────────────────────┘
+                          │  TaskRequest → NATS / internal bus
+L2 ┌──────────────────────▼──────────────────────────────────────┐
    │  L2 · Task Router (Rust)                                    │
    │  Intent classification · Permission enforcement            │
-L1 └──────────┬────────────────────────────┬──────────────────┘
-              │ apex.tasks.shallow       │ apex.tasks.deep
-L0 ┌──────────▼──────────┐    ┌───────────▼───────────────────┐
-   │  L4 · Skill Runner  │    │  L5 · Execution Engine         │
-   │  (TypeScript)       │    │  (Python in Firecracker microVM)│
-   │  Curated ~33 skills │    │  Agent Zero loop               │
-   └─────────────────────┘    └────────────────────────────────┘
+L1 └──────────┬────────────────────────────┬────────────────────┘
+              │ apex.tasks.shallow          │ apex.tasks.deep
+L0 ┌──────────▼──────────┐   ┌──────────────▼─────────────────────┐
+   │  L4 · Skill Runner  │   │  L5 · Execution Engine             │
+   │  (TypeScript)       │   │  (Python in Firecracker microVM)   │
+   │  Curated ~33 skills │   │  Agent Zero loop                   │
+   └─────────────────────┘   └────────────────────────────────────┘
 ```
 
 ## Key Components
 
-### L2 Task Router
+### L2 Task Router (`core/router/`)
 - **Intent Classification**: Instant (<100ms) / Shallow (<3s) / Deep (async)
 - **Permission Enforcement**: T0-T3 tier gates
 - **Cost Estimation**: Model selection, budget tracking
+- **Workers**: `skill_worker.rs`, `deep_task_worker.rs`, `t3_confirm_worker.rs`
+- **API**: 60+ endpoints (tasks, skills, channels, journal, memory, MCP, etc.)
 
-### L3 Memory & State
+### L3 Memory & State (`core/memory/`)
 - SQLite database: `~/.apex/data/apex.db`
-- Vector search via sqlite_vec
-- Append-only audit log (tamper-evident)
+- Vector search via sqlite_vec + embedder
+- Append-only audit log with hash chain (tamper-evident)
 - Memory tiers: Working → Session → Project → Long-term
+- FTS5 full-text search with BM25 ranking
+- 27 migrations (000-026)
 
-### L4 Skill Registry
+### L4 Skill Registry (`skills/`)
 - 33 built-in skills across categories
 - SKILL.md standard (hot-reload capable)
 - Permission tiers: T0 (silent) → T1 (tap) → T2 (type) → T3 (TOTP)
+- Lexical matching fallback (60+ keyword triggers)
+- Auto-created skills after 5+ tool calls
 
-### L5 Execution Engine
-- Firecracker micro-VMs for isolation
+### L5 Execution Engine (`execution/`)
+- Firecracker micro-VMs for isolation (Linux)
+- Docker fallback on Windows
 - Agent Zero loop: plan → act → observe → reflect
 - 125ms cold start, 512MB RAM default
 - gVisor fallback on non-KVM machines
+- SSRF protection for web.fetch tool
 
-## Security Model
+### L6 Web UI (`ui/`)
+- React 18 + TypeScript + Tailwind CSS
+- Real-time via WebSocket + SSE
+- Kanban task board
+- Process group execution traces
+- Theme system (Modern 2026, Amiga, AgentZero)
+- Toast notifications
 
-### Permission Tiers
-| Tier | Actions | Gate |
-|------|---------|------|
-| T0 | Read-only queries, search | None |
-| T1 | File writes, drafts | Tap confirm |
-| T2 | External API calls, git push | Type to confirm |
-| T3 | Destructive ops, cost >$10 | TOTP + 5-min delay |
+### L1 Gateway (`gateway/`)
+- TypeScript/Fastify messaging adapters
+- REST API proxy to router
+- HMAC request signing
 
-### VM Isolation
-- Dedicated Linux kernel (no host sharing)
-- Network blocked by default (allowlist required)
-- Ephemeral storage (destroyed with VM)
-- Resource limits enforced
+## API Surface
 
-## Implementation Status
+**Core:**
+- Tasks: create, list, filter, cancel, confirm
+- Messages: list, by task
+- Skills: registry, execute, triggers, auto-created
+- Deep Tasks: execute with VM pool
+- TOTP: setup, verify, status
 
-| Component | Version | Status |
-|-----------|---------|--------|
-| Core (Rust) | L2/L3 Router | Built |
-| Gateway (TypeScript) | L1 Messaging | Built |
-| Skills (TypeScript) | L4 Registry | Built (33 skills) |
-| Execution (Python) | L5 Engine | Built (Docker) |
-| UI (React) | L6 Web UI | Built |
-| MCP | Model Context Protocol | Built |
+**Session Control:**
+- Sessions: yield, resume, compact, checkpoints, attachments
+- Channels: CRUD
+- Journal: CRUD + search
 
-## Hermes Agent Features (v1.5.0+)
-- Bounded curated memory (2,200 agent / 1,375 user chars)
-- Auto-created skills after 5+ tool calls
-- Session search with FTS5
-- User profile modeling
+**Memory:**
+- Narrative memory: entities, knowledge, reflections
+- Bounded memory: agent/user with frozen snapshots
+- Session search: FTS5 + BM25 + context extraction
+- Hub: marketplace skills
 
-## Sapphire Features (v1.6.0)
-- Tool Maker runtime validation
-- Persona assembly
-- Context scope isolation
-- Continuity scheduler
-- Plugin signing
-- Privacy toggle
-- Story engine
+**System:**
+- MCP servers and registries
+- LLM config and providers
+- Secrets (64 targets)
+- Slack block kit templates
+- Execution patterns (death spiral detection)
+- Moltbook social integration
+- Governance and policy
+
+## Unified Configuration
+
+All settings via `AppConfig::global()` in `core/router/src/unified_config.rs`:
+- Server: port, host
+- Auth: shared secret, disabled flag
+- LLM: provider, model, llama-server URL
+- Execution: isolation backend, VM memory/vCPU
+- Memory: embedding provider, RRF k, decay
+- Skill Pool: size, timeout, acquire
+- Heartbeat: interval, jitter, cooldown
 
 ## Files
+
 - Design spec: [raw/APEX-Design.md](raw/APEX-Design.md)
-- Architecture: [ARCHITECTURE.md](raw/ARCHITECTURE.md)
-- Security: [SECURITY.md](raw/SECURITY.md)
+- Architecture: [raw/ARCHITECTURE.md](raw/ARCHITECTURE.md)
+- Security: [raw/SECURITY.md](raw/SECURITY.md)
+- Memory spec: [raw/APEX_Memory_System_Spec_v2.md](raw/APEX_Memory_System_Spec_v2.md)
+
+## Related
+
+- [project-overview.md](project-overview.md)
+- [skills.md](concepts/skills.md)
+- [phase-1-ux-improvements.md](concepts/phase-1-ux-improvements.md)
+- [security.md](concepts/security.md)
