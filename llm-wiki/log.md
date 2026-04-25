@@ -1,5 +1,29 @@
 # Log
 
+## [2026-04-25] feat | Session feature implementations (Phase 2-4)
+
+### Phase 2: Memory System Enhancements
+- **2.1 Memory Integrity** — SHA-256 hash sidecar (migration 027, 028, 031)
+- **2.2 Enhanced Session Search** — Auto-summarize (>50 messages), "Summarized" badge
+- **2.3 Temporal Decay** — APEX_MEMORY_HALF_LIFE_DAYS, APEX_MEMORY_MMR_LAMBDA
+
+### Phase 3: LLM Provider Abstraction  
+- **3.1 Transport Layer** — LlmTransport trait (chat, provider_name)
+- **3.2 Fast Mode** — TaskPriority::Fast, skip skill worker
+- **3.3 Multi-Model Routing** — model field in ExecuteDeepTaskRequest
+
+### Phase 4: Advanced Features
+- **4.1 Agent Nudges** — POST /api/v1/tasks/:id/steer
+- **4.2 Subagent Pool** — Already existed
+- **4.3 Webhook Direct** — Already existed  
+- **4.4 Shell Hooks** — ShellHookConfig, 5s timeout
+
+### Tests
+- 509 tests pass
+
+### Pages Updated
+- [concepts/future-work.md] — All Phases 2, 3, 4 complete
+
 ## [2026-04-25] init | Created llm-wiki structure for APEX project
 - [CLAUDE.md] created - schema layer
 - [index.md] created - content catalog
