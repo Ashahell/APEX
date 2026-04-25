@@ -42,3 +42,23 @@
 - [memory/src/provider_repo.rs] Removed unused import and prefixed vars
 - [memory/src/dashboard_repo.rs] Removed unused import
 - Result: 0 warnings, all tests passing
+
+## [2026-04-25] fix | Expanded test suite (518 tests passing)
+- Fixed streaming_integration.rs test issues: added StreamingError variants, to_sse_event() method
+- Tests: 518 passed (63 memory + 339 router + 110 integration + 6 security)
+- GitHub: Pushed schema-fix-plan.md and production-harden-research.md commits
+
+## [2026-04-25] review | Production hardening research completed
+- Reviewed PRODUCTION_HARDENING.md requirements
+- Researched latest 2026 AI agent security best practices (Google ADK, OWASP, Cordum, Harness)
+- Key insights: staged deployment gates, policy enforcement before dispatch, checkpoint-resume for fault tolerance, iteration/time/token budgets
+- Infrastructure hardening (seccomp, AppArmor, K8s policies) requires deployment environment, not code changes
+
+## [2026-04-25] fix | SSRF protection added (CVE-2026-4308 mitigation)
+- Monitored OpenClaw and Agent Zero repos for security updates
+- Agent Zero disclosed CVEs: CVE-2026-4307 (path traversal), CVE-2026-4308 (SSRF)
+- APEX already protected against path traversal (vm_pool.rs, content_hash.rs, injection_classifier.rs)
+- Implemented SSRF protection in execution/src/apex_agent/__init__.py
+- Blocks: localhost, private IPs (10.x, 172.16-31.x, 192.168.x), cloud metadata (169.254.169.254)
+- DNS resolution to prevent CNAME redirection attacks
+- Added 12 SSRF protection tests (64 execution tests total passing)
