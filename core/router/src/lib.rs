@@ -6,6 +6,7 @@ pub mod agent_loop;
 pub mod api;
 pub mod auth;
 pub mod circuit_breaker;
+pub mod compaction;  // Phase 1.9: Chat Compaction
 pub mod classifier;
 pub mod deep_task_worker;
 pub mod dynamic_tools;

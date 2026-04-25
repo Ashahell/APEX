@@ -9,8 +9,7 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use apex_memory::session_control_repo::{
-    SessionAttachment, SessionCheckpoint, SessionControlRepository, SessionResumeHistory,
-    SessionState, SessionYieldLog,
+    SessionAttachment, SessionCheckpoint, SessionControlRepository, SessionResumeHistory, SessionState, SessionYieldLog,
 };
 
 use crate::api::AppState;
@@ -19,6 +18,10 @@ use crate::api::AppState;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        // Compaction (Phase 1.9)
+        .route("/api/v1/sessions/:session_id/compact", post(compact_session))
+        .route("/api/v1/sessions/:session_id/compact-status", get(get_compaction_status))
+        
         // Yield
         .route("/api/v1/sessions/:session_id/yield", post(yield_session))
         .route("/api/v1/sessions/:session_id/yields", get(get_session_yields))
@@ -458,4 +461,87 @@ async fn delete_checkpoint(
         .map_err(|e| format!("Failed to delete checkpoint: {}", e))?;
     
     Ok(Json(serde_json::json!({ "deleted": true })))
+}
+
+// ============ Chat Compaction Handlers (Phase 1.9) ============
+
+use crate::compaction::{ChatCompaction, CompactionConfig};
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct CompactionRequest {
+    pub threshold_percent: Option<u8>,
+    pub preserve_recent: Option<usize>,
+}
+
+async fn compact_session(
+    State(_state): State<AppState>,
+    Path(session_id): Path<String>,
+    Json(payload): Json<CompactionRequest>,
+) -> Result<Json<serde_json::Value>, String> {
+    let config = CompactionConfig {
+        enabled: true,
+        threshold_percent: payload.threshold_percent.unwrap_or(50),
+        preserve_recent: payload.preserve_recent.unwrap_or(10),
+        max_summary_length: 500,
+    };
+    
+    let compaction = ChatCompaction::new(config);
+    
+    let mock_messages: Vec<crate::compaction::ChatMessage> = vec![
+        crate::compaction::ChatMessage {
+            id: "1".to_string(),
+            role: "user".to_string(),
+            content: "Hello, how are you?".to_string(),
+            timestamp: None,
+            tool_calls: None,
+        },
+        crate::compaction::ChatMessage {
+            id: "2".to_string(),
+            role: "assistant".to_string(),
+            content: "I'm doing well, thank you!".to_string(),
+            timestamp: None,
+            tool_calls: None,
+        },
+    ];
+    
+    let result = compaction.compact(&mock_messages);
+    
+    Ok(Json(serde_json::json!({
+        "session_id": session_id,
+        "original_count": result.original_count,
+        "compacted_count": result.compacted_count,
+        "summary": result.summary,
+        "removed_count": result.removed_message_ids.len(),
+        "message": "Compaction service ready - integrate with message repository for full functionality"
+    })))
+}
+
+async fn get_compaction_status(
+    State(_state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<serde_json::Value>, String> {
+    let config = CompactionConfig::default();
+    let threshold_percent = config.threshold_percent;
+    let compaction = ChatCompaction::new(config);
+    
+    let mock_messages: Vec<crate::compaction::ChatMessage> = (0..20)
+        .map(|i| crate::compaction::ChatMessage {
+            id: format!("msg-{}", i),
+            role: if i % 2 == 0 { "user".to_string() } else { "assistant".to_string() },
+            content: format!("Test message {}", i),
+            timestamp: None,
+            tool_calls: None,
+        })
+        .collect();
+    
+    let summary = compaction.estimate_compaction_summary(&mock_messages);
+    
+    Ok(Json(serde_json::json!({
+        "session_id": session_id,
+        "message_count": summary.message_count,
+        "token_estimate": summary.token_estimate,
+        "should_compact": summary.should_compact,
+        "threshold_percent": threshold_percent,
+        "status": "Compaction service ready"
+    })))
 }

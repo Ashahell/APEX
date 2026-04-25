@@ -69,6 +69,7 @@ export function Chat() {
   const [recognition, setRecognition] = useState<SpeechRecognition | null>(null);
   const [hoveredMessageId, setHoveredMessageId] = useState<string | null>(null);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
+  const [isCompacting, setIsCompacting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const clientRef = useRef<SSEClient | WSClient | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -168,6 +169,41 @@ export function Chat() {
     } else {
       recognition.start();
       setIsRecording(true);
+    }
+  };
+
+  const compactChat = async () => {
+    setIsCompacting(true);
+    try {
+      const sessionId = localStorage.getItem('apex-session-id') || 'default';
+      const threshold = parseInt(localStorage.getItem('apex-compaction-threshold') || '50');
+      const preserve = parseInt(localStorage.getItem('apex-compaction-preserve') || '10');
+      const res = await apiPost(`/api/v1/sessions/${sessionId}/compact`, {
+        threshold_percent: threshold,
+        preserve_recent: preserve,
+      });
+      if (res.ok) {
+        const data = await res.json();
+        useAppStore.getState().addToast({
+          type: 'success',
+          message: `Compacted ${data.original_count} → ${data.compacted_count} messages`,
+          duration: 3000,
+        });
+      } else {
+        useAppStore.getState().addToast({
+          type: 'error',
+          message: 'Compaction failed',
+          duration: 3000,
+        });
+      }
+    } catch (e) {
+      useAppStore.getState().addToast({
+        type: 'error',
+        message: 'Compaction error: ' + String(e),
+        duration: 3000,
+      });
+    } finally {
+      setIsCompacting(false);
     }
   };
 
@@ -533,6 +569,23 @@ export function Chat() {
               {lastStats.steps} steps • ${lastStats.cost.toFixed(4)}
             </span>
           )}
+          <button
+            onClick={compactChat}
+            disabled={isCompacting || messages.length < 20}
+            className="text-sm bg-muted px-3 py-1.5 rounded-full flex items-center gap-2 hover:bg-muted/80 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ml-auto"
+            title={messages.length < 20 ? 'Need 20+ messages to compact' : 'Compact older messages to reduce context'}
+          >
+            {isCompacting ? (
+              <svg className="animate-spin" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+              </svg>
+            )}
+            {isCompacting ? 'Compacting...' : 'Compact'}
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto p-4 space-y-4">

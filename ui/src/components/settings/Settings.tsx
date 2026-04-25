@@ -823,8 +823,38 @@ export function Settings() {
                 </label>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-2">Max Concurrent Tasks</label>
-                <input type="number" defaultValue="4" min="1" max="16" className="w-full px-3 py-2 rounded-lg border bg-background" />
+                <label className="block text-sm font-medium mb-2">Compaction Threshold (%)</label>
+                <input 
+                  type="number" 
+                  defaultValue="50" 
+                  min="10" 
+                  max="90" 
+                  className="w-full px-3 py-2 rounded-lg border bg-background"
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (val >= 10 && val <= 90) {
+                      localStorage.setItem('apex-compaction-threshold', String(val));
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Trigger compaction when context reaches this % of max tokens</p>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">Preserve Recent Messages</label>
+                <input 
+                  type="number" 
+                  defaultValue="10" 
+                  min="2" 
+                  max="50" 
+                  className="w-full px-3 py-2 rounded-lg border bg-background"
+                  onChange={(e) => {
+                    const val = parseInt(e.target.value);
+                    if (val >= 2 && val <= 50) {
+                      localStorage.setItem('apex-compaction-preserve', String(val));
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground mt-1">Number of recent messages to always keep during compaction</p>
               </div>
             </div>
 
