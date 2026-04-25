@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loading } from '../ui/LoadingState';
+import { Loading, EmptyState } from '../ui/LoadingState';
 
 interface VerificationResult {
   valid: boolean;
@@ -219,10 +219,11 @@ export function SkillSecurity() {
         </h4>
         
         {skills.length === 0 ? (
-          <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            <div className="text-4xl mb-4">🔐</div>
-            <p className="text-sm">No skills loaded</p>
-          </div>
+          <EmptyState
+            icon="🔐"
+            title="No skills loaded"
+            description="Skills will appear here after loading."
+          />
         ) : (
           skills.map(skill => {
             const result = verificationResults.get(skill.name);

@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
-import { Spinner, Loading, ErrorDisplay } from '../ui/LoadingState';
+import { Spinner, Loading, ErrorDisplay, EmptyState } from '../ui/LoadingState';
 
 // Types matching the Rust backend
 interface SearchResult {
@@ -167,9 +167,11 @@ export function SessionSearch({ onSelectResult }: SessionSearchProps) {
           </div>
 
           {results.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              No results found for "{query}"
-            </div>
+            <EmptyState
+              icon="🔍"
+              title={`No results for "${query}"`}
+              description="Try different keywords or clear the search."
+            />
           ) : (
             <div className="space-y-2">
               {results.map((result, index) => (

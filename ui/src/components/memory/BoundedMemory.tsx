@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
-import { Loading } from '../ui/LoadingState';
+import { Loading, EmptyState, ErrorDisplay } from '../ui/LoadingState';
 import {
   getBoundedMemoryStats,
   getMemoryEntries,
@@ -143,7 +143,7 @@ function AddEntryForm({ storeType, onSubmit, remaining: _remaining }: AddEntryFo
         maxLength={maxLength + 100}
       />
       {error && (
-        <p className="text-red-400 text-sm">{error}</p>
+        <ErrorDisplay message={error} onRetry={refresh} />
       )}
       <div className="flex justify-between items-center">
         <span className={`text-xs ${content.length < minLength ? 'text-amber-400' : 'text-[var(--color-text-muted)]'}`}>
@@ -325,10 +325,11 @@ export function BoundedMemory() {
           {activeTab === 'memory' ? 'Memory Entries' : 'User Preferences'}
         </h3>
         {currentEntries.length === 0 ? (
-          <div className="p-8 text-center text-[var(--color-text-muted)] bg-[var(--color-panel)] rounded-lg border border-[var(--color-border)]">
-            <p>No entries yet.</p>
-            <p className="text-sm mt-1">Add your first entry above.</p>
-          </div>
+          <EmptyState
+            icon="📝"
+            title="No entries yet"
+            description="Add your first entry above."
+          />
         ) : (
           <div className="space-y-2">
             {currentEntries.map((entry) => (

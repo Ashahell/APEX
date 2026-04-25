@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loading } from '../ui/LoadingState';
+import { Loading, EmptyState } from '../ui/LoadingState';
 
 // Task types for continuity scheduler
 const TASK_TYPES = [
@@ -314,11 +314,11 @@ export function ContinuitySettings() {
       {activeTab === 'tasks' && (
         <div className="space-y-3">
           {tasks.length === 0 ? (
-            <div className="text-center py-12 text-gray-500 dark:text-gray-400">
-              <div className="text-4xl mb-4">📅</div>
-              <p className="text-sm">No scheduled tasks yet</p>
-              <p className="text-xs mt-1">Click "New Task" to create one</p>
-            </div>
+            <EmptyState
+              icon="📅"
+              title="No scheduled tasks"
+              description="Click 'New Task' to create one."
+            />
           ) : (
             tasks.map(task => (
               <div
