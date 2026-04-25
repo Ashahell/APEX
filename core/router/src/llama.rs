@@ -2,6 +2,12 @@ use crate::unified_config::AppConfig;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+#[async_trait::async_trait]
+pub trait LlmTransport: Send + Sync {
+    async fn chat(&self, system_prompt: &str, user_prompt: &str) -> Result<String, String>;
+    fn provider_name(&self) -> &str;
+}
+
 #[derive(Clone)]
 pub struct LlamaClient {
     client: Client,
@@ -221,5 +227,16 @@ mod tests {
                 eprintln!("LLM test failed: {}. Make sure llama-server is running on port 8080", e);
             }
         }
+    }
+}
+
+#[async_trait::async_trait]
+impl LlmTransport for LlamaClient {
+    async fn chat(&self, system_prompt: &str, user_prompt: &str) -> Result<String, String> {
+        LlamaClient::chat(self, system_prompt, user_prompt).await
+    }
+
+    fn provider_name(&self) -> &str {
+        "llama-server"
     }
 }

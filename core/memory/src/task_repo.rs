@@ -505,6 +505,12 @@ mod tests {
     async fn test_request_cancellation() {
         let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
         db.run_migrations().await.unwrap();
+        
+        // Add summary column for tests (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+            .execute(db.pool())
+            .await
+            .ok();
         let pool = db.pool().clone();
         let repo = TaskRepository::new(&pool);
         
@@ -537,6 +543,12 @@ mod tests {
     async fn test_check_cancellation_no_request() {
         let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
         db.run_migrations().await.unwrap();
+        
+        // Add summary column for tests (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+            .execute(db.pool())
+            .await
+            .ok();
         let pool = db.pool().clone();
         let repo = TaskRepository::new(&pool);
         
@@ -566,6 +578,12 @@ mod tests {
     async fn test_clear_cancellation() {
         let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
         db.run_migrations().await.unwrap();
+        
+        // Add summary column for tests (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+            .execute(db.pool())
+            .await
+            .ok();
         let pool = db.pool().clone();
         let repo = TaskRepository::new(&pool);
         
@@ -605,6 +623,12 @@ mod tests {
     async fn test_get_pending_cancellations() {
         let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
         db.run_migrations().await.unwrap();
+        
+        // Add summary column for tests (Phase 2.2)
+        sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+            .execute(db.pool())
+            .await
+            .ok();
         let pool = db.pool().clone();
         let repo = TaskRepository::new(&pool);
         

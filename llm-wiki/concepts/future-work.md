@@ -49,9 +49,10 @@
 **Goal:** Support more providers and improve transport layer  
 **Risk:** Medium | **Effort:** ~4-6 weeks
 
-### 3.1 Transport Layer Abstraction
-- `LLMTransport` trait: send, format_request, parse_response
-- Implementations: Anthropic, OpenAI compat, Bedrock (future)
+### 3.1 Transport Layer Abstraction ✅ Complete
+- `LlmTransport` trait with `chat()` and `provider_name()`
+- LlamaClient implements trait (llama-server, Ollama, LM Studio)
+- OpenAiTransport for OpenAI-compatible APIs
 - Provider-specific retry logic
 
 ### 3.2 Fast Mode

@@ -107,6 +107,12 @@ use std::time::Duration;
 async fn create_test_state() -> AppState {
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
+    
+    // Add summary column for tests (Phase 2.2)
+    sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+        .execute(db.pool())
+        .await
+        .ok();
 
     let embedder = std::sync::Arc::new(apex_memory::embedder::Embedder::default());
     let indexer_config = apex_memory::background_indexer::IndexerConfig::default();
@@ -498,6 +504,12 @@ async fn test_deep_task_creates_task_in_db() {
     let _timer = TestTimer::new("test_deep_task_creates_task_in_db");
     let db = Database::new(&PathBuf::from(":memory:")).await.unwrap();
     db.run_migrations().await.unwrap();
+    
+    // Add summary column for tests (Phase 2.2)
+    sqlx::query("ALTER TABLE tasks ADD COLUMN summary TEXT")
+        .execute(db.pool())
+        .await
+        .ok();
 
     let pool = db.pool().clone();
     let repo = TaskRepository::new(&pool);
