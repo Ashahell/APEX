@@ -102,17 +102,44 @@ React ecosystem:
 
 ---
 
+## Performance Optimizations Applied
+
+### Rust Build Profile (2026-04-25)
+```toml
+[profile.release]
+lto = true           # Link Time Optimization
+codegen-units = 1    # Better optimization
+opt-level = 3       # Maximum optimization
+strip = true        # Remove debug symbols
+```
+
+**Result:**
+| Binary | Before | After | Reduction |
+|--------|--------|-------|-----------|
+| apex-router.exe | 20.5 MB | 18.56 MB | **9.5%** |
+| apex-router-bin.exe | 3.56 MB | 1.62 MB | **54.5%** |
+
+### UI Build Optimization
+- 5 vendor chunks: react, radix, motion, query, markdown
+- 28 lazy-loaded routes (already existed)
+- Chunk size warning limit: 500 KB
+
+### Test Results
+All 544 Rust tests pass after optimization.
+
+---
+
 ## Performance Recommendations
 
 ### High Priority
-1. **Add LTO to Rust build** - ~20% binary size reduction
-2. **Enable incremental compilation** - Use `cargo-watch` for dev
-3. **Add Rust codegen-units=1** - Better optimization
+1. ~~**Add LTO to Rust build**~~ - ✅ Done, 9.5% size reduction
+2. ~~**Enable incremental compilation**~~ - Already in use
+3. ~~**Add Rust codegen-units=1**~~ - ✅ Done
 
 ### Medium Priority
-1. **Split apex-router binary** - Separate CLI from library
-2. **Lazy load React components** - Route-based code splitting
-3. **Add bundle analyzer** - Visualize UI bundle
+1. ~~**Split apex-router binary**~~ - ✅ Already split (bin vs exe)
+2. ~~**Lazy load React components**~~ - ✅ Already done (28 routes)
+3. **Add bundle analyzer** - Chunk splitting in place
 
 ### Low Priority
 1. **Add benchmarks** - tokio-benches for async hot paths
@@ -123,6 +150,7 @@ React ecosystem:
 
 ## Next Steps
 
-1. Run `cargo build --release -Clto=true -Ccodegen-units=1` and measure size
-2. Add lazy loading to UI routes
-3. Add pytest performance markers
+1. ✅ Run `cargo build --release` with LTO - done
+2. ✅ Lazy load React routes - done
+3. Add vite-bundle-visualizer for detailed chunk analysis
+4. Add pytest performance markers for Python
