@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Loading } from '../ui/LoadingState';
 
 interface Persona {
   name: string;
@@ -91,12 +92,7 @@ export function PersonaList({ onSelect, onEdit, compact = false }: PersonaListPr
   };
 
   if (isLoading) {
-    return (
-      <div className="animate-pulse flex items-center gap-2">
-        <div className="w-8 h-8 bg-gray-200 dark:bg-gray-700 rounded-full" />
-        <div className="w-24 h-4 bg-gray-200 dark:bg-gray-700 rounded" />
-      </div>
-    );
+    return <Loading text="Loading personas..." />;
   }
 
   if (compact) {

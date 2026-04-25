@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { Loading } from '../ui/LoadingState';
 
 // Story types
 interface StoryChoice {
@@ -234,11 +235,7 @@ export function StoryPlayer({ storyId, onBack }: StoryPlayerProps) {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin w-8 h-8 border-2 border-indigo-500 border-t-transparent rounded-full" />
-      </div>
-    );
+    return <Loading text="Loading story..." />;
   }
 
   if (!story) {

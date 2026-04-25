@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useAppStore } from '../../stores/appStore';
+import { Loading } from '../ui/LoadingState';
 import {
   getBoundedMemoryStats,
   getMemoryEntries,
@@ -231,11 +232,7 @@ export function BoundedMemory() {
   };
   
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin w-8 h-8 border-2 border-[var(--color-primary)] border-t-transparent rounded-full" />
-      </div>
-    );
+    return <Loading text="Loading memory..." />;
   }
   
   const currentEntries = activeTab === 'memory' ? memoryEntries : userEntries;

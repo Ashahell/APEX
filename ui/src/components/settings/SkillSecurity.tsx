@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Loading } from '../ui/LoadingState';
 
 interface VerificationResult {
   valid: boolean;
@@ -144,11 +145,7 @@ export function SkillSecurity() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
-      </div>
-    );
+    return <Loading text="Loading skill security..." />;
   }
 
   return (

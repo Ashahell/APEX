@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Loading } from '../ui/LoadingState';
 
 // Privacy settings - stores in localStorage for now, API integration pending
 const CLOUD_PROVIDERS = [
@@ -135,11 +136,7 @@ export function PrivacySettings() {
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin w-6 h-6 border-2 border-indigo-500 border-t-transparent rounded-full" />
-      </div>
-    );
+    return <Loading text="Loading privacy settings..." />;
   }
 
   return (
