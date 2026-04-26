@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  router:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.router
+    image: apex/apex-router:1.6.0
+    ports:
+      - "3000:3000"
+    volumes:
+      - apex_data:/data
+    environment:
+      - APEX_SHARED_SECRET=${APEX_SHARED_SECRET}
+      - APEX_DATABASE_URL=sqlite:/data/apex.db
+      - APEX_USE_LLM=0
+      - APEX_AUTH_DISABLED=0
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  ui:
+    image: apex/ui:1.6.0
+    build:
+      context: ../ui
+      dockerfile: Dockerfile
+    ports:
+      - "8083:8083"
+    environment:
+      - VITE_API_URL=http://router:3000
+      - VITE_WS_URL=ws://router:3000
+    depends_on:
+      - router
+    restart: unless-stopped
+
+volumes:
+  apex_data:
+    driver: local
+
+networks:
+  default:
+    name: apex-network
