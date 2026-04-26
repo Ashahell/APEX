@@ -91,6 +91,18 @@ Inspired by NousResearch's Hermes Agent architecture.
 | **Session Search** | FTS5 with LIKE fallback, BM25 ranking, context extraction |
 | **User Profile** | Communication styles, verbosity levels, response format preferences |
 
+### Sapphire Features (v1.6.0)
+
+| Feature | Description |
+|---------|-------------|
+| **Story Engine** | Interactive fiction with choices and dice rolls |
+| **Persona Assembly** | Configurable agent persona with voice/model configs |
+| **Continuity Scheduler** | Cron-based recurring tasks |
+| **Privacy Guard** | Data retention and PII filtering |
+| **Context Scope** | Session-level context isolation |
+| **Tool Maker Runtime** | Python sandbox with import allowlist |
+| **Plugin Signing** | Skill integrity verification |
+
 ### Advanced Features (Research/POC)
 - **SOUL.md Identity** - Agent reads identity file on wake (POC)
 - **Heartbeat Daemon** - Autonomous wake cycles (experimental)
@@ -131,10 +143,14 @@ Inspired by NousResearch's Hermes Agent architecture.
 
 ## Tech Stack (Development)
 
-- **Backend**: Rust (Axum, Tokio, Sqlx)
-- **Frontend**: React 18, TypeScript, Tailwind CSS, Zustand
-- **Database**: SQLite
-- **LLM**: llama.cpp (Qwen3-4B) - requires local setup (disabled in development mode by default)
+| Layer | Technology |
+|-------|-----------|
+| **Backend** | Rust (Axum, Tokio, Sqlx) |
+| **Frontend** | React 18, TypeScript, Tailwind CSS, Zustand |
+| **Database** | SQLite (with sqlite_vec for embeddings) |
+| **LLM** | llama.cpp (Qwen3-4B) - requires local setup |
+
+See `docs/API.md` for full REST API documentation.
 
 ## Getting Started (Development)
 
@@ -220,7 +236,30 @@ GET /api/v1/secrets/access/failed
 - [x] SystemComponent trait (unified lifecycle management)
 - [x] OpenClaw Features (v1.4.0) - Dashboard, Fast Mode, Sessions, PDF, Multimodal, Channels, Secrets
 - [x] Hermes Agent Integration (v1.5.0) - Bounded Memory, Auto-Skills, Hub, Session Search, User Profile
+- [x] Sapphire Features (v1.6.0) - Story Engine, Persona Assembly, Continuity, Privacy Guard
+- [x] Sapphire Features (v1.6.0) - Story Engine, Persona Assembly, Continuity, Privacy Guard
+
+## Performance
+
+| Metric | Value |
+|--------|-------|
+| **Release build** | 87s (87s → 213s with LTO) |
+| **Binary size** | 18.56 MB (9.5% reduction from LTO) |
+| **CLI binary** | 1.62 MB (54.5% reduction) |
+| **Test count** | 544 Rust + 64 Python |
+| **TypeScript** | Passes |
+
+### Build Optimizations Applied
+- LTO (Link Time Optimization)
+- codegen-units = 1
+- opt-level = 3
+- strip = true
+
+## Documentation
+
+- `docs/API.md` - REST API endpoints (1000+ lines)
+- `docs/PERFORMANCE_PROFILING.md` - Performance analysis
+- `docs/GAP-ANALYSIS.md` - Feature gap analysis
 
 ## License
-
 MIT
