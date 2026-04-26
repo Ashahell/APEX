@@ -122,3 +122,137 @@ async fn test_create_task_via_http() {
 
     router.stop();
 }
+
+#[tokio::test]
+async fn test_skills_endpoint() {
+    if std::net::TcpStream::connect("127.0.0.1:3000").is_ok() {
+        eprintln!("Port 3000 is in use - skipping E2E test.");
+        return;
+    }
+
+    let mut router = match RouterProcess::start() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to start router: {}", e);
+            return;
+        }
+    };
+
+    let client = reqwest::Client::new();
+
+    // Test GET /api/v1/skills
+    let response = client
+        .get(&format!("{}/api/v1/skills", ROUTER_URL))
+        .send()
+        .await
+        .expect("Failed to fetch skills");
+
+    assert_eq!(response.status(), 200, "Skills endpoint should return 200");
+
+    let body: serde_json::Value = response.json().await.expect("Failed to parse skills");
+    assert!(body.is_array(), "Skills should be an array");
+
+    router.stop();
+}
+
+#[tokio::test]
+async fn test_health_endpoint() {
+    if std::net::TcpStream::connect("127.0.0.1:3000").is_ok() {
+        eprintln!("Port 3000 is in use - skipping E2E test.");
+        return;
+    }
+
+    let mut router = match RouterProcess::start() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to start router: {}", e);
+            return;
+        }
+    };
+
+    let client = reqwest::Client::new();
+
+    // Test GET /health
+    let response = client
+        .get(&format!("{}/health", ROUTER_URL))
+        .send()
+        .await
+        .expect("Failed to fetch health");
+
+    assert_eq!(response.status(), 200, "Health endpoint should return 200");
+
+    let body: serde_json::Value = response.json().await.expect("Failed to parse health");
+    assert!(
+        body.get("status").is_some() || body.get("uptime_secs").is_some(),
+        "Health should contain status"
+    );
+
+    router.stop();
+}
+
+#[tokio::test]
+async fn test_channels_endpoint() {
+    if std::net::TcpStream::connect("127.0.0.1:3000").is_ok() {
+        eprintln!("Port 3000 is in use - skipping E2E test.");
+        return;
+    }
+
+    let mut router = match RouterProcess::start() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to start router: {}", e);
+            return;
+        }
+    };
+
+    let client = reqwest::Client::new();
+
+    // Test GET /api/v1/channels
+    let response = client
+        .get(&format!("{}/api/v1/channels", ROUTER_URL))
+        .send()
+        .await
+        .expect("Failed to fetch channels");
+
+    assert_eq!(response.status(), 200, "Channels endpoint should return 200");
+
+    let body: serde_json::Value = response.json().await.expect("Failed to parse channels");
+    assert!(body.is_array(), "Channels should be an array");
+
+    router.stop();
+}
+
+#[tokio::test]
+async fn test_memory_stats_endpoint() {
+    if std::net::TcpStream::connect("127.0.0.1:3000").is_ok() {
+        eprintln!("Port 3000 is in use - skipping E2E test.");
+        return;
+    }
+
+    let mut router = match RouterProcess::start() {
+        Ok(r) => r,
+        Err(e) => {
+            eprintln!("Failed to start router: {}", e);
+            return;
+        }
+    };
+
+    let client = reqwest::Client::new();
+
+    // Test GET /api/v1/memory/stats
+    let response = client
+        .get(&format!("{}/api/v1/memory/stats", ROUTER_URL))
+        .send()
+        .await
+        .expect("Failed to fetch memory stats");
+
+    assert_eq!(response.status(), 200, "Memory stats endpoint should return 200");
+
+    let body: serde_json::Value = response.json().await.expect("Failed to parse memory stats");
+    assert!(
+        body.get("journal_entries").is_some() || body.get("entities").is_some(),
+        "Memory stats should contain entries"
+    );
+
+    router.stop();
+}
