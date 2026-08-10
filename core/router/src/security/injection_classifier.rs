@@ -2,8 +2,9 @@
 //!
 //! This module provides:
 //! - Regex-based pre-filter for known injection patterns
-//! - LLM-based classifier (optional, for complex cases)
+//! - Behavioral heuristics (repetition, structure, encoding)
 //! - Structural separation enforcement
+//! - Context switch detection (role/confidence underming)
 
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -105,6 +106,62 @@ static INJECTION_PATTERNS: LazyLock<Vec<(Regex, &'static str, InjectionType, Thr
         ]
     });
 
+/// Behavioral injection patterns (MITRE ATLAS AMLI008 mitigation)
+/// These detect indirect prompt injection via role-swapping, confidence-undermining,
+/// and context-manipulation tactics.
+static INJECTION_BEHAVIORS: LazyLock<Vec<(Regex, &'static str, InjectionType, ThreatLevel)>> =
+    LazyLock::new(|| {
+        vec![
+            // Role-swapping: claiming a different identity
+            (Regex::new(r"(?i)(you\s+are\s+now\s+(a|an)\s+\w+)").unwrap(),
+             "Role swap attempt", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(act\s+as\s+(a|an)\s+\w+)").unwrap(),
+             "Act-as role injection", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(pretend\s+(you\s+are|to\s+be))").unwrap(),
+             "Pretend role injection", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(as\s+a\s+(malicious|helpful|hacker|developer)\s+)").unwrap(),
+             "Actor role injection", InjectionType::PromptInjection, ThreatLevel::Medium),
+            
+            // Confidence-undermining: erode alignment
+            (Regex::new(r"(?i)(for\s+research\s+purposes?\s+only)").unwrap(),
+             "Research purpose claim", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)(?i)hypothetically\s+,").unwrap(),
+             "Hypothetical softening", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)just\s+curious").unwrap(),
+             "Just curious framing", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)not\s+a\s+(real\s+)?(threat|problem)").unwrap(),
+             "Harm denial framing", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)worst\s+case").unwrap(),
+             "Worst-case softening", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)harmless|dangerless|benign|safe\s+version").unwrap(),
+             "Harmless claim", InjectionType::PromptInjection, ThreatLevel::Low),
+            
+            // Context manipulation: embedding instructions in data fields
+            (Regex::new(r##"(?i)(description|comment|note):?\s*'?[^'"]+instructions"##).unwrap(),
+             "Description-field instruction injection", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(json|xml)\s+with\s+(the\s+)?following").unwrap(),
+             "Data-embedded instruction", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)<(system|prompt)\b").unwrap(),
+             "XML tag instruction injection", InjectionType::PromptInjection, ThreatLevel::Medium),
+            
+            // Obfuscation via formatting tricks
+            (Regex::new(r"(?i)(\\\[a-z]){5,}").unwrap(),
+             "Escaped char obfuscation", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(\bu\p+l+?\u\p+){3,}").unwrap(),
+             "Leetspeak obfuscation", InjectionType::PromptInjection, ThreatLevel::Low),
+            (Regex::new(r"(?i)(\x{2,}|z{3,}|a{4,})").unwrap(),
+             "Repeated char obfuscation", InjectionType::PromptInjection, ThreatLevel::Low),
+            
+            // Jailbreak prefixes
+            (Regex::new(r"(?i)^(DAN|[Aa]ct\s+as|You\s+are\s+a\s+Jailbreak)").unwrap(),
+             "Jailbreak prefix", InjectionType::PromptInjection, ThreatLevel::High),
+            (Regex::new(r"(?i)^(\}\}|```)\s*$").unwrap(),
+             "Delimiter prefix", InjectionType::PromptInjection, ThreatLevel::Medium),
+            (Regex::new(r"(?i)(解除|禁用|忽略)\s*(所有|previous|all)").unwrap(),
+             "Non-English instruction override", InjectionType::PromptInjection, ThreatLevel::High),
+        ]
+    });
+
 /// Pre-compiled shell dangerous patterns for skill execution
 static SHELL_DANGEROUS_PATTERNS: LazyLock<Vec<(Regex, &'static str, ThreatLevel)>> =
     LazyLock::new(|| {
@@ -168,7 +225,7 @@ impl InjectionClassifier {
             };
         }
 
-        // Run regex patterns
+        // Run regex patterns (direct injection)
         for (regex, description, injection_type, severity) in INJECTION_PATTERNS.iter() {
             if regex.is_match(input) {
                 let should_block = matches!(severity, ThreatLevel::Critical | ThreatLevel::High);
@@ -181,6 +238,25 @@ impl InjectionClassifier {
                     message: format!(
                         "Potential {} detected: {}",
                         injection_type.as_str(),
+                        description
+                    ),
+                    should_block,
+                };
+            }
+        }
+
+        // Run behavioral patterns (MITRE ATLAS AMLI008: Manipulate Agent)
+        for (regex, description, injection_type, severity) in INJECTION_BEHAVIORS.iter() {
+            if regex.is_match(input) {
+                let should_block = matches!(severity, ThreatLevel::Critical | ThreatLevel::High);
+
+                return InjectionDetectionResult {
+                    is_safe: false,
+                    threat_level: *severity,
+                    injection_type: Some(injection_type.clone()),
+                    matched_pattern: Some(description.to_string()),
+                    message: format!(
+                        "Behavioral pattern detected: {}",
                         description
                     ),
                     should_block,

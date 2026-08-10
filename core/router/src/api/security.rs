@@ -27,6 +27,7 @@ pub fn create_router() -> Router<AppState> {
         .route("/api/v1/security/injection/analyze", post(analyze_input))
         .route("/api/v1/security/injection/patterns", get(get_injection_patterns))
         .route("/api/v1/security/health", get(security_health))
+        .route("/api/v1/security/skills/stats", get(get_skill_stats))
 }
 
 /// Response for anomaly list
@@ -235,6 +236,49 @@ pub struct SecurityComponents {
     pub anomaly_detector: String,
     pub injection_classifier: String,
     pub content_hash: String,
+}
+
+/// Security health check response
+#[derive(Debug, Serialize)]
+pub struct SkillStatsResponse {
+    pub skill_name: String,
+    pub total_executions: u64,
+    pub total_errors: u64,
+    pub avg_duration_ms: f64,
+    pub max_duration_ms: u64,
+    pub min_duration_ms: u64,
+    pub recent_error_rate: f64,
+}
+
+/// Get behavioral stats for all skills (AI-DE-2: runtime monitoring)
+async fn get_skill_stats(State(state): State<AppState>) -> Json<Vec<SkillStatsResponse>> {
+    let detector = state.anomaly_detector.as_ref();
+
+    let stats = if let Some(detector) = detector {
+        detector
+            .get_all_stats()
+            .await
+            .into_iter()
+            .map(|s| {
+                let total = s.total_executions.max(1);
+                let recent_window = s.recent_errors.min(total as u64);
+                let recent_total = s.recent_durations.len().max(1) as u64;
+                SkillStatsResponse {
+                    skill_name: s.skill_name.clone(),
+                    total_executions: s.total_executions,
+                    total_errors: s.total_errors,
+                    avg_duration_ms: s.avg_duration_ms,
+                    max_duration_ms: s.max_duration_ms,
+                    min_duration_ms: if s.min_duration_ms == u64::MAX { 0 } else { s.min_duration_ms },
+                    recent_error_rate: (recent_window as f64 / recent_total as f64) * 100.0,
+                }
+            })
+            .collect()
+    } else {
+        vec![]
+    };
+
+    Json(stats)
 }
 
 /// Security health check
